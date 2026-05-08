@@ -1,0 +1,15 @@
+# Local machine configuration (copy of config.mk.example)
+config.mk
+
+# Generated at build time from EXORT_ROOT in config.mk
+src/sys_rootdir.F90
+
+# Compiler artefacts
+build/*.mod
+build/*.o
+
+# Executable
+run/
+
+# Runtime I/O files (NetCDF inputs/outputs)
+iofiles/

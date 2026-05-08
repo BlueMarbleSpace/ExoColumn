@@ -1,0 +1,32 @@
+# ExoColumn local build configuration
+# =====================================
+# Copy this file to config.mk and edit for your machine.
+# config.mk is machine-specific and is NOT committed to version control.
+#
+# Usage:
+#   cp config.mk.example config.mk
+#   # edit config.mk, then:
+#   cd build && make
+
+# --- Fortran compiler ---------------------------------------------------------
+# Default (no entry here): Intel ifx at the hard-coded path in the Makefile.
+# Set USER_FC to override, e.g.:
+#
+# USER_FC = /opt/intel/oneapi/compiler/2025.3/bin/ifx
+# USER_FC = gfortran
+
+# --- NetCDF-Fortran -----------------------------------------------------------
+# Required when the system nf-config points to a NetCDF built with a different
+# compiler (e.g. system NetCDF is gfortran-compiled but you are using ifx).
+# Set NETCDF_ROOT to the installation prefix of a NetCDF-Fortran built with
+# the same compiler as USER_FC / the default ifx.
+#
+# NETCDF_ROOT = /opt/netcdf
+
+# --- ExoRT source root --------------------------------------------------------
+# Default: /models/ExoRT  (set in the Makefile).
+# Override if ExoRT is installed elsewhere on your machine.
+# This also sets the runtime data path — sys_rootdir.F90 is generated from
+# this value at build time so ExoRT never needs to be modified.
+#
+# EXORT_ROOT = /models/ExoRT

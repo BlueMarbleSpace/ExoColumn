@@ -1,0 +1,131 @@
+#------------------------------------------------------------------------------
+# ExoColumn Makefile
+# Links ExoColumn src/ against ExoRT source/src.main + source/src.n68equiv
+# and NetCDF-Fortran.
+#
+# Local settings (compiler path, NETCDF_ROOT, EXORT_ROOT) should be placed in
+# config.mk at the project root — copy config.mk.example to get started.
+# config.mk is included automatically if it exists; it is not committed to git.
+#
+# Usage:
+#   make          build (reads ../config.mk if present)
+#   make clean
+#
+# The executable is placed in ../run/exocol.exe.
+# Before running, set working directory to the project root so that ExoRT can
+# find its data files via the relative paths in sys_rootdir.F90 / exoplanet_mod.
+#------------------------------------------------------------------------------
+
+# Pull in local machine settings (silently skipped if file does not exist).
+-include ../config.mk
+
+# --- NetCDF -------------------------------------------------------------------
+# If NETCDF_ROOT is set (in config.mk or on the command line) use it directly.
+# Otherwise fall back to nf-config (works for gfortran builds where the system
+# NetCDF matches the compiler).
+ifdef NETCDF_ROOT
+  LIB_NETCDF := -L$(NETCDF_ROOT)/lib -Wl,-Bstatic -lnetcdff -Wl,-Bdynamic -lnetcdf
+  INC_NETCDF := -I$(NETCDF_ROOT)/include
+else
+  LIB_NETCDF := $(shell nf-config --flibs)
+  INC_NETCDF := $(shell nf-config --fflags)
+endif
+
+# --- Compiler -----------------------------------------------------------------
+# Default: Intel ifx at its well-known OneAPI path.
+# Override via USER_FC in config.mk or on the command line.
+IFX := /opt/intel/oneapi/compiler/2025.3/bin/ifx
+
+ifeq ($(USER_FC),)
+  FC := $(IFX)
+else
+  FC := $(USER_FC)
+endif
+
+# Compiler flags
+ifeq ($(FC),$(IFX))
+  FFLAGS = -O2 -traceback -fpe0
+else ifeq ($(FC),gfortran)
+  FFLAGS = -O2 -fbacktrace -ffpe-trap=invalid,zero,overflow -cpp
+else
+  # Fallback: assume ifort-compatible flags
+  FFLAGS = -O2 -traceback -fpe0
+endif
+
+# --- ExoRT source directories -------------------------------------------------
+# Override EXORT_ROOT in config.mk if ExoRT lives elsewhere on your machine.
+EXORT_ROOT ?= /models/ExoRT
+MAIN_DIR    = $(EXORT_ROOT)/source/src.main
+
+# Generate sys_rootdir.F90 with the local EXORT_ROOT path, replacing ExoRT's
+# hardcoded machine-specific path.  Runs on every make invocation (fast).
+# The generated file is machine-specific and is not committed to version control.
+$(shell printf 'module sys_rootdir\n  implicit none\n  public\n  character(len=256), parameter :: exort_rootdir = "%s/"\nend module sys_rootdir\n' \
+  "$(EXORT_ROOT)" > ../src/sys_rootdir.F90)
+MISC_DIR    = $(EXORT_ROOT)/source/src.misc
+SPEC_DIR    = $(EXORT_ROOT)/source/src.n68equiv
+SRC_DIR     = $(EXORT_ROOT)/source
+
+# ExoColumn source directory
+EXCOL_DIR   = ../src
+
+# ---- ExoRT objects (same as n68equiv.exe target minus main.F90) ----
+# Ordering matters: each file must follow the modules it USEs.
+EXORT_SRCS = \
+  $(MISC_DIR)/shr_kind_mod.F90        \
+  $(SRC_DIR)/exoplanet_mod.F90        \
+  ../src/sys_rootdir.F90              \
+  $(MISC_DIR)/shr_const_mod.F90       \
+  $(MISC_DIR)/shr_sys_mod.F90         \
+  $(MISC_DIR)/spmd_utils.F90          \
+  $(MISC_DIR)/time_manager.F90        \
+  $(MISC_DIR)/wrap_nf.F90             \
+  $(MISC_DIR)/infnan.F90              \
+  $(MISC_DIR)/ppgrid.F90              \
+  $(MISC_DIR)/pmgrid.F90              \
+  $(MISC_DIR)/ioFileMod.F90           \
+  $(SPEC_DIR)/radgrid.F90             \
+  $(MAIN_DIR)/input.F90               \
+  $(MISC_DIR)/physconst.F90           \
+  $(MAIN_DIR)/output.F90              \
+  $(SPEC_DIR)/cloud.F90               \
+  $(SPEC_DIR)/kabs.F90                \
+  $(MAIN_DIR)/mcica_random_numbers.F90 \
+  $(MAIN_DIR)/mcica.F90               \
+  $(SPEC_DIR)/rad_interp_mod.F90      \
+  $(MAIN_DIR)/rayleigh_data.F90       \
+  $(SPEC_DIR)/calc_opd_mod.F90        \
+  $(SPEC_DIR)/initialize_rad_mod_1D.F90 \
+  $(MAIN_DIR)/planck_mod.F90          \
+  $(SPEC_DIR)/model_specific.F90      \
+  $(MAIN_DIR)/exo_init_ref.F90        \
+  $(MAIN_DIR)/exo_radiation_mod.F90
+
+# ---- ExoColumn objects ----
+EXCOL_SRCS = \
+  $(EXCOL_DIR)/exocol_mod.F90         \
+  $(EXCOL_DIR)/exocol_radiation.F90   \
+  $(EXCOL_DIR)/exocol_io.F90          \
+  $(EXCOL_DIR)/exocol_convadj.F90     \
+  $(EXCOL_DIR)/exocol_rce_loop.F90    \
+  $(EXCOL_DIR)/exocol_driver.F90
+
+ALL_SRCS = $(EXORT_SRCS) $(EXCOL_SRCS)
+
+# Build target
+exocol.exe: $(ALL_SRCS)
+	$(FC) $(FFLAGS) $(INC_NETCDF) -I$(MISC_DIR) -o $@ $(ALL_SRCS) $(LIB_NETCDF)
+	@mkdir -p ../run
+	mv -f $@ ../run/
+	@echo "Built ../run/exocol.exe"
+
+# Phony targets
+.PHONY: clean run
+
+clean:
+	$(RM) -f *.o *.mod
+	$(RM) -f ../run/exocol.exe
+
+# Convenience: run from the project root so ExoRT data paths resolve
+run:
+	cd .. && run/exocol.exe
