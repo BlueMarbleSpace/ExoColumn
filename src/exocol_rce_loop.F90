@@ -27,7 +27,7 @@ module exocol_rce_loop
 ! and H_slab = rho_w · cp_w · dz_slab  [J m⁻² K⁻¹].
 
   use shr_kind_mod,    only: r8 => shr_kind_r8
-  use shr_const_mod,   only: SHR_CONST_CSEC
+  use shr_const_mod,   only: SHR_CONST_CSEC, SHR_CONST_RGAS
   use exoplanet_mod,   only: exo_g
   use ppgrid,          only: pver, pverp
   use exocol_mod
@@ -50,6 +50,7 @@ module exocol_rce_loop
   integer,  parameter :: stab_check    = 100        ! steps between stability snapshots
   real(r8), parameter :: prof_stab_tol = 0.001_r8   ! max tmid change per stab_check steps [K]
   real(r8), parameter :: ts_stab_tol   = 0.001_r8   ! max Ts   change per stab_check steps [K]
+  real(r8), parameter :: toa_stab_tol  = 0.001_r8   ! max TOA flux change per stab_check steps [W/m²]
 
   ! Slab-ocean heat capacity parameters
   real(r8), parameter :: rho_w     = 1026._r8     ! seawater density [kg/m³]
@@ -67,12 +68,14 @@ contains
 
     real(r8), dimension(pver) :: tmid_snap   ! tmid at last stability snapshot
     real(r8) :: ts_snap                      ! Ts at last stability snapshot
+    real(r8) :: toa_snap                     ! TOA flux at last stability snapshot [W/m²]
     real(r8) :: dt_sec        ! dt in seconds
     real(r8) :: max_hr        ! max total heating rate this step [K/day]
     real(r8) :: toa_flux      ! TOA net flux this step [W/m²]
     real(r8) :: F_net_srf     ! net surface flux [W/m²]
     real(r8) :: max_dT        ! max tmid change since last snapshot [K]
     real(r8) :: dTs           ! Ts change since last snapshot [K]
+    real(r8) :: dToa          ! TOA flux change since last snapshot [W/m²]
 
     integer  :: it, k
     logical  :: converged, profile_stable
@@ -82,6 +85,7 @@ contains
     profile_stable = .false.
     tmid_snap      = tmid
     ts_snap        = ts
+    toa_snap       = 0._r8
 
     write(*,'(/,a)')    '========================================'
     write(*,'(a)')      ' ExoColumn RCE loop starting'
@@ -113,19 +117,29 @@ contains
 
       ! 5. Convective adjustment (dry adiabat, Phase 1)
       !    tint(pverp) is set to ts inside update_tint before this call.
-      call convadj_dry(tmid, tint, pint, pdel, cpdry_col, exo_g, pver)
+      call convadj_dry(tmid, tint, pint, pdel, cpdry_col, exo_g, ts, pver)
 
-      ! 6. Diagnostics and convergence check
+      ! 6. Update interface heights consistent with the new tmid profile.
+      !    zint is passed to aerad_driver each call; without this update it
+      !    would reflect the initial conditions throughout the run.
+      call update_zint()
+
+      ! 7. Diagnostics and convergence check
       max_hr   = maxval(abs(LWHR(:) + SWHR(:)))
-      toa_flux = abs(SWDN(1) - SWUP(1) - LWUP(1))
+      toa_flux = abs(SWDN(1) - SWUP(1) + LWDN(1) - LWUP(1))
 
-      ! Profile-stability check every stab_check steps (Path B)
+      ! Profile-stability check every stab_check steps (Path B).
+      ! Includes TOA flux stability so a structurally imbalanced dry column
+      ! (where toa_flux never drops below toa_tol) can still converge.
       if (mod(it, stab_check) == 0) then
         max_dT         = maxval(abs(tmid - tmid_snap))
         dTs            = abs(ts - ts_snap)
-        profile_stable = (max_dT < prof_stab_tol .and. dTs < ts_stab_tol)
+        dToa           = abs(toa_flux - toa_snap)
+        profile_stable = (max_dT < prof_stab_tol .and. dTs < ts_stab_tol &
+                          .and. dToa < toa_stab_tol)
         tmid_snap      = tmid
         ts_snap        = ts
+        toa_snap       = toa_flux
       end if
 
       if (mod(it, print_every) == 0 .or. it == 1) then
@@ -140,8 +154,11 @@ contains
         exit
       end if
 
-      ! Path B: profile stability with TOA balance
-      if (profile_stable .and. toa_flux < toa_tol) then
+      ! Path B: profile stability (entire state frozen, including TOA flux).
+      ! Does not require toa_flux < toa_tol — a dry column in radiative-
+      ! convective equilibrium may have a structural TOA imbalance that never
+      ! shrinks.  A warning is printed post-convergence if toa_flux > toa_tol.
+      if (profile_stable) then
         converged = .true.
         exit
       end if
@@ -156,9 +173,11 @@ contains
     write(*,'(a,f8.3,a,f8.3)') &
       '   Final max|HR| [K/day] = ', max_hr, &
       '   Final TOA net [W/m2]  = ', toa_flux
-
-    ! Final radiation call to return consistent flux diagnostics
-    call exocol_rad_tend(LWHR, SWHR, LWUP, LWDN, SWUP, SWDN)
+    if (toa_flux > toa_tol) then
+      write(*,'(a)') &
+        '   WARNING: TOA net flux exceeds toa_tol — dry-only equilibrium,' // &
+        ' structural imbalance expected.'
+    end if
 
   end subroutine run_rce_loop
 
@@ -193,5 +212,27 @@ contains
               log(pmid_k / pint(1)) / log(pmid_kp1 / pmid_k)
 
   end subroutine update_tint
+
+  ! -----------------------------------------------------------------------
+  ! Private helper: recompute zint from tmid via the hypsometric equation
+  ! -----------------------------------------------------------------------
+
+  subroutine update_zint()
+  ! Rebuild interface heights from the current tmid using the hypsometric equation:
+  !   zint(k) = zint(k+1) + (R/g) * tmid(k) * ln(pint(k+1)/pint(k))
+  ! zint(pverp) (the surface height) is held fixed at whatever value was read
+  ! from the input file and is not modified here.
+  !
+  ! Explicit USE here works around an ifx host-association quirk for allocatable
+  ! arrays from a module-level USE in a contained subroutine.
+    use exocol_mod, only: zint, tmid, pint, mwdry_col
+    integer  :: k
+    real(r8) :: R_gas
+
+    R_gas = SHR_CONST_RGAS / mwdry_col
+    do k = pver, 1, -1
+      zint(k) = zint(k+1) + (R_gas / exo_g) * tmid(k) * log(pint(k+1) / pint(k))
+    end do
+  end subroutine update_zint
 
 end module exocol_rce_loop

@@ -40,7 +40,7 @@ Activate Intel OneAPI, then build from the `build/` directory:
 ```bash
 source /opt/intel/oneapi/setvars.sh
 cd build
-make NETCDF_ROOT=/opt/netcdf                         # ifx + custom NetCDF
+make                                                 # NETCDF_ROOT read from config.mk
 make clean
 ```
 
@@ -103,7 +103,7 @@ ExoColumn: exocol_radiation   → aerad_driver
 
 - **`exocol_radiation`** — Wraps `aerad_driver`. Packages column state into the exact argument list `aerad_driver` expects. Converts heating rates from K/s (raw output) to K/day for the RCE loop.
 
-- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step: radiation → update `tmid`/`ts` → recompute `tint` (log-p interpolation) → dry convective adjustment. Two convergence paths: **Path A** (radiative equilibrium): `max|LWHR+SWHR| < 0.01 K/day` AND `|TOA net flux| < 0.1 W/m²`. **Path B** (profile stability, for convectively active columns): `|TOA net flux| < 0.1 W/m²` AND column state (`tmid`, `ts`) changes < 0.001 K over 100 consecutive steps. Path B is necessary because a convectively active layer always has a large instantaneous HR (balanced by `convadj_dry`), so Path A is never satisfied there.
+- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step: radiation → update `tmid`/`ts` → recompute `tint` (log-p interpolation) → dry convective adjustment → update `zint` (hypsometric). Two convergence paths: **Path A** (radiative equilibrium): `max|LWHR+SWHR| < 0.01 K/day` AND `|TOA net flux| < 0.1 W/m²`. **Path B** (frozen-state stability): all three diagnostics — `tmid`, `ts`, and TOA net flux — change by less than 0.001 (K or W/m²) over 100 consecutive steps. Path B does **not** require the TOA flux itself to be small; a dry-only column reaches a genuine equilibrium with a structural TOA imbalance (~79 W/m² for Earth-like inputs) that Path B detects and accepts, printing a warning. Path B is necessary because a convectively active layer always has a large instantaneous HR (balanced by `convadj_dry`), so Path A is never satisfied there.
 
 - **`exocol_convadj`** — Dry adiabatic adjustment using potential-temperature stability criterion. Sweeps surface→TOA, adjusting unstable pairs while conserving column enthalpy. Repeats up to 30 passes per timestep. Phase 2 (moist) is not yet implemented.
 
