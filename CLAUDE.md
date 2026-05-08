@@ -64,6 +64,17 @@ Output: `iofiles/exocol_out.nc` (ExoRT `RTprofile_out.nc` format, compatible wit
 
 Use ExoRT's `makeColumn.py` script to generate the input file.
 
+## Plotting
+
+After a run, inspect the output with:
+
+```bash
+python tools/plot_exocol.py                        # reads/writes iofiles/exocol_out.{nc,pdf}
+python tools/plot_exocol.py my_in.nc my_out.pdf    # explicit paths
+```
+
+Produces a 4-panel PDF: temperature profile, radiative fluxes, heating rates, water vapour — all on a log-pressure axis.
+
 ## Architecture
 
 ExoColumn is a 1-D radiative-convective equilibrium (RCE) model written in Fortran that directly calls ExoRT's `aerad_driver` subroutine. It does **not** use ExoRT's file-based I/O inside the RCE loop.
@@ -92,7 +103,7 @@ ExoColumn: exocol_radiation   → aerad_driver
 
 - **`exocol_radiation`** — Wraps `aerad_driver`. Packages column state into the exact argument list `aerad_driver` expects. Converts heating rates from K/s (raw output) to K/day for the RCE loop.
 
-- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step: radiation → update `tmid`/`ts` → recompute `tint` (log-p interpolation) → dry convective adjustment. Convergence requires both `max|LWHR+SWHR| < 0.01 K/day` **and** `|TOA net flux| < 0.1 W/m²`.
+- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step: radiation → update `tmid`/`ts` → recompute `tint` (log-p interpolation) → dry convective adjustment. Two convergence paths: **Path A** (radiative equilibrium): `max|LWHR+SWHR| < 0.01 K/day` AND `|TOA net flux| < 0.1 W/m²`. **Path B** (profile stability, for convectively active columns): `|TOA net flux| < 0.1 W/m²` AND column state (`tmid`, `ts`) changes < 0.001 K over 100 consecutive steps. Path B is necessary because a convectively active layer always has a large instantaneous HR (balanced by `convadj_dry`), so Path A is never satisfied there.
 
 - **`exocol_convadj`** — Dry adiabatic adjustment using potential-temperature stability criterion. Sweeps surface→TOA, adjusting unstable pairs while conserving column enthalpy. Repeats up to 30 passes per timestep. Phase 2 (moist) is not yet implemented.
 
