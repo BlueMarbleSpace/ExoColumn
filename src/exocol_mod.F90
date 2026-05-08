@@ -180,7 +180,7 @@ contains
   ! Derivation follows ExoRT main.F90:
   !   pdeldry(k)  = pdel(k)  * (1 - h2ommr(k))
   !   pintdry(1)  = pint(1)  * (1 - h2ommr(1))   ! top interface uses k=1 mmr
-  !   pintdry(k)  = pint(k)  * (1 - h2ommr(k-1)) ! lower interfaces use layer below
+  !   pintdry(k)  = pint(k)  * (1 - h2ommr(k-1)) ! lower interfaces use layer above (k-1 in top-down indexing)
     integer :: k
 
     pdeldry(:) = pdel(:) * (1._r8 - h2ommr(:))

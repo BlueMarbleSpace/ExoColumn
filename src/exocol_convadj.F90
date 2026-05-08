@@ -23,7 +23,7 @@ module exocol_convadj
 
 contains
 
-  subroutine convadj_dry(tmid, tint, pint, pdel, cp, g, nv)
+  subroutine convadj_dry(tmid, tint, pint, pdel, cp, g, ts, nv)
   ! Dry adiabatic convective adjustment.
   !
   ! Arguments:
@@ -36,6 +36,11 @@ contains
   !   cp           IN      specific heat of dry air [J/kg/K]
   !   g            IN      gravitational acceleration [m/s²] (reserved for
   !                        moist phase; not used in this potential-T version)
+  !   ts           IN      surface skin temperature [K].  Used to couple the
+  !                        bottom atmospheric layer to the surface: if tmid(nv)
+  !                        is cooler than the dry adiabat from ts, it is pinned
+  !                        to neutral stability.  ts is not modified here
+  !                        because H_slab >> H_atm for any single layer.
   !   nv           IN      number of layers (normally = pver)
   !
   ! Stability criterion: potential temperature θ(k) = T(k)·(p_ref/p(k))^κ
@@ -53,6 +58,7 @@ contains
     real(r8), intent(in)    :: pdel(nv)
     real(r8), intent(in)    :: cp
     real(r8), intent(in)    :: g
+    real(r8), intent(in)    :: ts
     integer,  intent(in)    :: nv
 
     integer, parameter :: max_pass = 30
@@ -78,6 +84,21 @@ contains
 
     do ipass = 1, max_pass
       adjusted = .false.
+
+      ! Surface–bottom-layer pair: check first so the atmospheric sweep
+      ! below can immediately propagate any instability upward in this pass.
+      ! A parcel from tmid(nv) brought adiabatically to pint(nv+1) = ps;
+      ! if it arrives cooler than ts the layer is unstable.
+      ! ts is treated as a fixed boundary (H_slab >> H_atm for any single layer).
+      block
+        real(r8) :: pmid_bot, ratio_bot
+        pmid_bot  = 0.5_r8 * (pint(nv) + pint(nv+1))
+        ratio_bot = (pmid_bot / pint(nv+1))**kappa
+        if (tmid(nv) / ratio_bot < ts) then
+          tmid(nv) = ratio_bot * ts
+          adjusted = .true.
+        end if
+      end block
 
       ! Sweep from surface (k = nv-1) upward (toward k = 1).
       ! Pair (k, k+1): k is the upper layer, k+1 is the lower layer.

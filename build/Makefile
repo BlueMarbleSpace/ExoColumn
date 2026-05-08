@@ -66,15 +66,17 @@ MISC_DIR    = $(EXORT_ROOT)/source/src.misc
 SPEC_DIR    = $(EXORT_ROOT)/source/src.n68equiv
 SRC_DIR     = $(EXORT_ROOT)/source
 
-# ExoColumn source directory
-EXCOL_DIR   = ../src
+# ExoColumn source directory — absolute path so the compiler can be invoked
+# from a different working directory (see build rule below).
+EXCOL_DIR   = $(abspath ../src)
+BUILD_DIR   = $(abspath .)
 
 # ---- ExoRT objects (same as n68equiv.exe target minus main.F90) ----
 # Ordering matters: each file must follow the modules it USEs.
 EXORT_SRCS = \
   $(MISC_DIR)/shr_kind_mod.F90        \
   $(SRC_DIR)/exoplanet_mod.F90        \
-  ../src/sys_rootdir.F90              \
+  $(EXCOL_DIR)/sys_rootdir.F90        \
   $(MISC_DIR)/shr_const_mod.F90       \
   $(MISC_DIR)/shr_sys_mod.F90         \
   $(MISC_DIR)/spmd_utils.F90          \
@@ -113,10 +115,14 @@ EXCOL_SRCS = \
 ALL_SRCS = $(EXORT_SRCS) $(EXCOL_SRCS)
 
 # Build target
+# Compile from $(SRC_DIR) so that ExoRT's input.F90 can resolve its relative
+# include 'netcdf.inc' path.  -module redirects generated .mod files back to
+# build/.  All source paths are absolute so the CWD change is transparent.
 exocol.exe: $(ALL_SRCS)
-	$(FC) $(FFLAGS) $(INC_NETCDF) -I$(MISC_DIR) -o $@ $(ALL_SRCS) $(LIB_NETCDF)
+	cd $(SRC_DIR) && $(FC) $(FFLAGS) $(INC_NETCDF) -I$(MISC_DIR) \
+	  -module $(BUILD_DIR) -o $(BUILD_DIR)/$@ $(ALL_SRCS) $(LIB_NETCDF)
 	@mkdir -p ../run
-	mv -f $@ ../run/
+	mv -f $(BUILD_DIR)/$@ ../run/
 	@echo "Built ../run/exocol.exe"
 
 # Phony targets
