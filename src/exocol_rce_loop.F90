@@ -27,12 +27,13 @@ module exocol_rce_loop
 ! and H_slab = rho_w · cp_w · dz_slab  [J m⁻² K⁻¹].
 
   use shr_kind_mod,    only: r8 => shr_kind_r8
-  use shr_const_mod,   only: SHR_CONST_CSEC, SHR_CONST_RGAS
+  use shr_const_mod,   only: SHR_CONST_CSEC, SHR_CONST_RGAS, SHR_CONST_MWWV
   use exoplanet_mod,   only: exo_g
   use ppgrid,          only: pver, pverp
   use exocol_mod
   use exocol_radiation, only: exocol_rad_tend
-  use exocol_convadj,   only: convadj_dry
+  use exocol_config,    only: conv_scheme, cc_feedback
+  use exocol_convadj,   only: convadj_dry, convadj_moist, convadj_manabe, esat_cc
 
   implicit none
   private
@@ -66,6 +67,7 @@ contains
     real(r8), dimension(pver)  :: LWHR, SWHR
     real(r8), dimension(pverp) :: LWUP, LWDN, SWUP, SWDN
 
+    real(r8), dimension(pver) :: rh_init     ! initial relative humidity (fixed-RH)
     real(r8), dimension(pver) :: tmid_snap   ! tmid at last stability snapshot
     real(r8) :: ts_snap                      ! Ts at last stability snapshot
     real(r8) :: toa_snap                     ! TOA flux at last stability snapshot [W/m²]
@@ -95,6 +97,22 @@ contains
     write(*,'(a,f6.3)') '   toa_tol [W/m2]  = ', toa_tol
     write(*,'(a,/)')    '========================================'
 
+    ! Compute initial relative humidity from the input q profile.
+    ! rh_init(k) = h2ommr(k) / qsat(T(k), p(k)), capped at 1.
+    ! This is held fixed throughout the run; h2ommr is updated each step
+    ! via the Clausius-Clapeyron relation to maintain this RH profile.
+    block
+      use exocol_mod, only: h2ommr, pmid, mwdry_col
+      integer  :: k
+      real(r8) :: eps_wv, es_k, qsat_k
+      eps_wv = SHR_CONST_MWWV / mwdry_col
+      do k = 1, pver
+        es_k       = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+        qsat_k     = eps_wv * es_k / (pmid(k) - es_k)
+        rh_init(k) = min(h2ommr(k) / max(qsat_k, 1.0e-20_r8), 1.0_r8)
+      end do
+    end block
+
     do it = 1, nmax
 
       ! 1. Radiation
@@ -111,20 +129,41 @@ contains
       F_net_srf = (SWDN(pverp) - SWUP(pverp)) + (LWDN(pverp) - LWUP(pverp))
       ts = ts + dt_sec * F_net_srf / H_slab
 
-      ! 4. Recompute interface temperatures from updated tmid and ts.
+      ! 4. Update water vapour (fixed relative humidity via CC) then derived fields.
+      if (cc_feedback) then
+        call update_h2ommr(rh_init)
+        call exocol_update_derived()
+      end if
+
+      ! 5. Recompute interface temperatures from updated tmid and ts.
       !    tint(pverp) = ts (surface);  inner interfaces interpolated in log-p.
       call update_tint()
 
-      ! 5. Convective adjustment (dry adiabat, Phase 1)
-      !    tint(pverp) is set to ts inside update_tint before this call.
-      call convadj_dry(tmid, tint, pint, pdel, cpdry_col, exo_g, ts, pver)
+      ! 6. Convective adjustment
+      ! Block-scope USE for zint follows the same ifx workaround as update_zint:
+      ! host-association of allocatables from a module-level USE can mis-resolve
+      ! in contained subroutines under ifx.
+      select case (trim(conv_scheme))
+      case ('moist')
+        block
+          use exocol_mod, only: zint
+          call convadj_moist(tmid, tint, zint, pint, pdel, cpdry_col, exo_g, ts, pver)
+        end block
+      case ('manabe')
+        block
+          use exocol_mod, only: zint
+          call convadj_manabe(tmid, tint, zint, pint, pdel, cpdry_col, exo_g, ts, pver)
+        end block
+      case default  ! 'dry'
+        call convadj_dry(tmid, tint, pint, pdel, cpdry_col, exo_g, ts, pver)
+      end select
 
-      ! 6. Update interface heights consistent with the new tmid profile.
+      ! 7. Update interface heights consistent with the new tmid profile.
       !    zint is passed to aerad_driver each call; without this update it
       !    would reflect the initial conditions throughout the run.
       call update_zint()
 
-      ! 7. Diagnostics and convergence check
+      ! 8. Diagnostics and convergence check
       max_hr   = maxval(abs(LWHR(:) + SWHR(:)))
       toa_flux = abs(SWDN(1) - SWUP(1) + LWDN(1) - LWUP(1))
 
@@ -132,14 +171,20 @@ contains
       ! Includes TOA flux stability so a structurally imbalanced dry column
       ! (where toa_flux never drops below toa_tol) can still converge.
       if (mod(it, stab_check) == 0) then
-        max_dT         = maxval(abs(tmid - tmid_snap))
-        dTs            = abs(ts - ts_snap)
-        dToa           = abs(toa_flux - toa_snap)
+        max_dT = maxval(abs(tmid - tmid_snap))
+        dTs    = abs(ts - ts_snap)
+        dToa   = abs(toa_flux - toa_snap)
+        ! Profile stable when tmid and ts have frozen.  For the TOA flux:
+        ! if the column is already energy-balanced (toa_flux < toa_tol) the
+        ! dToa criterion is redundant and is skipped — CC-active runs have a
+        ! small residual TOA oscillation that would otherwise block convergence.
+        ! For structurally imbalanced columns (dry scheme, no CC) toa_flux >>
+        ! toa_tol so dToa is still needed to detect a truly frozen state.
         profile_stable = (max_dT < prof_stab_tol .and. dTs < ts_stab_tol &
-                          .and. dToa < toa_stab_tol)
-        tmid_snap      = tmid
-        ts_snap        = ts
-        toa_snap       = toa_flux
+                          .and. (toa_flux < toa_tol .or. dToa < toa_stab_tol))
+        tmid_snap = tmid
+        ts_snap   = ts
+        toa_snap  = toa_flux
       end if
 
       if (mod(it, print_every) == 0 .or. it == 1) then
@@ -175,11 +220,46 @@ contains
       '   Final TOA net [W/m2]  = ', toa_flux
     if (toa_flux > toa_tol) then
       write(*,'(a)') &
-        '   WARNING: TOA net flux exceeds toa_tol — dry-only equilibrium,' // &
-        ' structural imbalance expected.'
+        '   WARNING: TOA net flux exceeds toa_tol — column may be convectively' // &
+        ' active; structural imbalance possible.'
     end if
 
   end subroutine run_rce_loop
+
+  ! -----------------------------------------------------------------------
+  ! Private helper: update h2ommr for fixed relative humidity
+  ! -----------------------------------------------------------------------
+
+  subroutine update_h2ommr(rh_init)
+  ! Relax the water-vapour mixing ratio toward the CC-equilibrium value for
+  ! the current tmid profile while maintaining fixed relative humidity.
+  !
+  !   qsat(k) = (Mw_h2o/Mw_dry) · esat(T(k)) / (p(k) − esat(T(k)))
+  !   h2ommr(k) ← h2ommr(k) + α · (rh_init(k)·qsat(k) − h2ommr(k))
+  !   α = dt_days / tau_relax    (capped at 1)
+  !
+  ! Relaxing rather than instantaneously equilibrating damps the positive
+  ! CC feedback and prevents limit-cycle oscillations at large virtual dt.
+  ! At equilibrium the result is identical to full CC equilibration.
+  ! Explicit USE works around the ifx host-association quirk for allocatables.
+    use exocol_mod, only: h2ommr, tmid, pmid, mwdry_col
+
+    real(r8), intent(in) :: rh_init(pver)
+
+    real(r8), parameter :: tau_relax = 10._r8   ! moisture relaxation timescale [days]
+
+    integer  :: k
+    real(r8) :: eps_wv, es_k, qsat_k, alpha
+
+    eps_wv = SHR_CONST_MWWV / mwdry_col
+    alpha  = min(dt_days / tau_relax, 1.0_r8)
+    do k = 1, pver
+      es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+      qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
+      h2ommr(k) = h2ommr(k) + alpha * (rh_init(k) * qsat_k - h2ommr(k))
+      h2ommr(k) = max(h2ommr(k), 0.0_r8)
+    end do
+  end subroutine update_h2ommr
 
   ! -----------------------------------------------------------------------
   ! Private helper: recompute tint from tmid and ts
