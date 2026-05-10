@@ -106,6 +106,7 @@ EXORT_SRCS = \
 # ---- ExoColumn objects ----
 EXCOL_SRCS = \
   $(EXCOL_DIR)/exocol_mod.F90         \
+  $(EXCOL_DIR)/exocol_config.F90      \
   $(EXCOL_DIR)/exocol_radiation.F90   \
   $(EXCOL_DIR)/exocol_io.F90          \
   $(EXCOL_DIR)/exocol_convadj.F90     \

@@ -83,11 +83,12 @@ ExoColumn is a 1-D radiative-convective equilibrium (RCE) model written in Fortr
 exocol_driver (PROGRAM)
   └── exocol_io          :: read_initial_conditions → populate exocol_mod
   └── exocol_mod         :: exocol_setgas, exocol_update_derived
+  └── exocol_config      :: read_config (namelist: conv_scheme, cc_feedback)
   └── ExoRT init sequence:: initialize_kcoeff → initialize_solar → init_ref
                             → init_model_specific → init_planck → initialize_radbuffer
   └── exocol_rce_loop    :: run_rce_loop (main iteration)
         ├── exocol_radiation :: exocol_rad_tend → aerad_driver
-        └── exocol_convadj   :: convadj_dry
+        └── exocol_convadj   :: convadj_dry | convadj_moist | convadj_manabe
   └── exocol_io          :: write_output
 ```
 
@@ -103,9 +104,15 @@ ExoColumn: exocol_radiation   → aerad_driver
 
 - **`exocol_radiation`** — Wraps `aerad_driver`. Packages column state into the exact argument list `aerad_driver` expects. Converts heating rates from K/s (raw output) to K/day for the RCE loop.
 
-- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step: radiation → update `tmid`/`ts` → recompute `tint` (log-p interpolation) → dry convective adjustment → update `zint` (hypsometric). Two convergence paths: **Path A** (radiative equilibrium): `max|LWHR+SWHR| < 0.01 K/day` AND `|TOA net flux| < 0.1 W/m²`. **Path B** (frozen-state stability): all three diagnostics — `tmid`, `ts`, and TOA net flux — change by less than 0.001 (K or W/m²) over 100 consecutive steps. Path B does **not** require the TOA flux itself to be small; a dry-only column reaches a genuine equilibrium with a structural TOA imbalance (~79 W/m² for Earth-like inputs) that Path B detects and accepts, printing a warning. Path B is necessary because a convectively active layer always has a large instantaneous HR (balanced by `convadj_dry`), so Path A is never satisfied there.
+- **`exocol_config`** — Reads `exocol_config.nml` (namelist `&exocol_nml`). Exports `conv_scheme` (`'dry'` | `'moist'` | `'manabe'`) and `cc_feedback` (logical). Silently uses defaults if the file is absent.
 
-- **`exocol_convadj`** — Dry adiabatic adjustment using potential-temperature stability criterion. Sweeps surface→TOA, adjusting unstable pairs while conserving column enthalpy. Repeats up to 30 passes per timestep. Phase 2 (moist) is not yet implemented.
+- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step: radiation → update `tmid`/`ts` → optional CC moisture update → recompute `tint` (log-p interpolation) → convective adjustment → update `zint` (hypsometric). Two convergence paths: **Path A** (radiative equilibrium): `max|LWHR+SWHR| < 0.01 K/day` AND `|TOA net flux| < 0.1 W/m²`. **Path B** (frozen-state stability): `tmid` and `ts` change by less than 0.001 K over 100 consecutive steps, AND either `|TOA net flux| < 0.1 W/m²` OR the TOA flux itself has changed by less than 0.001 W/m² (the latter detects structurally imbalanced dry columns). CC moisture is updated via relaxation toward `rh_init(k) * qsat(T,p)` with `tau_relax = 10 days` (α = 0.5); this prevents limit-cycle oscillations at large virtual dt while preserving the correct equilibrium.
+
+- **`exocol_convadj`** — Three schemes selectable via `conv_scheme`:
+  - `'dry'`: potential-temperature stability criterion; adjusts pairs conserving column enthalpy; up to 30 passes per step.
+  - `'moist'`: geometric lapse-rate criterion using the dynamic moist adiabatic lapse rate Γm(T̄,p̄) per adjacent pair; same enthalpy-conserving adjustment.
+  - `'manabe'`: fixed 6.5 K/km environmental lapse rate (Manabe-Wetherald 1967).
+  All schemes sweep surface→TOA. **Physical note:** only `'moist'` + `cc_feedback=.true.` achieves genuine radiative-convective equilibrium for Earth-like inputs; `'dry'` and `'manabe'` with CC enabled diverge to runaway warm states.
 
 - **`exocol_io`** — NetCDF I/O using the Fortran 90 interface. Validates `pver`/`pverp` dimensions against compile-time constants on read. Output format is ExoRT-compatible.
 

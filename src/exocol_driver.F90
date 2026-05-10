@@ -30,6 +30,7 @@ PROGRAM exocol_driver
   use exo_model_specific,    only: init_model_specific
   use ppgrid,                only: pver, pverp
   use exocol_mod
+  use exocol_config,         only: read_config
   use exocol_io,             only: read_initial_conditions, write_output
   use exocol_rce_loop,       only: run_rce_loop
   use exocol_radiation,      only: exocol_rad_tend   ! final flux retrieval
@@ -44,6 +45,9 @@ PROGRAM exocol_driver
 
   write(*,'(/,a)') '=== ExoColumn: Radiative-Convective Equilibrium Model ==='
   write(*,'(a,i0,a)') '  pver = ', pver, ' layers (from exoplanet_mod::exo_pver)'
+
+  ! ---- 0. Read runtime configuration (scheme selection, etc.) ----
+  call read_config('exocol_config.nml')
 
   ! ---- 1. Allocate column state ----
   call exocol_init()
