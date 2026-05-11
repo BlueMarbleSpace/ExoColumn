@@ -110,6 +110,7 @@ EXCOL_SRCS = \
   $(EXCOL_DIR)/exocol_radiation.F90   \
   $(EXCOL_DIR)/exocol_io.F90          \
   $(EXCOL_DIR)/exocol_convadj.F90     \
+  $(EXCOL_DIR)/exocol_surface.F90     \
   $(EXCOL_DIR)/exocol_rce_loop.F90    \
   $(EXCOL_DIR)/exocol_driver.F90
 

@@ -1,0 +1,6 @@
+&exocol_nml
+  conv_scheme     = 'moist'
+  moisture_scheme = 'prognostic'
+  wind_speed      = 5.0
+  C_D             = 1.5e-3
+/

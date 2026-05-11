@@ -21,7 +21,9 @@ module exocol_convadj
 
   use shr_kind_mod,  only: r8 => shr_kind_r8
   use shr_const_mod, only: SHR_CONST_RGAS, SHR_CONST_LATVAP, &
-                            SHR_CONST_TKFRZ, SHR_CONST_RWV
+                            SHR_CONST_LATSUB, &
+                            SHR_CONST_TKFRZ, SHR_CONST_RWV, &
+                            SHR_CONST_MWWV
   use ppgrid,        only: pver, pverp
 
   implicit none
@@ -31,6 +33,7 @@ module exocol_convadj
   public :: convadj_moist
   public :: convadj_manabe
   public :: esat_cc
+  public :: Lvap_T
 
   ! Manabe-Wetherald critical lapse rate [K/m]
   real(r8), parameter :: gamma_crit = 6.5e-3_r8
@@ -45,31 +48,28 @@ contains
   ! Scheme 0 — Dry adiabatic adjustment
   ! -----------------------------------------------------------------------
 
-  subroutine convadj_dry(tmid, tint, pint, pdel, cp, g, ts, nv)
+  subroutine convadj_dry(tmid, tint, h2ommr_col, pint, pdel, cp, g, ts, nv)
   ! Dry adiabatic convective adjustment.
   !
   ! Arguments:
-  !   tmid(nv)     IN/OUT  layer-midpoint temperatures [K]
-  !   tint(nv+1)   IN/OUT  interface temperatures [K]; tint(nv+1) (surface)
-  !                        must be set to ts by the caller before this call
-  !                        and is not modified here.
-  !   pint(nv+1)   IN      interface pressures [Pa]; index 1 = TOA, nv+1 = srf
-  !   pdel(nv)     IN      layer pressure thicknesses [Pa]
-  !   cp           IN      specific heat of dry air [J/kg/K]
-  !   g            IN      gravitational acceleration [m/s²] (reserved; unused)
-  !   ts           IN      surface skin temperature [K]
-  !   nv           IN      number of layers (normally = pver)
-  !
-  ! Stability criterion: θ(k) = T(k)·(p_ref/p(k))^κ must be non-decreasing
-  ! upward.  Unstable: θ(k) < θ(k+1) with k above k+1.
-  !
-  ! Adjustment: conserve cp·T·Δp of the pair and restore θ(k) = θ(k+1):
-  !   T'_{k+1} = H / (Δp_k·r + Δp_{k+1})
-  !   T'_k     = r · T'_{k+1}
-  ! where H = Δp_k·T_k + Δp_{k+1}·T_{k+1},  r = (pmid_k/pmid_{k+1})^κ.
+  !   tmid(nv)        IN/OUT  layer-midpoint temperatures [K]
+  !   tint(nv+1)      IN/OUT  interface temperatures [K]; tint(nv+1) (surface)
+  !                           must be set to ts by the caller before this call
+  !                           and is not modified here.
+  !   h2ommr_col(nv)  IN/OUT  specific humidity [kg/kg]; mixed in every pair
+  !                           that is convectively adjusted (mass-weighted by
+  !                           pdel, conservative).  Surface-bottom pair does
+  !                           not mix q (slab has no q field).
+  !   pint(nv+1)      IN      interface pressures [Pa]; index 1 = TOA, nv+1 = srf
+  !   pdel(nv)        IN      layer pressure thicknesses [Pa]
+  !   cp              IN      specific heat of dry air [J/kg/K]
+  !   g               IN      gravitational acceleration [m/s²] (reserved; unused)
+  !   ts              IN      surface skin temperature [K]
+  !   nv              IN      number of layers (normally = pver)
 
     real(r8), intent(inout) :: tmid(nv)
     real(r8), intent(inout) :: tint(nv+1)
+    real(r8), intent(inout) :: h2ommr_col(nv)
     real(r8), intent(in)    :: pint(nv+1)
     real(r8), intent(in)    :: pdel(nv)
     real(r8), intent(in)    :: cp
@@ -85,7 +85,7 @@ contains
     real(r8) :: kappa
     real(r8) :: ratio_kappa
     real(r8) :: theta_k_scaled
-    real(r8) :: H
+    real(r8) :: H, q_mixed
     real(r8) :: Tkp1_new, Tk_new
 
     block
@@ -96,16 +96,8 @@ contains
     do ipass = 1, max_pass
       adjusted = .false.
 
-      ! Surface–bottom-layer pair
-      block
-        real(r8) :: pmid_bot, ratio_bot
-        pmid_bot  = 0.5_r8 * (pint(nv) + pint(nv+1))
-        ratio_bot = (pmid_bot / pint(nv+1))**kappa
-        if (tmid(nv) / ratio_bot < ts) then
-          tmid(nv) = ratio_bot * ts
-          adjusted = .true.
-        end if
-      end block
+      ! Surface coupling handled by bulk SH flux in rce_loop; no
+      ! surface-bottom-pair adjustment here (it would be non-conservative).
 
       ! Atmospheric sweep, surface → TOA
       do k = nv-1, 1, -1
@@ -121,6 +113,10 @@ contains
           Tk_new    = ratio_kappa * Tkp1_new
           tmid(k)   = Tk_new
           tmid(k+1) = Tkp1_new
+          q_mixed   = (pdel(k)*h2ommr_col(k) + pdel(k+1)*h2ommr_col(k+1)) &
+                      / (pdel(k) + pdel(k+1))
+          h2ommr_col(k)   = q_mixed
+          h2ommr_col(k+1) = q_mixed
           adjusted  = .true.
         end if
       end do
@@ -147,26 +143,46 @@ contains
   ! Scheme 1 — Moist pseudo-adiabatic adjustment
   ! -----------------------------------------------------------------------
 
-  subroutine convadj_moist(tmid, tint, zint_if, pint, pdel, cp, g, ts, nv)
-  ! Moist pseudo-adiabatic convective adjustment.
+  subroutine convadj_moist(tmid, tint, h2ommr_col, zint_if, pint, pdel, cp, g, ts, nv)
+  ! Moist convective adjustment with rh-weighted local lapse rate.
   !
-  ! Stability criterion: the geometric lapse rate between midpoints of two
-  ! adjacent layers must not exceed the local moist adiabatic lapse rate Γm:
-  !   (T_{k+1} − T_k) / (zmid_k − zmid_{k+1}) > Γm(T̄, p̄)  →  unstable
+  ! The relevant critical lapse rate depends on the local saturation state:
   !
-  ! Γm is evaluated at the mean T and p of the pair via the malr() helper:
+  !   Γeff(k) = rh(k)·Γm(T̄,p̄) + (1 − rh(k))·Γd
+  !
+  ! where Γd = g/cp (dry adiabat), Γm is the saturated moist adiabat, and
+  ! rh = q/qsat is computed from the actual specific humidity h2ommr.
+  !
+  ! Limits: rh→1 (saturated) recovers the Manabe-style moist-adiabatic
+  ! adjustment; rh→0 (dry) recovers a dry-adiabatic adjustment.  Earth's
+  ! observed ~6.5 K/km tropospheric lapse rate emerges from this blend
+  ! without prescribing it.  No saturation threshold is needed: the
+  ! interpolation is smooth and parameter-free.
+  !
+  ! Stability criterion (per pair):
+  !   (T_{k+1} − T_k) / (zmid_k − zmid_{k+1}) > Γeff  →  unstable
+  !
+  ! Γm is evaluated at the mean T and p of the pair via malr():
   !   Γm = (g/cp) · (1 + Lv·ws/(Rd·T)) / (1 + Lv²·ws/(cp·Rv·T²))
-  ! where ws = eps·esat(T̄)/(p̄ − esat(T̄)) is the saturation mixing ratio
-  ! and esat follows the Clausius-Clapeyron relation.
+  ! ws = eps·esat(T̄)/(p̄ − esat(T̄)).
   !
-  ! Adjustment: restore Γm exactly while conserving cp·T·Δp:
-  !   T'_{k+1} = (H + Γm·Δz·Δp_k) / (Δp_k + Δp_{k+1})
-  !   T'_k     = T'_{k+1} − Γm·Δz
+  ! Adjustment: restore Γeff exactly while conserving cp·T·Δp:
+  !   T'_{k+1} = (H + Γeff·Δz·Δp_k) / (Δp_k + Δp_{k+1})
+  !   T'_k     = T'_{k+1} − Γeff·Δz
   !
-  ! Moisture is not modified.  Γm is floored at 1 K/km.
+  ! In any pair that is adjusted, q is also mixed — but weighted by the same
+  ! rh_pair used for Γeff:
+  !   q_k   ← (1 − rh)·q_k   + rh·q_homog
+  !   q_k+1 ← (1 − rh)·q_k+1 + rh·q_homog
+  ! where q_homog is the mass-weighted average of the pair.  Saturated pairs
+  ! (rh → 1, cumulus-like) mix q fully; subsaturated pairs adjust T but
+  ! leave q nearly untouched.  Conserves mass-weighted total q in the pair.
+  ! The surface-bottom pair does not mix q (slab has no q field; surface
+  ! moisture flux is handled by the bulk LE term).
 
     real(r8), intent(inout) :: tmid(nv)
     real(r8), intent(inout) :: tint(nv+1)
+    real(r8), intent(inout) :: h2ommr_col(nv) ! specific humidity [kg/kg]
     real(r8), intent(in)    :: zint_if(nv+1)  ! interface heights [m]
     real(r8), intent(in)    :: pint(nv+1)
     real(r8), intent(in)    :: pdel(nv)
@@ -180,37 +196,29 @@ contains
 
     integer  :: k, ipass
     logical  :: adjusted
-    real(r8) :: Rd
+    real(r8) :: Rd, eps_wv, gamma_d
     real(r8) :: zmid_k, zmid_kp1, dz
-    real(r8) :: T_mean, p_mean, gamma_m
+    real(r8) :: T_mean, p_mean, gamma_m, gamma_eff
     real(r8) :: gamma_actual
+    real(r8) :: q_pair, es_pair, qsat_pair, rh_pair, q_mixed
     real(r8) :: H, Tkp1_new, Tk_new
     real(r8) :: pmid_k, pmid_kp1
 
     block
       use exocol_mod, only: mwdry_col
-      Rd = SHR_CONST_RGAS / mwdry_col
+      Rd     = SHR_CONST_RGAS / mwdry_col
+      eps_wv = SHR_CONST_MWWV / mwdry_col
     end block
+    gamma_d = g / cp
 
     do ipass = 1, max_pass
       adjusted = .false.
 
-      ! Surface–bottom-layer pair
-      block
-        real(r8) :: zmid_bot, dz_surf, pmid_bot
-        zmid_bot = 0.5_r8 * (zint_if(nv) + zint_if(nv+1))
-        dz_surf  = zmid_bot - zint_if(nv+1)
-        if (dz_surf > dz_min) then
-          pmid_bot = 0.5_r8 * (pint(nv) + pint(nv+1))
-          T_mean   = 0.5_r8 * (tmid(nv) + ts)
-          p_mean   = 0.5_r8 * (pmid_bot + pint(nv+1))
-          gamma_m  = malr(T_mean, p_mean, Rd, g, cp)
-          if ((ts - tmid(nv)) / dz_surf > gamma_m) then
-            tmid(nv) = ts - gamma_m * dz_surf
-            adjusted = .true.
-          end if
-        end if
-      end block
+      ! NOTE: no surface-bottom-layer pair adjustment.  Slab-atmosphere
+      ! coupling is handled by the bulk sensible heat flux in the rce loop,
+      ! which is energy-conservative.  A direct tmid(nv) ← ts pull here
+      ! would inject energy into the bottom layer without a matching slab
+      ! debit, breaking column energy conservation at the surface.
 
       ! Atmospheric sweep, surface → TOA
       do k = nv-1, 1, -1
@@ -226,12 +234,23 @@ contains
         p_mean  = pint(k+1)
         gamma_m = malr(T_mean, p_mean, Rd, g, cp)
 
-        if (gamma_actual > gamma_m) then
+        q_pair    = 0.5_r8 * (h2ommr_col(k) + h2ommr_col(k+1))
+        es_pair   = min(esat_cc(T_mean), 0.99_r8 * p_mean)
+        qsat_pair = eps_wv * es_pair / (p_mean - es_pair)
+        rh_pair   = min(q_pair / max(qsat_pair, 1.0e-20_r8), 1.0_r8)
+        gamma_eff = rh_pair * gamma_m + (1.0_r8 - rh_pair) * gamma_d
+
+        if (gamma_actual > gamma_eff) then
           H        = pdel(k)*tmid(k) + pdel(k+1)*tmid(k+1)
-          Tkp1_new = (H + gamma_m*dz*pdel(k)) / (pdel(k) + pdel(k+1))
-          Tk_new   = Tkp1_new - gamma_m * dz
+          Tkp1_new = (H + gamma_eff*dz*pdel(k)) / (pdel(k) + pdel(k+1))
+          Tk_new   = Tkp1_new - gamma_eff * dz
           tmid(k)   = Tk_new
           tmid(k+1) = Tkp1_new
+          ! rh-weighted q-mixing: saturated pairs homogenize, dry pairs do not.
+          q_mixed   = (pdel(k)*h2ommr_col(k) + pdel(k+1)*h2ommr_col(k+1)) &
+                      / (pdel(k) + pdel(k+1))
+          h2ommr_col(k)   = (1._r8 - rh_pair) * h2ommr_col(k)   + rh_pair * q_mixed
+          h2ommr_col(k+1) = (1._r8 - rh_pair) * h2ommr_col(k+1) + rh_pair * q_mixed
           adjusted  = .true.
         end if
       end do
@@ -257,7 +276,7 @@ contains
   ! Scheme 2 — Manabe-Wetherald fixed lapse rate
   ! -----------------------------------------------------------------------
 
-  subroutine convadj_manabe(tmid, tint, zint_if, pint, pdel, cp, g, ts, nv)
+  subroutine convadj_manabe(tmid, tint, h2ommr_col, zint_if, pint, pdel, cp, g, ts, nv)
   ! Manabe-Wetherald (1967) convective adjustment.
   !
   ! Stability criterion: the geometric temperature lapse rate between the
@@ -270,11 +289,15 @@ contains
   !   T'_k     = T'_{k+1} − γ_crit·Δz
   ! where H = Δp_k·T_k + Δp_{k+1}·T_{k+1},  Δz = zmid_k − zmid_{k+1}.
   !
-  ! Moisture is not updated.  zint_if reflects heights from the previous
-  ! timestep (the caller updates zint after convective adjustment).
+  ! In any pair that is adjusted, q is also mixed (mass-weighted by pdel).
+  ! Surface-bottom pair does not mix q (slab has no q field; surface
+  ! moisture flux handled separately by the bulk-aerodynamic LE term).
+  ! zint_if reflects heights from the previous timestep (the caller updates
+  ! zint after convective adjustment).
 
     real(r8), intent(inout) :: tmid(nv)
     real(r8), intent(inout) :: tint(nv+1)
+    real(r8), intent(inout) :: h2ommr_col(nv)
     real(r8), intent(in)    :: zint_if(nv+1)  ! interface heights [m]
     real(r8), intent(in)    :: pint(nv+1)
     real(r8), intent(in)    :: pdel(nv)
@@ -290,25 +313,13 @@ contains
     logical  :: adjusted
     real(r8) :: zmid_k, zmid_kp1, dz
     real(r8) :: gamma_actual
-    real(r8) :: H, Tkp1_new, Tk_new
+    real(r8) :: H, Tkp1_new, Tk_new, q_mixed
     real(r8) :: pmid_k, pmid_kp1
 
     do ipass = 1, max_pass
       adjusted = .false.
 
-      ! Surface–bottom-layer pair.
-      ! zmid(nv) is the midpoint of the bottom layer; zint_if(nv+1) is the surface.
-      block
-        real(r8) :: zmid_bot, dz_surf
-        zmid_bot = 0.5_r8 * (zint_if(nv) + zint_if(nv+1))
-        dz_surf  = zmid_bot - zint_if(nv+1)
-        if (dz_surf > dz_min) then
-          if ((ts - tmid(nv)) / dz_surf > gamma_crit) then
-            tmid(nv) = ts - gamma_crit * dz_surf
-            adjusted = .true.
-          end if
-        end if
-      end block
+      ! Surface coupling handled by bulk SH flux in rce_loop.
 
       ! Atmospheric sweep, surface → TOA
       do k = nv-1, 1, -1
@@ -326,6 +337,10 @@ contains
           Tk_new    = Tkp1_new - gamma_crit * dz
           tmid(k)   = Tk_new
           tmid(k+1) = Tkp1_new
+          q_mixed   = (pdel(k)*h2ommr_col(k) + pdel(k+1)*h2ommr_col(k+1)) &
+                      / (pdel(k) + pdel(k+1))
+          h2ommr_col(k)   = q_mixed
+          h2ommr_col(k+1) = q_mixed
           adjusted  = .true.
         end if
       end do
@@ -352,23 +367,47 @@ contains
   ! -----------------------------------------------------------------------
 
   pure function esat_cc(T) result(es)
-  ! Clausius-Clapeyron saturation vapour pressure [Pa] relative to liquid water.
+  ! Clausius-Clapeyron saturation vapour pressure [Pa].
+  ! Phase-aware: uses Lvap (over liquid) for T >= T0_sat (273.16 K) and Lsub
+  ! (over ice) below.  Both branches give es = es0 = 611.2 Pa at T0_sat,
+  ! so the function is continuous at the freezing point.
     real(r8), intent(in) :: T   ! temperature [K]
-    real(r8) :: es
-    es = es0 * exp((SHR_CONST_LATVAP / SHR_CONST_RWV) * (1._r8/T0_sat - 1._r8/T))
+    real(r8) :: es, L_use
+    if (T >= T0_sat) then
+      L_use = SHR_CONST_LATVAP
+    else
+      L_use = SHR_CONST_LATSUB
+    end if
+    es = es0 * exp((L_use / SHR_CONST_RWV) * (1._r8/T0_sat - 1._r8/T))
   end function esat_cc
 
+  pure function Lvap_T(T) result(L)
+  ! Phase-appropriate latent heat for evaporation/sublimation [J/kg].
+  !   T >= 273.16 K  →  L_v (liquid → vapor)
+  !   T <  273.16 K  →  L_s (solid  → vapor, includes fusion)
+    real(r8), intent(in) :: T
+    real(r8) :: L
+    if (T >= T0_sat) then
+      L = SHR_CONST_LATVAP
+    else
+      L = SHR_CONST_LATSUB
+    end if
+  end function Lvap_T
+
   pure function malr(T, p, Rd, g_planet, cp_dry) result(gamma_m)
-  ! Moist adiabatic lapse rate [K/m] for given T [K], p [Pa], and gas constants.
+  ! Moist (or ice-) adiabatic lapse rate [K/m] for given T [K], p [Pa], and
+  ! gas constants.  The latent-heat coefficient is phase-aware via Lvap_T(T)
+  ! so saturated columns below 273.16 K release the sublimation latent heat.
   ! Floored at 1 K/km (= 0.001 K/m) to avoid pathological values where esat → 0.
     real(r8), intent(in) :: T, p, Rd, g_planet, cp_dry
     real(r8) :: gamma_m
-    real(r8) :: eps, es, ws
+    real(r8) :: eps, es, ws, L
     real(r8), parameter :: ws_tiny = 1.0e-10_r8
     real(r8), parameter :: gamma_floor = 1.0e-3_r8  ! 1 K/km
 
     eps = Rd / SHR_CONST_RWV
     es  = esat_cc(T)
+    L   = Lvap_T(T)
     if (p > es) then
       ws = eps * es / (p - es)
     else
@@ -376,8 +415,8 @@ contains
     end if
 
     gamma_m = (g_planet / cp_dry) * &
-              (1._r8 + SHR_CONST_LATVAP * ws / (Rd * T)) / &
-              (1._r8 + SHR_CONST_LATVAP**2 * ws / (cp_dry * SHR_CONST_RWV * T**2))
+              (1._r8 + L * ws / (Rd * T)) / &
+              (1._r8 + L**2 * ws / (cp_dry * SHR_CONST_RWV * T**2))
     gamma_m = max(gamma_m, gamma_floor)
   end function malr
 
