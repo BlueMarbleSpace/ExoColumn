@@ -173,6 +173,7 @@ contains
     integer :: h2o_id, co2_id, ch4_id, c2h6_id
     integer :: o2_id,  o3_id,  n2_id,  h2_id
     integer :: mw_id,  cp_id
+    integer :: le_id,  sh_id,  precip_id, condhr_id
 
     write(*,'(2a)') 'exocol_io: writing ', trim(filename)
     call nc_check(nf90_create(filename, nf90_clobber, ncid), 'create:'//filename)
@@ -280,6 +281,23 @@ contains
     call nc_check(nf90_put_att(ncid,cp_id,'long_name','specific heat of dry air'),'att')
     call nc_check(nf90_put_att(ncid,cp_id,'units','J/kg/K'),                      'att')
 
+    ! ---- Surface flux / moisture diagnostics ----
+    call nc_check(nf90_def_var(ncid,'LE',nf90_double,[one_dim],le_id),'def_var:LE')
+    call nc_check(nf90_put_att(ncid,le_id,'long_name','latent heat flux (surface→atmosphere)'),'att')
+    call nc_check(nf90_put_att(ncid,le_id,'units','W/m2'),'att')
+
+    call nc_check(nf90_def_var(ncid,'SH',nf90_double,[one_dim],sh_id),'def_var:SH')
+    call nc_check(nf90_put_att(ncid,sh_id,'long_name','sensible heat flux (surface→atmosphere)'),'att')
+    call nc_check(nf90_put_att(ncid,sh_id,'units','W/m2'),'att')
+
+    call nc_check(nf90_def_var(ncid,'precip',nf90_double,[one_dim],precip_id),'def_var:precip')
+    call nc_check(nf90_put_att(ncid,precip_id,'long_name','column-integrated precipitation rate'),'att')
+    call nc_check(nf90_put_att(ncid,precip_id,'units','mm/day'),'att')
+
+    call nc_check(nf90_def_var(ncid,'cond_heating',nf90_double,[pver_dim],condhr_id),'def_var:cond_heating')
+    call nc_check(nf90_put_att(ncid,condhr_id,'long_name','latent heat release from condensation (last step)'),'att')
+    call nc_check(nf90_put_att(ncid,condhr_id,'units','K/day'),'att')
+
     call nc_check(nf90_enddef(ncid), 'enddef')
 
     ! ---- Write data ----
@@ -310,6 +328,11 @@ contains
 
     call put_scalar(ncid, mw_id, mwdry_col, 'put:mw')
     call put_scalar(ncid, cp_id, cpdry_col, 'put:cp')
+
+    call put_scalar(ncid, le_id,     LE_diag,     'put:LE')
+    call put_scalar(ncid, sh_id,     SH_diag,     'put:SH')
+    call put_scalar(ncid, precip_id, precip_diag, 'put:precip')
+    call put_1d    (ncid, condhr_id, cond_heating,'put:cond_heating')
 
     call nc_check(nf90_close(ncid), 'close:'//filename)
     write(*,'(2a)') 'exocol_io: wrote ', trim(filename)

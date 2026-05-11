@@ -81,15 +81,16 @@ ExoColumn is a 1-D radiative-convective equilibrium (RCE) model written in Fortr
 
 ```
 exocol_driver (PROGRAM)
+  └── exocol_config      :: read_config (namelist: conv_scheme, moisture_scheme, wind_speed, C_D)
+  └── exocol_mod         :: exocol_init, exocol_setgas, exocol_update_derived
   └── exocol_io          :: read_initial_conditions → populate exocol_mod
-  └── exocol_mod         :: exocol_setgas, exocol_update_derived
-  └── exocol_config      :: read_config (namelist: conv_scheme, cc_feedback)
   └── ExoRT init sequence:: initialize_kcoeff → initialize_solar → init_ref
                             → init_model_specific → init_planck → initialize_radbuffer
   └── exocol_rce_loop    :: run_rce_loop (main iteration)
         ├── exocol_radiation :: exocol_rad_tend → aerad_driver
+        ├── exocol_surface   :: compute_surface_fluxes (bulk aerodynamic LE, SH)
         └── exocol_convadj   :: convadj_dry | convadj_moist | convadj_manabe
-  └── exocol_io          :: write_output
+  └── exocol_io          :: write_output (state + LE, SH, precip, cond_heating)
 ```
 
 **Analogy to CESM/ExoCAM:**
@@ -100,21 +101,34 @@ ExoColumn: exocol_radiation   → aerad_driver
 
 ### Module responsibilities
 
-- **`exocol_mod`** — Defines the entire column state (all arrays and scalars). `USE`d by every other ExoColumn module. `pver`/`pverp` come from ExoRT's compile-time `ppgrid` module (set by `exoplanet_mod::exo_pver`). Call order after init: `exocol_setgas()` → `exocol_update_derived()`.
+- **`exocol_mod`** — Defines the entire column state (all arrays, scalars, and diagnostics `LE_diag`, `SH_diag`, `precip_diag`, `cond_heating`). `USE`d by every other ExoColumn module. `pver`/`pverp` come from ExoRT's compile-time `ppgrid` module (set by `exoplanet_mod::exo_pver`). Call order after init: `exocol_setgas()` → `exocol_update_derived()`.
 
 - **`exocol_radiation`** — Wraps `aerad_driver`. Packages column state into the exact argument list `aerad_driver` expects. Converts heating rates from K/s (raw output) to K/day for the RCE loop.
 
-- **`exocol_config`** — Reads `exocol_config.nml` (namelist `&exocol_nml`). Exports `conv_scheme` (`'dry'` | `'moist'` | `'manabe'`) and `cc_feedback` (logical). Silently uses defaults if the file is absent.
+- **`exocol_surface`** — Bulk-aerodynamic surface fluxes. `compute_surface_fluxes(ts, t_bot, q_bot, p_bot, mwdry, cpdry, U, C_D) → LE, SH` using `LE = ρ·L(Ts)·C_D·U·(qsat(Ts)−q_bot)` and `SH = ρ·cp·C_D·U·(Ts−T_bot)`. L is phase-aware: `L_v` for `Ts ≥ 273.16 K`, `L_sub` below. The rce loop applies an implicit-Euler damping factor `1/(1+dt/τ)` so the raw bulk formulas remain stable at the large virtual `dt` (τ ≈ 8.5 h vs `dt` = 5 d).
 
-- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step: radiation → update `tmid`/`ts` → optional CC moisture update → recompute `tint` (log-p interpolation) → convective adjustment → update `zint` (hypsometric). Two convergence paths: **Path A** (radiative equilibrium): `max|LWHR+SWHR| < 0.01 K/day` AND `|TOA net flux| < 0.1 W/m²`. **Path B** (frozen-state stability): `tmid` and `ts` change by less than 0.001 K over 100 consecutive steps, AND either `|TOA net flux| < 0.1 W/m²` OR the TOA flux itself has changed by less than 0.001 W/m² (the latter detects structurally imbalanced dry columns). CC moisture is updated via relaxation toward `rh_init(k) * qsat(T,p)` with `tau_relax = 10 days` (α = 0.5); this prevents limit-cycle oscillations at large virtual dt while preserving the correct equilibrium.
+- **`exocol_config`** — Reads `exocol_config.nml` (namelist `&exocol_nml`). Exports `conv_scheme` ∈ {`'dry'`, `'moist'`, `'manabe'`}, `moisture_scheme` ∈ {`'prognostic'`, `'fixed_rh'`, `'off'`}, `wind_speed` (default 5 m/s), and `C_D` (default 1.5e-3). Silently uses defaults if the file is absent.
 
-- **`exocol_convadj`** — Three schemes selectable via `conv_scheme`:
-  - `'dry'`: potential-temperature stability criterion; adjusts pairs conserving column enthalpy; up to 30 passes per step.
-  - `'moist'`: geometric lapse-rate criterion using the dynamic moist adiabatic lapse rate Γm(T̄,p̄) per adjacent pair; same enthalpy-conserving adjustment.
-  - `'manabe'`: fixed 6.5 K/km environmental lapse rate (Manabe-Wetherald 1967).
-  All schemes sweep surface→TOA. **Physical note:** only `'moist'` + `cc_feedback=.true.` achieves genuine radiative-convective equilibrium for Earth-like inputs; `'dry'` and `'manabe'` with CC enabled diverge to runaway warm states.
+- **`exocol_rce_loop`** — Time-marches the column with a virtual timestep (`dt_days = 5` Earth days). Each step:
+  1. radiation tendency on `tmid`
+  2. bulk surface fluxes LE, SH (implicit-damped)
+  3. slab budget: `ts += dt · (F_net_srf_rad − LE − SH) / H_slab`
+  4. bottom-layer sources: `tmid(pver) += dt·SH/(cp·pdel/g)`, `h2ommr(pver) += dt·LE/(L·pdel/g)`
+  5. `update_tint`
+  6. convective adjustment (T + q mixed; see `exocol_convadj`)
+  7. condensation cap: where `h2ommr(k) > qsat(T(k),p(k))`, set `h2ommr = qsat` and add `L(T)·q_excess/cp` to `tmid(k)` (phase-aware L)
+  8. `update_derived`, `update_zint`
 
-- **`exocol_io`** — NetCDF I/O using the Fortran 90 interface. Validates `pver`/`pverp` dimensions against compile-time constants on read. Output format is ExoRT-compatible.
+  Two convergence paths: **Path A** (radiative equilibrium): `max|LWHR+SWHR| < 0.01 K/day` AND `|TOA net flux| < 0.1 W/m²`. **Path B** (frozen-state stability): `max|Δtmid| < 0.001 K` AND `|ΔTs| < 0.001 K` over 100 steps, AND either `|TOA net flux| < 0.1 W/m²` OR `|ΔTOA flux| < 0.001 W/m²`. The `'fixed_rh'` and `'off'` moisture schemes are legacy code paths preserved for diagnostics (`fixed_rh` retains the historical RH relaxation closure with `tau_relax = 50 days`).
+
+- **`exocol_convadj`** — Three schemes selectable via `conv_scheme`. All operate purely on atmosphere-atmosphere pairs (no surface-bottom pair adjustment — surface coupling is handled by the bulk SH/LE fluxes). All conserve `cp·T·Δp` in each adjusted pair. The `'moist'` and `'manabe'` schemes also mix `h2ommr` in adjusted pairs.
+  - `'dry'`: potential-temperature stability criterion; q mixed fully (mass-weighted) when a pair is adjusted.
+  - `'moist'`: rh-weighted local lapse rate `Γ_eff = rh·Γm + (1−rh)·Γd` where `rh = q/qsat` and `Γm = malr(T̄, p̄)` (saturated moist adiabat, phase-aware L). q-mixing is also rh-weighted: saturated pairs homogenize q; subsaturated pairs adjust only T.
+  - `'manabe'`: fixed 6.5 K/km lapse rate (Manabe-Wetherald 1967); q mixed fully (mass-weighted).
+
+  `esat_cc(T)` is phase-aware (Clausius-Clapeyron with L_v above 0 °C, L_sub below; continuous at 273.16 K). `Lvap_T(T)` returns the phase-appropriate latent heat and is reused by `exocol_surface` and the condensation step.
+
+- **`exocol_io`** — NetCDF I/O using the Fortran 90 interface. Validates `pver`/`pverp` dimensions against compile-time constants on read. Output includes the column state plus diagnostics: `LE`, `SH` (W/m²), `precip` (mm/day), `cond_heating(pver)` (K/day from the final step's condensation).
 
 - **`exocol_driver`** — Top-level `PROGRAM`. Owns the ExoRT init sequence (mirrors `ExoRT/source/src.main/main.F90`); does **not** call ExoRT's `input_profile`.
 
@@ -140,4 +154,17 @@ Index 1 = TOA (top of atmosphere), index `pver`/`pverp` = surface. Midpoint arra
 
 ### Surface energy balance
 
-`ts` is prognostic: updated each step by `dt * F_net_srf / H_slab` where `H_slab = rho_w * cp_w * dz_slab = 1026 * 4000 * 50 = 2.052×10⁸ J/m²/K`. After updating `ts`, `tint(pverp)` is pinned to `ts` before convective adjustment.
+`ts` is prognostic and the slab budget includes turbulent fluxes:
+
+```
+ts ← ts + dt · (F_net_srf_rad − LE − SH) / H_slab
+H_slab = rho_w · cp_w · dz_slab = 1026 · 4000 · 50 = 2.052×10⁸ J/m²/K
+```
+
+`F_net_srf_rad = (SWDN − SWUP) + (LWDN − LWUP)` at the surface interface. `LE` and `SH` are bulk-aerodynamic fluxes from `exocol_surface` damped by `1/(1+dt/τ)` for stability (`τ = (pdel/g)/(ρ·C_D·U) ≈ 8.5 h` for Earth-like surface conditions; without damping the explicit Euler step overshoots by ~14×). LE and SH are also applied as bottom-layer sources for `tmid(pver)` and `h2ommr(pver)`, and the latent enthalpy enters the column as condensation heat where the vapor later saturates.
+
+After updating `tmid` and `ts`, `tint(pverp)` is pinned to `ts` in `update_tint`. The convadj schemes operate purely on interior atmosphere-atmosphere pairs — there is no surface-bottom-layer pair adjustment (it would inject energy into the bottom layer without a matching slab debit, breaking column conservation).
+
+### Moisture and energy conservation
+
+With `moisture_scheme = 'prognostic'` the column conserves moist static energy in steady state: column-integrated `F_TOA − F_net_srf_rad + LE + SH = 0`. Mass-balanced steady state requires surface evaporation rate = column precipitation rate (verified diagnostically by comparing `LE/L_v` to `precip_diag`).

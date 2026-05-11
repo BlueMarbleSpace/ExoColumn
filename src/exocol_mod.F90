@@ -73,6 +73,14 @@ module exocol_mod
   real(r8), allocatable, public :: pintdry(:) ! dry pressure at interfaces [Pa] (derived)
   real(r8), allocatable, public :: zint(:)    ! geometric height at interfaces [m]
 
+  ! -----------------------------------------------------------------------
+  ! Surface-flux / moisture diagnostics (filled by run_rce_loop)
+  ! -----------------------------------------------------------------------
+  real(r8),              public :: LE_diag     = 0._r8  ! latent heat flux  [W/m²]
+  real(r8),              public :: SH_diag     = 0._r8  ! sensible heat flux [W/m²]
+  real(r8),              public :: precip_diag = 0._r8  ! column precip rate [mm/day]
+  real(r8), allocatable, public :: cond_heating(:)      ! latent heating per layer [K/day]
+
 contains
 
   ! -----------------------------------------------------------------------
@@ -110,6 +118,9 @@ contains
     allocate(pintdry(pverp), stat=ierr); if (ierr /= 0) stop 'exocol_init: pintdry'
     allocate(zint(pverp),    stat=ierr); if (ierr /= 0) stop 'exocol_init: zint'
 
+    ! --- diagnostics ---
+    allocate(cond_heating(pver), stat=ierr); if (ierr /= 0) stop 'exocol_init: cond_heating'
+
     ! --- zero-initialise everything ---
     tmid    = 0._r8;  pmid    = 0._r8;  pdel    = 0._r8;  pdeldry  = 0._r8
     h2ommr  = 0._r8;  co2mmr  = 0._r8;  ch4mmr  = 0._r8;  c2h6mmr = 0._r8
@@ -117,6 +128,8 @@ contains
     cicewp  = 0._r8;  cliqwp  = 0._r8;  cfrc    = 0._r8
     rei     = 0._r8;  rel     = 0._r8
     tint    = 0._r8;  pint    = 0._r8;  pintdry = 0._r8;   zint    = 0._r8
+    cond_heating = 0._r8
+    LE_diag = 0._r8; SH_diag = 0._r8; precip_diag = 0._r8
 
     ts        = 0._r8
     ps        = 0._r8
@@ -157,6 +170,8 @@ contains
     if (allocated(pint))    deallocate(pint)
     if (allocated(pintdry)) deallocate(pintdry)
     if (allocated(zint))    deallocate(zint)
+
+    if (allocated(cond_heating)) deallocate(cond_heating)
 
   end subroutine exocol_finalize
 
