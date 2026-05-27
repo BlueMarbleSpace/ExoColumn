@@ -13,6 +13,7 @@ module exocol_io
   use shr_kind_mod, only: r8 => shr_kind_r8
   use ppgrid,       only: pver, pverp
   use exocol_mod
+  use exocol_config, only: cfg_msdist => msdist
 
   implicit none
   private
@@ -86,7 +87,7 @@ contains
   subroutine read_initial_conditions(filename)
   ! Read column state from an ExoRT RTprofile_in.nc file.
   ! Populates all exocol_mod arrays.  cfrc is set to zero (clear sky);
-  ! msdist is set to 1.0 (1 AU equivalent).
+  ! msdist is taken from &exocol_nml (default 1.0 = 1 AU).
     character(len=*), intent(in) :: filename
 
     integer :: ncid, dimid
@@ -148,8 +149,8 @@ contains
     call nc_check(nf90_close(ncid), 'close:'//filename)
 
     ! Defaults not stored in the input file
-    cfrc(:) = 0._r8   ! clear sky
-    msdist  = 1._r8   ! 1 AU; override via namelist if needed
+    cfrc(:) = 0._r8     ! clear sky
+    msdist  = cfg_msdist ! planet-star distance [AU]; from &exocol_nml (default 1.0)
 
     write(*,'(a,i0,a)') 'exocol_io: read ', pver, ' layers OK'
 

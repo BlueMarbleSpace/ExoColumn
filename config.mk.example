@@ -30,3 +30,14 @@
 # this value at build time so ExoRT never needs to be modified.
 #
 # EXORT_ROOT = /models/ExoRT
+
+# --- Vertical levels ----------------------------------------------------------
+# Number of vertical model layers (pver).  This is a compile-time constant in
+# ExoRT (used to size static arrays), so it must be fixed at build time.  Set
+# here in ExoColumn so /models/ExoRT remains untouched: the build generates
+# src/exoplanet_mod.F90 from ExoRT's source with this value substituted in,
+# and compiles the local copy instead.
+# Default: 70 (60 log-spaced upper layers + 10 near-surface layers).
+# Recompile (make clean && make) after changing.
+#
+# PVER = 70
