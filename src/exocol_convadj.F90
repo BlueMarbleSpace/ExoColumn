@@ -34,6 +34,8 @@ module exocol_convadj
   public :: convadj_manabe
   public :: esat_cc
   public :: Lvap_T
+  public :: malr
+  public :: compute_tint_interp
 
   ! Manabe-Wetherald critical lapse rate [K/m]
   real(r8), parameter :: gamma_crit = 6.5e-3_r8
@@ -124,18 +126,8 @@ contains
       if (.not. adjusted) exit
     end do
 
-    ! Recompute interface temperatures from the adjusted tmid profile.
-    ! tint(nv+1) = ts is fixed by the caller; do not touch it.
-    do k = 1, nv-1
-      pmid_k   = 0.5_r8 * (pint(k)   + pint(k+1))
-      pmid_kp1 = 0.5_r8 * (pint(k+1) + pint(k+2))
-      tint(k+1) = tmid(k) + (tmid(k+1) - tmid(k)) * &
-                  log(pint(k+1)/pmid_k) / log(pmid_kp1/pmid_k)
-    end do
-    pmid_k   = 0.5_r8 * (pint(1) + pint(2))
-    pmid_kp1 = 0.5_r8 * (pint(2) + pint(3))
-    tint(1) = tmid(1) - (tmid(2) - tmid(1)) * &
-              log(pmid_k / pint(1)) / log(pmid_kp1 / pmid_k)
+    ! Recompute interior and TOA interface temperatures; tint(nv+1) = ts untouched.
+    call compute_tint_interp(tmid, pint, nv, tint)
 
   end subroutine convadj_dry
 
@@ -202,7 +194,6 @@ contains
     real(r8) :: gamma_actual
     real(r8) :: q_pair, es_pair, qsat_pair, rh_pair, q_mixed
     real(r8) :: H, Tkp1_new, Tk_new
-    real(r8) :: pmid_k, pmid_kp1
 
     block
       use exocol_mod, only: mwdry_col
@@ -258,17 +249,8 @@ contains
       if (.not. adjusted) exit
     end do
 
-    ! Recompute interface temperatures
-    do k = 1, nv-1
-      pmid_k   = 0.5_r8 * (pint(k)   + pint(k+1))
-      pmid_kp1 = 0.5_r8 * (pint(k+1) + pint(k+2))
-      tint(k+1) = tmid(k) + (tmid(k+1) - tmid(k)) * &
-                  log(pint(k+1)/pmid_k) / log(pmid_kp1/pmid_k)
-    end do
-    pmid_k   = 0.5_r8 * (pint(1) + pint(2))
-    pmid_kp1 = 0.5_r8 * (pint(2) + pint(3))
-    tint(1) = tmid(1) - (tmid(2) - tmid(1)) * &
-              log(pmid_k / pint(1)) / log(pmid_kp1 / pmid_k)
+    ! Recompute interior and TOA interface temperatures; tint(nv+1) = ts untouched.
+    call compute_tint_interp(tmid, pint, nv, tint)
 
   end subroutine convadj_moist
 
@@ -314,7 +296,6 @@ contains
     real(r8) :: zmid_k, zmid_kp1, dz
     real(r8) :: gamma_actual
     real(r8) :: H, Tkp1_new, Tk_new, q_mixed
-    real(r8) :: pmid_k, pmid_kp1
 
     do ipass = 1, max_pass
       adjusted = .false.
@@ -348,19 +329,43 @@ contains
       if (.not. adjusted) exit
     end do
 
-    ! Recompute interface temperatures (same as dry scheme).
+    ! Recompute interior and TOA interface temperatures; tint(nv+1) = ts untouched.
+    call compute_tint_interp(tmid, pint, nv, tint)
+
+  end subroutine convadj_manabe
+
+  ! -----------------------------------------------------------------------
+  ! Shared interface-temperature interpolation
+  ! -----------------------------------------------------------------------
+
+  subroutine compute_tint_interp(tmid, pint, nv, tint)
+  ! Fill tint(1:nv) by log-pressure interpolation/extrapolation from tmid(1:nv).
+  ! tint(nv+1) (surface interface, pinned to ts) is left unchanged — the caller
+  ! is responsible for setting it before this routine and after as needed.
+  !
+  ! Interior interfaces (k+1, k=1..nv-1): log-p linear interpolation between
+  ! the midpoints of adjacent layers.
+  ! TOA interface (k=1): log-p linear extrapolation from tmid(1) and tmid(2).
+    real(r8), intent(in)    :: tmid(nv)
+    real(r8), intent(in)    :: pint(nv+1)
+    integer,  intent(in)    :: nv
+    real(r8), intent(inout) :: tint(nv+1)   ! tint(1:nv) overwritten; tint(nv+1) unchanged
+
+    integer  :: k
+    real(r8) :: pmid_k, pmid_kp1
+
     do k = 1, nv-1
       pmid_k   = 0.5_r8 * (pint(k)   + pint(k+1))
       pmid_kp1 = 0.5_r8 * (pint(k+1) + pint(k+2))
       tint(k+1) = tmid(k) + (tmid(k+1) - tmid(k)) * &
-                  log(pint(k+1)/pmid_k) / log(pmid_kp1/pmid_k)
+                  log(pint(k+1) / pmid_k) / log(pmid_kp1 / pmid_k)
     end do
     pmid_k   = 0.5_r8 * (pint(1) + pint(2))
     pmid_kp1 = 0.5_r8 * (pint(2) + pint(3))
     tint(1) = tmid(1) - (tmid(2) - tmid(1)) * &
               log(pmid_k / pint(1)) / log(pmid_kp1 / pmid_k)
 
-  end subroutine convadj_manabe
+  end subroutine compute_tint_interp
 
   ! -----------------------------------------------------------------------
   ! Private helpers for moist adiabatic lapse rate
@@ -371,14 +376,22 @@ contains
   ! Phase-aware: uses Lvap (over liquid) for T >= T0_sat (273.16 K) and Lsub
   ! (over ice) below.  Both branches give es = es0 = 611.2 Pa at T0_sat,
   ! so the function is continuous at the freezing point.
+  !
+  ! Defensive: the exponent (L/Rv)(1/T0 - 1/T) overflows IEEE double when T is
+  ! negative or close to zero.  We clamp T to a safe physical range [50, 5000] K
+  ! before evaluating.  Outside this range the input was unphysical anyway; the
+  ! clamp prevents a floating overflow from killing the run.
     real(r8), intent(in) :: T   ! temperature [K]
-    real(r8) :: es, L_use
-    if (T >= T0_sat) then
+    real(r8) :: es, L_use, T_use
+    real(r8), parameter :: T_min_safe = 50._r8
+    real(r8), parameter :: T_max_safe = 5000._r8
+    T_use = min(max(T, T_min_safe), T_max_safe)
+    if (T_use >= T0_sat) then
       L_use = SHR_CONST_LATVAP
     else
       L_use = SHR_CONST_LATSUB
     end if
-    es = es0 * exp((L_use / SHR_CONST_RWV) * (1._r8/T0_sat - 1._r8/T))
+    es = es0 * exp((L_use / SHR_CONST_RWV) * (1._r8/T0_sat - 1._r8/T_use))
   end function esat_cc
 
   pure function Lvap_T(T) result(L)

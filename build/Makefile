@@ -56,12 +56,6 @@ endif
 # Override EXORT_ROOT in config.mk if ExoRT lives elsewhere on your machine.
 EXORT_ROOT ?= /models/ExoRT
 MAIN_DIR    = $(EXORT_ROOT)/source/src.main
-
-# Generate sys_rootdir.F90 with the local EXORT_ROOT path, replacing ExoRT's
-# hardcoded machine-specific path.  Runs on every make invocation (fast).
-# The generated file is machine-specific and is not committed to version control.
-$(shell printf 'module sys_rootdir\n  implicit none\n  public\n  character(len=256), parameter :: exort_rootdir = "%s/"\nend module sys_rootdir\n' \
-  "$(EXORT_ROOT)" > ../src/sys_rootdir.F90)
 MISC_DIR    = $(EXORT_ROOT)/source/src.misc
 SPEC_DIR    = $(EXORT_ROOT)/source/src.n68equiv
 SRC_DIR     = $(EXORT_ROOT)/source
@@ -71,11 +65,35 @@ SRC_DIR     = $(EXORT_ROOT)/source
 EXCOL_DIR   = $(abspath ../src)
 BUILD_DIR   = $(abspath .)
 
+# --- ExoColumn-owned model settings ------------------------------------------
+# ExoRT exposes a few compile-time `parameter` constants (vertical levels,
+# gravity, stellar spectrum, etc.).  Rather than edit /models/ExoRT, we let
+# ExoColumn own these values: at build time we read ExoRT's exoplanet_mod.F90,
+# substitute the values we control, and write a local copy into src/.  The
+# build then compiles our local copy instead of ExoRT's, leaving ExoRT
+# completely untouched.  Override in config.mk or on the command line, e.g.:
+#
+#   make PVER=120
+#
+PVER ?= 70
+
+# Generate sys_rootdir.F90 with the local EXORT_ROOT path, replacing ExoRT's
+# hardcoded machine-specific path.  Runs on every make invocation (fast).
+# The generated file is machine-specific and is not committed to version control.
+$(shell printf 'module sys_rootdir\n  implicit none\n  public\n  character(len=256), parameter :: exort_rootdir = "%s/"\nend module sys_rootdir\n' \
+  "$(EXORT_ROOT)" > $(EXCOL_DIR)/sys_rootdir.F90)
+
+# Generate src/exoplanet_mod.F90 from ExoRT's source with our chosen exo_pver
+# value.  Matches the (single) uncommented `exo_pver = N` line and rewrites it;
+# commented variants are left alone.  ExoRT's file is preserved.
+$(shell sed -E 's|^([[:space:]]*integer[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_pver[[:space:]]*=[[:space:]]*)[0-9]+.*|\1$(PVER)  ! set by ExoColumn build (PVER=$(PVER))|' \
+  $(SRC_DIR)/exoplanet_mod.F90 > $(EXCOL_DIR)/exoplanet_mod.F90)
+
 # ---- ExoRT objects (same as n68equiv.exe target minus main.F90) ----
 # Ordering matters: each file must follow the modules it USEs.
 EXORT_SRCS = \
   $(MISC_DIR)/shr_kind_mod.F90        \
-  $(SRC_DIR)/exoplanet_mod.F90        \
+  $(EXCOL_DIR)/exoplanet_mod.F90      \
   $(EXCOL_DIR)/sys_rootdir.F90        \
   $(MISC_DIR)/shr_const_mod.F90       \
   $(MISC_DIR)/shr_sys_mod.F90         \
@@ -106,11 +124,13 @@ EXORT_SRCS = \
 # ---- ExoColumn objects ----
 EXCOL_SRCS = \
   $(EXCOL_DIR)/exocol_mod.F90         \
+  $(EXCOL_DIR)/exocol_ozone.F90       \
   $(EXCOL_DIR)/exocol_config.F90      \
   $(EXCOL_DIR)/exocol_radiation.F90   \
   $(EXCOL_DIR)/exocol_io.F90          \
   $(EXCOL_DIR)/exocol_convadj.F90     \
   $(EXCOL_DIR)/exocol_surface.F90     \
+  $(EXCOL_DIR)/exocol_coldstart.F90   \
   $(EXCOL_DIR)/exocol_rce_loop.F90    \
   $(EXCOL_DIR)/exocol_driver.F90
 

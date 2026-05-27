@@ -4,6 +4,9 @@ config.mk
 # Generated at build time from EXORT_ROOT in config.mk
 src/sys_rootdir.F90
 
+# Generated at build time from ExoRT's exoplanet_mod.F90 with PVER substituted
+src/exoplanet_mod.F90
+
 # Compiler artefacts
 build/*.mod
 build/*.o
