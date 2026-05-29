@@ -64,9 +64,10 @@ module exocol_rce_loop
   use exocol_mod
   use exocol_radiation, only: exocol_rad_tend
   use exocol_config,    only: conv_scheme, moisture_scheme, wind_speed, C_D, &
-                              cfg_dz_slab => dz_slab, tau_conv, cape_trigger
+                              cfg_dz_slab => dz_slab, tau_conv, cape_trigger, &
+                              rh_sbm
   use exocol_convadj,   only: convadj_dry, convadj_moist, convadj_manabe, &
-                              convadj_zm, esat_cc, Lvap_T
+                              convadj_zm, convadj_sbm, esat_cc, Lvap_T
   use exocol_surface,   only: compute_surface_fluxes
 
   implicit none
@@ -369,7 +370,27 @@ contains
       precip_total = 0._r8
       cond_heating = 0._r8
 
-      if (trim(adjustl(conv_scheme)) == 'zm') then
+      if (trim(adjustl(conv_scheme)) == 'sbm') then
+        ! Simplified Betts-Miller (Frierson 2007): relax T to the moist adiabat
+        ! and q to rh_sbm·qsat over tau_conv, energy-conservingly.  A light
+        ! saturation-adjustment mop-up then removes any residual (stratiform)
+        ! supersaturation outside the convecting column.
+        block
+          real(r8) :: precip_sbm
+          real(r8), dimension(pver) :: cond_tend_sbm
+          call convadj_sbm(tmid, tint, h2ommr, zint, pint, pdel, &
+                           cpdry_col, exo_g, ts, dt_sec, tau_conv, rh_sbm, &
+                           Lvap_T(ts), prognostic, precip_sbm, cond_tend_sbm, pver)
+          do k = 1, pver
+            cond_heating(k) = cond_heating(k) + cond_tend_sbm(k) * SHR_CONST_CSEC
+          end do
+          precip_total = precip_sbm
+          if (prognostic) then
+            call condense(dt_sec, precip_iter)
+            precip_total = precip_total + precip_iter
+          end if
+        end block
+      else if (trim(adjustl(conv_scheme)) == 'zm') then
         ! ZM soft scheme: one relaxed pass, condensation, then one hard cleanup.
         ! f_zm = 1 - exp(-dt/τ_conv): fraction of instability removed this step.
         ! At dt >> τ_conv (cold start) f_zm → 1 (hard); near equilibrium where

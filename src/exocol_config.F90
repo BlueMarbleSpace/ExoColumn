@@ -7,9 +7,12 @@ module exocol_config
 ! Two namelist blocks are supported, both optional:
 !
 ! &exocol_nml — runtime physics options
-!   conv_scheme      CHARACTER  'dry'        dry adiabatic
-!                               'moist'      moist rh-weighted (default)
+!   conv_scheme      CHARACTER  'sbm'        simplified Betts-Miller (default,
+!                                            recommended; Frierson 2007)
+!                               'dry'        dry adiabatic
+!                               'moist'      moist rh-weighted
 !                               'manabe'     fixed 6.5 K/km
+!                               'zm'         Zhang-McFarlane soft
 !   moisture_scheme  CHARACTER  'prognostic' surface evap + condensation (default)
 !                               'fixed_rh'   legacy RH-relaxation closure
 !                               'off'        no moisture update
@@ -102,22 +105,31 @@ module exocol_config
   private
 
   ! ---- &exocol_nml ----
-  character(len=32), public, save :: conv_scheme     = 'moist'
+  character(len=32), public, save :: conv_scheme     = 'sbm'
   character(len=32), public, save :: moisture_scheme = 'prognostic'
   character(len=32), public, save :: o3_profile      = 'uniform'
   real(r8),          public, save :: wind_speed      = 5.0_r8
   real(r8),          public, save :: C_D             = 1.5e-3_r8
   real(r8),          public, save :: msdist          = 1.0_r8
   real(r8),          public, save :: dz_slab         = 50.0_r8
-  real(r8),          public, save :: tau_conv        = 3600.0_r8  ! ZM relaxation time [s]
+  real(r8),          public, save :: tau_conv        = 3600.0_r8  ! ZM/SBM relaxation time [s]
   real(r8),          public, save :: cape_trigger    =    0.0_r8  ! CAPE activation threshold [J/kg]
+  real(r8),          public, save :: rh_sbm          =    0.7_r8  ! SBM reference relative humidity [-]
 
-  ! Hybrid vertical grid: n_sfc_layers near-surface layers are geometrically
-  ! spaced with bottom thickness dp_sfc_bot [Pa] and ratio sfc_stretch between
-  ! consecutive layers (each layer above is sfc_stretch times thicker).  The
-  ! remaining pver - n_sfc_layers layers are log-spaced from p_top to the top
-  ! of the surface block.  Set n_sfc_layers = 0 to revert to pure log-spacing.
-  integer,  public, save :: n_sfc_layers = 10
+  ! Vertical grid.  Default n_sfc_layers = 0 → pure log-spacing from p_top to ps
+  ! (recommended; lowest level ~400 m, giving Earth-like bulk surface fluxes with
+  ! the standard C_D and a numerically well-behaved column).
+  !
+  ! Setting n_sfc_layers > 0 builds a HYBRID grid: that many near-surface layers
+  ! are geometrically spaced (bottom thickness dp_sfc_bot [Pa], ratio sfc_stretch
+  ! between consecutive layers), with the remaining pver - n_sfc_layers layers
+  ! log-spaced above.  This puts the lowest level at ~8.5 m (dp_sfc_bot=200 Pa).
+  ! NOTE: without an explicit boundary-layer mixing scheme the thin bottom layer
+  ! equilibrates to Ts (collapsing the flux gradient → suppressed LE/SH) and goes
+  ! radiatively stiff in a moist column (collapsing the adaptive dt under sbm).
+  ! The hybrid grid is therefore reserved for future work that adds BL mixing;
+  ! use the log grid (n_sfc_layers = 0) for production runs.
+  integer,  public, save :: n_sfc_layers = 0
   real(r8), public, save :: dp_sfc_bot   = 200.0_r8   ! bottom layer dp [Pa] (~8.5 m)
   real(r8), public, save :: sfc_stretch  = 1.5_r8     ! geometric ratio [-]
 
@@ -192,7 +204,7 @@ contains
     namelist /exocol_nml/         conv_scheme, moisture_scheme, o3_profile, &
                                   wind_speed, C_D, msdist, dz_slab, &
                                   n_sfc_layers, dp_sfc_bot, sfc_stretch, &
-                                  tau_conv, cape_trigger
+                                  tau_conv, cape_trigger, rh_sbm
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -227,14 +239,21 @@ contains
 
     ! Validate conv_scheme
     select case (trim(adjustl(conv_scheme)))
-    case ('dry','moist','manabe','zm')
+    case ('dry','moist','manabe','zm','sbm')
       ! ok
     case default
       write(*,'(3a)') &
         "  WARNING: unknown conv_scheme='", trim(conv_scheme), &
-        "' — defaulting to moist"
-      conv_scheme = 'moist'
+        "' — defaulting to sbm"
+      conv_scheme = 'sbm'
     end select
+
+    ! Validate rh_sbm (reference RH for the SBM scheme; physical range (0,1])
+    if (rh_sbm <= 0.0_r8 .or. rh_sbm > 1.0_r8) then
+      write(*,'(a,f8.4,a)') &
+        '  WARNING: rh_sbm must be in (0,1] (got ', rh_sbm, ') — defaulting to 0.7'
+      rh_sbm = 0.7_r8
+    end if
 
     ! Validate moisture_scheme
     select case (trim(adjustl(moisture_scheme)))
@@ -306,6 +325,10 @@ contains
       write(*,'(a)') '  Convection scheme : Zhang-McFarlane soft (CAPE-relaxation)'
       write(*,'(a,f7.1,a)') '    tau_conv     = ', tau_conv,     ' s'
       write(*,'(a,f7.1,a)') '    cape_trigger = ', cape_trigger, ' J/kg'
+    case ('sbm')
+      write(*,'(a)') '  Convection scheme : simplified Betts-Miller (Frierson 2007)'
+      write(*,'(a,f7.1,a)') '    tau_conv (relax) = ', tau_conv, ' s'
+      write(*,'(a,f6.3)')   '    rh_sbm (ref RH)  = ', rh_sbm
     end select
 
     select case (trim(adjustl(moisture_scheme)))
