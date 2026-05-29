@@ -74,15 +74,33 @@ LWHR   = ds["LWHR"][:]
 SWHR   = ds["SWHR"][:]
 totHR  = LWHR + SWHR
 
-h2o_gkg = ds["h2ommr"][:] * 1e3
+cond_heating = ds["cond_heating"][:]   # K/day, per layer
+
+h2ommr  = ds["h2ommr"][:]
+co2mmr  = ds["co2mmr"][:]
+ch4mmr  = ds["ch4mmr"][:]
+o2mmr   = ds["o2mmr"][:]
+o3mmr   = ds["o3mmr"][:]
+n2mmr   = ds["n2mmr"][:]
 
 ts = float(ds["ts"][0])
 ps = float(ds["ps"][0]) / 100.0
 
 LE_diag = float(ds["LE"][0])
 SH_diag = float(ds["SH"][0])
+cp_col  = float(ds["cp"][0])           # J/kg/K
+pint_pa = ds["pint"][:]                # Pa (needed for pdel)
 
 ds.close()
+
+# ---------------------------------------------------------------------------
+# SH heating rate profile: applied only to the bottom model layer
+# SH [W/m²] * g [m/s²] / (cp [J/kg/K] * Δp [Pa]) * 86400 → K/day
+# ---------------------------------------------------------------------------
+_g = 9.80665
+SH_HR = np.zeros_like(totHR)
+pdel_bot = float(pint_pa[-1] - pint_pa[-2])   # Pa, bottom layer thickness
+SH_HR[-1] = SH_diag * _g / (cp_col * pdel_bot) * 86400.0
 
 # ---------------------------------------------------------------------------
 # Derived budget quantities (at interface levels)
@@ -144,19 +162,35 @@ setup_yaxis(ax)
 # ---- Panel 3: Heating rates -----------------------------------------------
 ax = ax_hr
 ax.axvline(0, color="gray", lw=0.6, ls=":")
-ax.plot(LWHR,  pmid, color="tomato",    lw=1.5, label="LW")
-ax.plot(SWHR,  pmid, color="steelblue", lw=1.5, label="SW")
-ax.plot(totHR, pmid, color="black",     lw=1.8, label="Total")
+grandHR = LWHR + SWHR + cond_heating + SH_HR
+ax.plot(LWHR,         pmid, color="tomato",       lw=1.5, label="LW rad")
+ax.plot(SWHR,         pmid, color="steelblue",    lw=1.5, label="SW rad")
+ax.plot(totHR,        pmid, color="black",        lw=1.8, ls="--", label="Rad total")
+ax.plot(cond_heating, pmid, color="mediumorchid", lw=1.5, label="Cond (latent)")
+ax.plot(SH_HR,        pmid, color="darkorange",   lw=1.5, label="Sensible (sfc)")
+ax.plot(grandHR,      pmid, color="black",        lw=2.2, label="Grand total")
 ax.set_xlabel("Heating rate (K day$^{-1}$)")
-ax.set_title("Radiative heating rates")
+ax.set_title("Heating rates")
 ax.legend(fontsize=9)
 setup_yaxis(ax)
 
-# ---- Panel 4: Water vapour ------------------------------------------------
+# ---- Panel 4: Atmospheric composition ----------------------------------------
 ax = ax_q
-ax.plot(h2o_gkg, pmid, color="royalblue", lw=1.5)
-ax.set_xlabel("Specific humidity (g kg$^{-1}$)")
-ax.set_title("Water vapour")
+_gases = [
+    (n2mmr,  "N$_2$",                 "dimgray"),
+    (o2mmr,  "O$_2$",                 "steelblue"),
+    (h2ommr, "H$_2$O (moist-air)",    "royalblue"),
+    (co2mmr, "CO$_2$",                "tomato"),
+    (o3mmr,  "O$_3$",                 "mediumseagreen"),
+    (ch4mmr, "CH$_4$",                "darkorange"),
+]
+for mmr, label, color in _gases:
+    if mmr.max() > 0:
+        ax.plot(mmr, pmid, color=color, lw=1.5, label=label)
+ax.set_xscale("log")
+ax.set_xlabel("Mass mixing ratio (kg kg$^{-1}$)")
+ax.set_title("Atmospheric composition")
+ax.legend(fontsize=8.5, loc="lower left")
 setup_yaxis(ax)
 
 # ---- Panel 5: Column energy budget ----------------------------------------

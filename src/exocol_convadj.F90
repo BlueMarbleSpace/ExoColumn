@@ -32,10 +32,12 @@ module exocol_convadj
   public :: convadj_dry
   public :: convadj_moist
   public :: convadj_manabe
+  public :: convadj_zm
   public :: esat_cc
   public :: Lvap_T
   public :: malr
   public :: compute_tint_interp
+  public :: compute_cape
 
   ! Manabe-Wetherald critical lapse rate [K/m]
   real(r8), parameter :: gamma_crit = 6.5e-3_r8
@@ -333,6 +335,184 @@ contains
     call compute_tint_interp(tmid, pint, nv, tint)
 
   end subroutine convadj_manabe
+
+  ! -----------------------------------------------------------------------
+  ! Scheme 3 — Zhang-McFarlane-style soft moist adjustment
+  ! -----------------------------------------------------------------------
+
+  subroutine convadj_zm(tmid, tint, h2ommr_col, zint_if, pint, pdel, cp, g, ts, &
+                        f_relax, cape_trig, nv)
+  ! Single-sweep moist adjustment with relaxation fraction f_relax.
+  !
+  ! For each unstable layer pair (same criterion as convadj_moist) the full
+  ! moist-adiabatic hard-adjustment increments ΔT and Δq are computed but
+  ! only a fraction f_relax ∈ (0,1] is applied.  Setting
+  !   f_relax = 1 - exp(-dt / τ_conv)
+  ! with the ZM default τ_conv = 7200 s reproduces the CAPE-relaxation
+  ! closure of Zhang & McFarlane (1995) without an explicit mass-flux
+  ! framework: each timestep removes 1 - e^{-dt/τ} of the layer-pair
+  ! instability.  f_relax = 1 recovers a single hard-adjustment pass
+  ! (used for the post-condensation cleanup in run_rce_loop).
+  !
+  ! CAPE trigger: when cape_trig > 0, a surface-parcel CAPE is computed
+  ! first; convection is suppressed if CAPE < cape_trig.  Pass cape_trig = 0
+  ! to skip the check (always active on any unstable pair).
+
+    real(r8), intent(inout) :: tmid(nv)
+    real(r8), intent(inout) :: tint(nv+1)
+    real(r8), intent(inout) :: h2ommr_col(nv)
+    real(r8), intent(in)    :: zint_if(nv+1)
+    real(r8), intent(in)    :: pint(nv+1)
+    real(r8), intent(in)    :: pdel(nv)
+    real(r8), intent(in)    :: cp
+    real(r8), intent(in)    :: g
+    real(r8), intent(in)    :: ts
+    real(r8), intent(in)    :: f_relax    ! relaxation fraction [0,1]
+    real(r8), intent(in)    :: cape_trig  ! CAPE activation threshold [J/kg]
+    integer,  intent(in)    :: nv
+
+    real(r8), parameter :: dz_min = 1._r8
+
+    integer  :: k
+    real(r8) :: Rd, eps_wv, gamma_d
+    real(r8) :: pmid_local(nv)
+    real(r8) :: zmid_k, zmid_kp1, dz
+    real(r8) :: T_mean, p_mean, gamma_m, gamma_eff, gamma_actual
+    real(r8) :: q_pair, es_pair, qsat_pair, rh_pair
+    real(r8) :: H, Tkp1_hard, Tk_hard, dTk, dTkp1
+    real(r8) :: q_mixed, dq_k, dq_kp1
+
+    block
+      use exocol_mod, only: mwdry_col, pmid
+      Rd         = SHR_CONST_RGAS / mwdry_col
+      eps_wv     = SHR_CONST_MWWV / mwdry_col
+      pmid_local = pmid(1:nv)
+    end block
+    gamma_d = g / cp
+
+    if (cape_trig > 0.0_r8) then
+      if (compute_cape(tmid, h2ommr_col, pmid_local, pint, zint_if, &
+                       Rd, g, cp, eps_wv, nv) < cape_trig) return
+    end if
+
+    do k = nv-1, 1, -1
+      zmid_k   = 0.5_r8 * (zint_if(k)   + zint_if(k+1))
+      zmid_kp1 = 0.5_r8 * (zint_if(k+1) + zint_if(k+2))
+      dz       = zmid_k - zmid_kp1
+
+      if (dz < dz_min) cycle
+
+      gamma_actual = (tmid(k+1) - tmid(k)) / dz
+
+      T_mean  = 0.5_r8 * (tmid(k) + tmid(k+1))
+      p_mean  = pint(k+1)
+      gamma_m = malr(T_mean, p_mean, Rd, g, cp)
+
+      q_pair    = 0.5_r8 * (h2ommr_col(k) + h2ommr_col(k+1))
+      es_pair   = min(esat_cc(T_mean), 0.99_r8 * p_mean)
+      qsat_pair = eps_wv * es_pair / (p_mean - es_pair)
+      rh_pair   = min(q_pair / max(qsat_pair, 1.0e-20_r8), 1.0_r8)
+      gamma_eff = rh_pair * gamma_m + (1.0_r8 - rh_pair) * gamma_d
+
+      if (gamma_actual > gamma_eff) then
+        H         = pdel(k)*tmid(k) + pdel(k+1)*tmid(k+1)
+        Tkp1_hard = (H + gamma_eff*dz*pdel(k)) / (pdel(k) + pdel(k+1))
+        Tk_hard   = Tkp1_hard - gamma_eff * dz
+        dTk       = f_relax * (Tk_hard   - tmid(k))
+        dTkp1     = f_relax * (Tkp1_hard - tmid(k+1))
+        tmid(k)   = tmid(k)   + dTk
+        tmid(k+1) = tmid(k+1) + dTkp1
+        q_mixed   = (pdel(k)*h2ommr_col(k) + pdel(k+1)*h2ommr_col(k+1)) &
+                    / (pdel(k) + pdel(k+1))
+        dq_k      = f_relax * rh_pair * (q_mixed - h2ommr_col(k))
+        dq_kp1    = f_relax * rh_pair * (q_mixed - h2ommr_col(k+1))
+        h2ommr_col(k)   = h2ommr_col(k)   + dq_k
+        h2ommr_col(k+1) = h2ommr_col(k+1) + dq_kp1
+      end if
+    end do
+
+    call compute_tint_interp(tmid, pint, nv, tint)
+
+  end subroutine convadj_zm
+
+  ! -----------------------------------------------------------------------
+  ! CAPE diagnostic — surface parcel ascent
+  ! -----------------------------------------------------------------------
+
+  function compute_cape(tmid_col, h2ommr_col, pmid_col, pint_col, zint_if, &
+                        Rd, g_planet, cp, eps_wv, nv) result(cape_out)
+  ! Compute CAPE [J/kg] by lifting the surface-layer parcel.
+  !
+  ! Phase 1 (dry adiabat): lift from k=nv to the LCL — the first layer k
+  ! going upward where q_parcel ≥ qsat(T_dry_parcel, p).
+  ! Phase 2 (moist adiabat): above the LCL, follow malr(T,p) and integrate
+  ! buoyancy using virtual temperatures.
+  ! CAPE = Σ g·(Tv_par − Tv_env)/Tv_env·Δz  over buoyant layers;
+  ! integration stops at the first non-buoyant layer (LNB).
+  !
+  ! Returns 0 if no LCL is found or the parcel is never buoyant above it.
+  ! Virtual temperature: Tv = T·(ε + q·(1−ε))/ε  where ε = Mwv/Mdry.
+
+    real(r8), intent(in) :: tmid_col(nv)
+    real(r8), intent(in) :: h2ommr_col(nv)
+    real(r8), intent(in) :: pmid_col(nv)
+    real(r8), intent(in) :: pint_col(nv+1)
+    real(r8), intent(in) :: zint_if(nv+1)
+    real(r8), intent(in) :: Rd, g_planet, cp, eps_wv
+    integer,  intent(in) :: nv
+    real(r8) :: cape_out
+
+    integer  :: k, k_lcl
+    real(r8) :: kappa, T_parcel, q_parcel
+    real(r8) :: T_parcel_dry, es_dry, qsat_dry
+    real(r8) :: zmid_k, zmid_prev
+    real(r8) :: T_par, es_par, q_par
+    real(r8) :: Tv_par, Tv_env, dz
+
+    cape_out = 0.0_r8
+    kappa    = Rd / cp
+    T_parcel = tmid_col(nv)
+    q_parcel = h2ommr_col(nv)
+
+    ! Phase 1: dry adiabatic lift to LCL
+    k_lcl = -1
+    do k = nv, 1, -1
+      T_parcel_dry = T_parcel * (pmid_col(k) / pmid_col(nv))**kappa
+      es_dry       = min(esat_cc(T_parcel_dry), 0.99_r8 * pmid_col(k))
+      qsat_dry     = eps_wv * es_dry / (pmid_col(k) - es_dry)
+      if (q_parcel >= qsat_dry) then
+        k_lcl = k
+        T_par = T_parcel_dry
+        exit
+      end if
+    end do
+    if (k_lcl < 0) return
+
+    ! Phase 2: moist adiabatic lift above LCL, accumulate CAPE
+    zmid_prev = 0.5_r8 * (zint_if(k_lcl) + zint_if(k_lcl+1))
+
+    do k = k_lcl - 1, 1, -1
+      zmid_k = 0.5_r8 * (zint_if(k) + zint_if(k+1))
+      dz     = zmid_k - zmid_prev
+
+      T_par = T_par - malr(T_par, pint_col(k+1), Rd, g_planet, cp) * dz
+
+      es_par = min(esat_cc(T_par), 0.99_r8 * pmid_col(k))
+      q_par  = eps_wv * es_par / (pmid_col(k) - es_par)
+
+      Tv_par = T_par        * (eps_wv + q_par           * (1.0_r8 - eps_wv)) / eps_wv
+      Tv_env = tmid_col(k)  * (eps_wv + h2ommr_col(k)   * (1.0_r8 - eps_wv)) / eps_wv
+
+      if (Tv_par > Tv_env) then
+        cape_out = cape_out + g_planet * (Tv_par - Tv_env) / Tv_env * dz
+      else
+        exit
+      end if
+
+      zmid_prev = zmid_k
+    end do
+
+  end function compute_cape
 
   ! -----------------------------------------------------------------------
   ! Shared interface-temperature interpolation

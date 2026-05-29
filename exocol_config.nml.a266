@@ -6,7 +6,7 @@
   wind_speed      = 5.0
   C_D             = 1.5e-3
   msdist          = 1.0
-  dz_slab         = 10.0
+  dz_slab         = 50.0
   n_sfc_layers    = 10
   dp_sfc_bot      = 200.0
   sfc_stretch     = 1.5
