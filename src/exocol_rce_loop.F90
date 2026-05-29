@@ -421,6 +421,13 @@ contains
         call sat_iter_convadj(sat_warn_count)  ! final cleanup after last satadj
       end if
 
+      ! ---- 10b. Stratospheric cold-point cold trap (Brewer-Dobson) ----
+      ! ExoColumn has no vertical moisture transport above the convective top,
+      ! so the stratosphere otherwise stays at its initialised q = 0, removing
+      ! the principal stratospheric LW coolant.  Set stratospheric H2O from the
+      ! cold-point freeze-drying value (see subroutine header).
+      if (prognostic) call apply_stratospheric_coldtrap()
+
       ! ---- 11. Final derived update (q + T changed in sat-adjust loop) ----
       call exocol_update_derived()
 
@@ -697,6 +704,64 @@ contains
     end do
 
   end subroutine condense
+
+  ! -----------------------------------------------------------------------
+  ! Stratospheric cold-point cold trap (Brewer-Dobson freeze-drying)
+  ! -----------------------------------------------------------------------
+
+  subroutine apply_stratospheric_coldtrap()
+  ! Physics-based stratospheric water-vapour closure.
+  !
+  ! Physical basis: tropospheric air can only enter the stratosphere by
+  ! ascending through the cold-point tropopause, where it is dehydrated by
+  ! condensation down to the saturation mixing ratio at the cold-point
+  ! temperature ("freeze drying"; Brewer 1949).  Above the cold point the air
+  ! continues to rise and warm, so it becomes subsaturated and no further
+  ! condensation occurs — the water-vapour mixing ratio is therefore conserved
+  ! (vertically uniform) throughout the stratosphere at the cold-point entry
+  ! value.  This is the dominant control on stratospheric humidity and is the
+  ! same closure used by konrad (ColdPointCoupling).
+  !
+  ! Why ExoColumn needs it: the model has no vertical moisture transport above
+  ! the convective top (SBM only relaxes q within the convecting column;
+  ! condense only removes vapour; surface evaporation sources only the bottom
+  ! layer).  The stratosphere would otherwise remain at its initialised q = 0,
+  ! removing the principal stratospheric LW coolant and leaving the stratosphere
+  ! unphysically warm — which in turn forces a sharp single-layer tropopause
+  ! where the cold convective top abuts the too-warm dry stratosphere.
+  !
+  ! Self-consistency: the entry value is recomputed from the current cold point
+  ! every step, so it tracks the radiative-convective solution — a colder cold
+  ! point gives a drier stratosphere (less H2O cooling) and vice versa.
+  !
+  ! Implementation as a global floor: freeze-dried air at the cold point is the
+  ! driest air in the whole column — every layer below is warmer and moister
+  ! (the convectively-moistened troposphere), and every layer above conserves
+  ! the same mixing ratio on ascent.  So qsat(T_cp) is the column-wide minimum
+  ! humidity, and we impose it as a floor at every level.  In the troposphere
+  ! q >> qsat(T_cp), so max() is a no-op there; in the otherwise-dry stratosphere
+  ! (both above the cold point AND in the gap between the convective top and the
+  ! cold point) it sets q = qsat(T_cp).  This avoids a dry warm gap forming
+  ! between the convective top and the cold point, which would otherwise push
+  ! the cold point unphysically high.  Since T >= T_cp everywhere, qsat >= q_cp,
+  ! so no supersaturation is introduced.
+    use exocol_mod, only: tmid, pmid, h2ommr, mwdry_col
+    use ppgrid,     only: pver
+    integer  :: k, k_cp
+    real(r8) :: eps_wv, es_cp, q_cp
+
+    eps_wv = SHR_CONST_MWWV / mwdry_col
+
+    ! Cold-point tropopause = coldest model level → freeze-drying value.
+    k_cp  = minloc(tmid, dim=1)
+    es_cp = min(esat_cc(tmid(k_cp)), 0.99_r8 * pmid(k_cp))
+    q_cp  = eps_wv * es_cp / (pmid(k_cp) - es_cp)
+
+    ! Impose the freeze-drying value as a column-wide humidity floor.
+    do k = 1, pver
+      h2ommr(k) = max(h2ommr(k), q_cp)
+    end do
+  end subroutine apply_stratospheric_coldtrap
 
   ! -----------------------------------------------------------------------
   ! Legacy fixed-RH closure (only invoked when moisture_scheme='fixed_rh')
