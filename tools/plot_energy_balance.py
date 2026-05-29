@@ -23,9 +23,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.backends.backend_pdf import PdfPages
 
-# --------------------------------------------------------------------------
-# Read data
-# --------------------------------------------------------------------------
+# ── Data ──────────────────────────────────────────────────────────────────────
 nc_path  = sys.argv[1] if len(sys.argv) > 1 else "iofiles/exocol_out.nc"
 pdf_path = sys.argv[2] if len(sys.argv) > 2 else "iofiles/energy_balance.pdf"
 
@@ -38,7 +36,7 @@ LE   = float(ds['LE'][:])
 SH   = float(ds['SH'][:])
 ds.close()
 
-# ---- Derived fluxes --------------------------------------------------------
+# ── Derived fluxes ─────────────────────────────────────────────────────────────
 sw_in      = SWDN[0]
 sw_ref_toa = SWUP[0]
 olr        = LWUP[0]
@@ -53,49 +51,86 @@ srf_rad    = sw_srf_abs + (lw_srf_dn - lw_srf_up)
 srf_net    = srf_rad - LE - SH
 precip_mm  = LE / 2.501e6 * 86400
 net_lw_atm = lw_srf_up - lw_srf_dn - olr + LWDN[0]
+atm_net    = sw_atm_abs + net_lw_atm + LE + SH
 
-# --------------------------------------------------------------------------
-# Figure
-# --------------------------------------------------------------------------
-fig, ax = plt.subplots(figsize=(14, 9))
+# ── Design tokens ──────────────────────────────────────────────────────────────
+BG_SPACE  = '#edf1f8'     # pale blue-grey — space
+BG_ATM    = '#d8eef9'     # light sky blue — atmosphere
+BG_SRF    = '#ede2ce'     # warm sand      — surface
+
+C_SW_IN   = '#1a65c0'     # blue            — all SW arrows (SW convention)
+C_LW      = '#c0282a'     # crimson red     — all LW arrows
+C_LW_SRF  = C_LW
+C_LW_ATM  = C_LW
+C_OLR     = C_LW
+C_TURB    = '#c88000'     # amber           — turbulent surface fluxes (LE, SH)
+C_LE      = C_TURB
+C_SH      = C_TURB
+
+plt.rcParams.update({'font.family': 'DejaVu Sans'})
+
+# ── Arrow width proportional to flux magnitude ─────────────────────────────────
+def flux_lw(flux, ref=400.0, lw_max=4.0, lw_min=1.0):
+    """Linear scaling: ref W m⁻² → lw_max, minimum lw_min."""
+    return lw_min + (lw_max - lw_min) * min(1.0, abs(flux) / ref)
+
+# ── Figure ─────────────────────────────────────────────────────────────────────
+fig, ax = plt.subplots(figsize=(7.0, 4.5))
+fig.patch.set_facecolor('white')
+ax.set_facecolor('white')
 ax.set_xlim(0, 1)
 ax.set_ylim(0, 1)
 ax.axis('off')
 
-Y_SRF = 0.21
+Y_SRF = 0.20
 Y_ATM = 0.78
 
-# Backgrounds
-ax.add_patch(mpatches.Rectangle((0, 0),     1, Y_SRF,        color='#4e3820', zorder=0))
-ax.add_patch(mpatches.Rectangle((0, Y_SRF), 1, Y_ATM-Y_SRF, color='#b8dff5', zorder=0))
-ax.add_patch(mpatches.Rectangle((0, Y_ATM), 1, 1-Y_ATM,     color='#06101e', zorder=0))
+# ── Zone fill ──────────────────────────────────────────────────────────────────
+ax.add_patch(mpatches.Rectangle((0, 0),     1, Y_SRF,        fc=BG_SRF,   ec='none', zorder=0))
+ax.add_patch(mpatches.Rectangle((0, Y_SRF), 1, Y_ATM-Y_SRF, fc=BG_ATM,   ec='none', zorder=0))
+ax.add_patch(mpatches.Rectangle((0, Y_ATM), 1, 1-Y_ATM,     fc=BG_SPACE, ec='none', zorder=0))
 
-# Band boundary lines
-ax.plot([0,1], [Y_SRF, Y_SRF], color='#2e1c0a', lw=2.0, transform=ax.transAxes, zorder=2)
-ax.plot([0,1], [Y_ATM, Y_ATM], color='#1a3a5c', lw=1.0, ls='--',
-        alpha=0.6, transform=ax.transAxes, zorder=2)
+# Soft atmosphere-glow fade into space at top of atmosphere zone
+_NFADE, _FADE_H = 50, 0.055
+for _i in range(_NFADE):
+    _alpha = (_i / _NFADE) ** 1.8 * 0.22
+    _dy    = _FADE_H / _NFADE
+    ax.add_patch(mpatches.Rectangle((0, Y_ATM + _i * _dy), 1, _dy,
+                                     fc=BG_ATM, alpha=_alpha, ec='none', zorder=1))
 
-# Band labels — left margin, clear of all arrows/boxes
-ax.text(0.013, (Y_ATM + 1.0) / 2, 'SPACE',
-        color='white', fontsize=13, fontweight='bold', va='center')
-ax.text(0.013, (Y_SRF + Y_ATM) / 2, 'ATMOSPHERE',
-        color='#0d2e4a', fontsize=11, fontweight='bold', va='center')
-ax.text(0.013, Y_SRF * 0.68, 'SURFACE',
-        color='white', fontsize=10, fontweight='bold', va='center')
-ax.text(0.013, Y_SRF * 0.28, f'Ts = {ts:.2f} K',
-        color='#f0c080', fontsize=9.5, fontweight='bold', va='center')
+# Zone boundary lines
+ax.plot([0, 1], [Y_SRF, Y_SRF], color='#a08060', lw=1.2, zorder=3)
+ax.plot([0, 1], [Y_ATM, Y_ATM], color='#6090b0', lw=0.5,
+        ls='--', alpha=0.65, zorder=3)
 
-# --------------------------------------------------------------------------
-# Arrow helper — arrowhead always at y_tip (xy); tail at y_tail (xytext).
-# For downward arrows: y_tip < y_tail.  '->' puts head at xy = y_tip.
-# --------------------------------------------------------------------------
+# ── Zone labels ────────────────────────────────────────────────────────────────
+ax.text(0.016, (Y_ATM + 1.0) / 2 + 0.018, 'S P A C E',
+        color='#4a6280', fontsize=7, fontweight='bold', va='center',
+        transform=ax.transAxes, zorder=4)
+ax.text(0.016, (Y_SRF + Y_ATM) / 2, 'A T M O S P H E R E',
+        color='#1e4a6a', fontsize=7, fontweight='bold', va='center',
+        transform=ax.transAxes, zorder=4)
+ax.text(0.016, Y_SRF * 0.62, 'S U R F A C E',
+        color='#6a4820', fontsize=6, fontweight='bold', va='center',
+        transform=ax.transAxes, zorder=4)
+
+# Surface temperature badge
+ax.text(0.016, Y_SRF * 0.20,
+        f'$T_s$ = {ts:.2f} K',
+        color='#5a3000', fontsize=7, fontweight='bold', va='center',
+        transform=ax.transAxes, zorder=6,
+        bbox=dict(facecolor='#fdf0d8', edgecolor='#b07828',
+                  alpha=0.95, pad=2, boxstyle='round,pad=0.35'))
+
+# ── Arrow helper ───────────────────────────────────────────────────────────────
 def varrow(ax, x, y_tail, y_tip, color, lw=3.0,
-           label='', ha='left', x_label=None, y_label=None, fs=9.0):
+           label='', ha='center', x_label=None, y_label=None, fs=6.0,
+           mutation_scale=20, arrowstyle='-|>'):
     ax.annotate(
         '', xy=(x, y_tip), xytext=(x, y_tail),
         xycoords='axes fraction', textcoords='axes fraction',
-        arrowprops=dict(arrowstyle='->', color=color, lw=lw,
-                        mutation_scale=18, shrinkA=2, shrinkB=2),
+        arrowprops=dict(arrowstyle=arrowstyle, color=color, lw=lw,
+                        mutation_scale=mutation_scale, shrinkA=2, shrinkB=2),
         zorder=5,
     )
     if label:
@@ -103,154 +138,123 @@ def varrow(ax, x, y_tail, y_tip, color, lw=3.0,
         xl = x_label if x_label is not None else x
         ax.text(xl, yl, label, color=color, fontsize=fs, fontweight='bold',
                 va='center', ha=ha, zorder=6,
-                bbox=dict(facecolor='white', edgecolor='none', alpha=0.78, pad=1.5))
+                bbox=dict(facecolor='white', edgecolor='none', alpha=0.82, pad=2))
 
-# --------------------------------------------------------------------------
-# Colours
-# --------------------------------------------------------------------------
-C_SW_IN  = '#c87808'   # incoming / transmitted SW
-C_SW_REF = '#d4a010'   # reflected SW
-C_SW_ABS = '#a04000'   # absorbed SW label
-C_LW_UP  = '#bb1a1a'   # LW up from surface
-C_LW_DN  = '#d86040'   # back-radiation
-C_OLR    = '#880606'   # OLR
-C_LE     = '#1a58cc'   # latent heat
-C_SH     = '#cc5808'   # sensible heat
-
-# --------------------------------------------------------------------------
-# Space-zone labels: centred above each arrow, clear of each other.
-# Three space arrows: incoming (x=0.15), reflected (x=0.24), OLR (x=0.76).
-# Put incoming label at y=0.91, reflected at y=0.84, OLR at y=0.88.
-# --------------------------------------------------------------------------
-
-# 1 — Incoming solar: downward, space → atmosphere top
-varrow(ax, 0.15, 0.975, Y_ATM + 0.005, C_SW_IN, lw=6,
-       label=f'Incoming solar\n{sw_in:.1f} W/m²',
-       ha='center', x_label=0.15, y_label=0.912, fs=10)
+# ── Space-zone arrows ──────────────────────────────────────────────────────────
+# 1 — Incoming solar: downward from space into atmosphere top
+varrow(ax, 0.20, 0.978, Y_ATM + 0.005, C_SW_IN, lw=7,
+       label=f'Incoming solar\n{sw_in:.1f} W m⁻²',
+       x_label=0.20, y_label=0.923, fs=6.5)
 
 # 2 — Reflected to space: upward
-varrow(ax, 0.24, Y_ATM, 0.970, C_SW_REF, lw=3,
-       label=f'Reflected\nto space\n{sw_ref_toa:.1f} W/m²',
-       ha='center', x_label=0.24, y_label=0.840, fs=9)
+varrow(ax, 0.42, Y_ATM, 0.972, C_SW_IN, lw=flux_lw(sw_ref_toa) * 1.5,
+       label=f'Reflected\nto space\n{sw_ref_toa:.1f} W m⁻²',
+       x_label=0.42, y_label=0.843, fs=6)
 
-# 7 — OLR: upward, atmosphere top → space  (placed here to keep space labels together)
-varrow(ax, 0.76, Y_ATM, 0.970, C_OLR, lw=4.5,
-       label=f'OLR\n{olr:.1f} W/m²',
-       ha='center', x_label=0.76, y_label=0.880, fs=10)
+# 7 — OLR: upward
+varrow(ax, 0.56, Y_ATM, 0.972, C_OLR, lw=flux_lw(olr),
+       label=f'OLR\n{olr:.1f} W m⁻²',
+       x_label=0.56, y_label=0.852, fs=6.5)
 
-# --------------------------------------------------------------------------
-# Atmosphere-zone labels: three height tiers to avoid overlap.
-#   Top tier    y ≈ 0.70  (just below TOA)
-#   Middle tier y ≈ 0.50
-#   Bottom tier y ≈ 0.29  (just above surface)
-# --------------------------------------------------------------------------
-
-# 3 — SW to surface: downward, atmosphere top → surface
-#     label at top tier, to the LEFT of arrow
-varrow(ax, 0.33, Y_ATM, Y_SRF + 0.005, C_SW_IN, lw=4,
-       label=f'SW to surface\n{sw_srf_dn:.1f} W/m²',
-       ha='right', x_label=0.315, y_label=0.700, fs=9)
+# ── Atmosphere-zone arrows ─────────────────────────────────────────────────────
+# 3 — SW transmitted to surface: downward
+varrow(ax, 0.25, Y_ATM, Y_SRF + 0.005, C_SW_IN, lw=flux_lw(sw_srf_dn),
+       label=f'SW to surface\n{sw_srf_dn:.1f} W m⁻²',
+       x_label=0.25, y_label=0.700)
 
 # 4 — SW reflected by surface: upward
-#     label at middle tier, to the RIGHT
-varrow(ax, 0.42, Y_SRF, Y_ATM, C_SW_REF, lw=2.5,
-       label=f'Surface reflected\n{sw_srf_ref:.1f} W/m²  (α={sw_srf_ref/sw_srf_dn:.3f})',
-       ha='left', x_label=0.435, y_label=0.500, fs=8.5)
+varrow(ax, 0.37, Y_SRF, Y_ATM, C_SW_IN, lw=flux_lw(sw_srf_ref),
+       label=f'Surface reflected\n{sw_srf_ref:.1f} W m⁻²',
+       x_label=0.37, y_label=0.370, fs=5.5)
 
 # 5 — LW emitted by surface: upward
-#     label at bottom tier, to the LEFT
-varrow(ax, 0.56, Y_SRF, Y_ATM, C_LW_UP, lw=4.5,
-       label=f'LW emitted\nby surface\n{lw_srf_up:.1f} W/m²  (≈ σT⁴)',
-       ha='right', x_label=0.545, y_label=0.295, fs=9)
+varrow(ax, 0.56, Y_SRF, Y_ATM, C_LW_SRF, lw=flux_lw(lw_srf_up),
+       label=f'LW from surface\n{lw_srf_up:.1f} W m⁻²',
+       x_label=0.56, y_label=0.295)
 
-# 6 — Back-radiation: downward, atmosphere top → surface
-#     label at top tier, to the RIGHT
-varrow(ax, 0.655, Y_ATM, Y_SRF + 0.005, C_LW_DN, lw=4,
-       label=f'Back-radiation\n(greenhouse)\n{lw_srf_dn:.1f} W/m²',
-       ha='left', x_label=0.670, y_label=0.700, fs=9)
+# 6 — Back-radiation: downward from atmosphere to surface
+varrow(ax, 0.655, Y_ATM, Y_SRF + 0.005, C_LW_ATM, lw=flux_lw(lw_srf_dn),
+       label=f'Greenhouse\nwarming\n{lw_srf_dn:.1f} W m⁻²',
+       x_label=0.655, y_label=0.700)
 
-# 8 — Latent heat: upward
-#     label at bottom tier, to the LEFT
-varrow(ax, 0.845, Y_SRF, Y_ATM, C_LE, lw=3,
-       label=f'Latent heat\n{LE:.1f} W/m²\n({precip_mm:.2f} mm/day)',
-       ha='right', x_label=0.828, y_label=0.295, fs=9)
+Y_BL = Y_SRF + (Y_ATM - Y_SRF) / 2   # boundary-layer arrow top
 
-# 9 — Sensible heat: upward
-#     label at middle tier, to the RIGHT (short label to stay within bounds)
-varrow(ax, 0.920, Y_SRF, Y_ATM, C_SH, lw=2.5,
-       label=f'Sensible heat\n{SH:.1f} W/m²',
-       ha='left', x_label=0.932, y_label=0.500, fs=9)
+# 8 — Latent heat: upward (boundary layer only)
+varrow(ax, 0.845, Y_SRF, Y_BL, C_LE, lw=flux_lw(LE),
+       label=f'Latent heat\n{LE:.1f} W m⁻²',
+       x_label=0.845, y_label=0.310)
 
-# --------------------------------------------------------------------------
-# Floating annotation boxes inside the atmosphere band
-# --------------------------------------------------------------------------
-# SW absorbed by atmosphere
-ax.text(0.255, 0.610,
-        f'SW abs. by atmosphere\n{sw_atm_abs:.1f} W/m²',
-        color=C_SW_ABS, fontsize=9, fontweight='bold', va='center', ha='center', zorder=6,
-        bbox=dict(facecolor='white', edgecolor=C_SW_ABS, alpha=0.90,
-                  pad=4, boxstyle='round,pad=0.3'))
+# 9 — Sensible heat: upward (boundary layer only)
+varrow(ax, 0.920, Y_SRF, Y_BL, C_SH, lw=flux_lw(SH),
+       label=f'Sensible heat\n{SH:.1f} W m⁻²',
+       x_label=0.920, y_label=0.390)
 
-# Net LW cooling of atmosphere
-ax.text(0.720, 0.540,
-        f'Net LW atm cooling\n{net_lw_atm:.1f} W/m²',
-        color='#8a1818', fontsize=8.5, fontweight='bold', va='center', ha='center', zorder=6,
-        bbox=dict(facecolor='white', edgecolor='#cc3030', alpha=0.88,
-                  pad=3, boxstyle='round,pad=0.3'))
+# ── Floating atmosphere annotation boxes ───────────────────────────────────────
+ax.text(0.31, 0.540,
+        f'SW absorbed\nby atmosphere\n{sw_atm_abs:.1f} W m⁻²',
+        color=C_SW_IN, fontsize=6, fontweight='bold', va='center', ha='center', zorder=6,
+        bbox=dict(facecolor='white', edgecolor=C_SW_IN,
+                  alpha=0.90, pad=2, boxstyle='round,pad=0.35'))
 
-# --------------------------------------------------------------------------
-# Surface band annotation
-# --------------------------------------------------------------------------
-ax.text(0.50, Y_SRF / 2,
-        f'SW absorbed at surface:  {sw_srf_abs:.1f} W/m²',
-        color='#e8a020', fontsize=9, fontweight='bold', va='center', ha='center', zorder=6,
-        bbox=dict(facecolor='#4e3820', edgecolor='#e8a020', alpha=0.90,
-                  pad=4, boxstyle='round,pad=0.3'))
+ax.text(0.607, 0.540,
+        f'LW absorbed\nby atmosphere\n{net_lw_atm:.1f} W m⁻²',
+        color=C_LW, fontsize=6, fontweight='bold', va='center', ha='center', zorder=6,
+        bbox=dict(facecolor='white', edgecolor=C_LW,
+                  alpha=0.90, pad=2, boxstyle='round,pad=0.35'))
 
-# --------------------------------------------------------------------------
-# Budget boxes
-# --------------------------------------------------------------------------
-# TOA (space zone, top-right)
-ax.text(0.875, 0.965,
-        f'TOA net (this step):   {toa_net:+.2f} W/m²\n'
-        f'TOA net (window mean): −0.09 W/m²',
-        fontsize=8.5, ha='center', va='top', color='white', zorder=7,
-        bbox=dict(facecolor='#1a3a60', edgecolor='#6090cc',
-                  alpha=0.92, pad=5, boxstyle='round,pad=0.4'))
+# ── Surface band annotation ────────────────────────────────────────────────────
+ax.text(0.31, Y_SRF / 2 + 0.07,
+        f'SW net at surface:  {sw_srf_abs:.1f} W m⁻²',
+        color=C_SW_IN, fontsize=6, fontweight='bold', va='center', ha='center', zorder=6,
+        bbox=dict(facecolor='white', edgecolor=C_SW_IN,
+                  alpha=0.95, pad=2, boxstyle='round,pad=0.35'))
 
-# Surface balance (surface band, right side)
-ax.text(0.985, Y_SRF - 0.005,
-        f'Surface balance\n'
-        f'  SW net    +{sw_srf_abs:.1f}\n'
-        f'  LW net   {lw_srf_dn - lw_srf_up:+.1f}\n'
-        f'  LE       {-LE:+.1f}\n'
-        f'  SH       {-SH:+.1f}\n'
-        f'  ─────────────\n'
-        f'  Residual  {srf_net:+.2f} W/m²',
-        fontsize=8.5, ha='right', va='top', color='white', zorder=7,
+ax.text(0.62, Y_SRF / 2 + 0.07,
+        f'LW net at surface:  {lw_srf_dn - lw_srf_up:+.1f} W m⁻²',
+        color=C_LW, fontsize=6, fontweight='bold', va='center', ha='center', zorder=6,
+        bbox=dict(facecolor='white', edgecolor=C_LW,
+                  alpha=0.95, pad=2, boxstyle='round,pad=0.35'))
+
+# ── Budget panels ──────────────────────────────────────────────────────────────
+# TOA balance — top right, in space zone
+ax.text(0.875, 0.968,
+        f'TOA net (this step)    {toa_net:+.2f} W m⁻²\n'
+        f'TOA net (window mean)  −0.09 W m⁻²',
+        fontsize=5.5, ha='center', va='top', color='#0d2a50', zorder=7,
         family='monospace',
-        bbox=dict(facecolor='#2a1a0a', edgecolor='#8a6030',
-                  alpha=0.92, pad=5, boxstyle='round,pad=0.4'))
+        bbox=dict(facecolor='#ddeef8', edgecolor='#5a88c0',
+                  alpha=0.95, pad=3, boxstyle='round,pad=0.45'))
 
-# --------------------------------------------------------------------------
-# Title and caption
-# --------------------------------------------------------------------------
-ax.set_title(
-    'ExoColumn  ·  Planetary Energy Balance\n'
-    f'ZM convection (τ = 3600 s)  ·  α = 0.266  ·  Earth-like composition  ·  '
-    f'$T_s$ = {ts:.2f} K',
-    fontsize=12, fontweight='bold', pad=10,
-)
-ax.text(0.5, 0.003,
-        'ExoColumn + ExoRT n68equiv  |  pver = 70  |  coszrs = 0.50  |  '
-        'ps = 1000 hPa  |  Units: W m⁻²',
-        ha='center', va='bottom', fontsize=8, color='#888888',
-        transform=ax.transAxes)
+# Atmosphere balance — right side, just below TOA line
+ax.text(0.985, Y_ATM - 0.005,
+        f'Atmosphere balance\n'
+        f'  SW abs   +{sw_atm_abs:.1f}\n'
+        f'  Net LW  {net_lw_atm:+.1f}\n'
+        f'  LE       +{LE:.1f}\n'
+        f'  SH       +{SH:.1f}\n'
+        f'  ─────────────\n'
+        f'  Residual {atm_net:+.2f} W m⁻²',
+        fontsize=5.5, ha='right', va='top', color='#0d2040', zorder=7,
+        family='monospace',
+        bbox=dict(facecolor='#ddeef8', edgecolor='#5a88c0',
+                  alpha=0.96, pad=3, boxstyle='round,pad=0.45'))
 
-# --------------------------------------------------------------------------
-# Save
-# --------------------------------------------------------------------------
+# Surface balance — bottom right, inside surface zone
+ax.text(0.985, Y_SRF - 0.006,
+        f'Surface balance\n'
+        f'  SW net   +{sw_srf_abs:.1f}\n'
+        f'  LW net  {lw_srf_dn - lw_srf_up:+.1f}\n'
+        f'  LE      {-LE:+.1f}\n'
+        f'  SH      {-SH:+.1f}\n'
+        f'  ─────────────\n'
+        f'  Residual {srf_net:+.2f} W m⁻²',
+        fontsize=5.5, ha='right', va='top', color='#2a1808', zorder=7,
+        family='monospace',
+        bbox=dict(facecolor='#f8f0e2', edgecolor='#907848',
+                  alpha=0.96, pad=3, boxstyle='round,pad=0.45'))
+
+# ── Save ───────────────────────────────────────────────────────────────────────
 with PdfPages(pdf_path) as pdf:
-    pdf.savefig(fig, bbox_inches='tight', dpi=150)
+    pdf.savefig(fig, bbox_inches='tight', dpi=300, facecolor='white')
 plt.close(fig)
 print(f"Wrote {pdf_path}")
