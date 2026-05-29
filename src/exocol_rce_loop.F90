@@ -19,18 +19,18 @@ module exocol_rce_loop
 !      for any bottom-layer thickness.  n_sub = max(1, floor(dt/τ)+1) so that
 !      for thick layers (τ >> dt) n_sub = 1 and cost is identical to before.
 !      Each subcycle updates ts, tmid(pver), and h2ommr(pver) together.
-!   7. Saturation adjustment — convadj and condense iterated to fixed point.
-!      convadj equilibrates the lapse rate; condense relaxes q toward qsat
-!      with an implicit-Euler step of timescale τ_cond (replacing the legacy
-!      instant cap), releasing Lvap_T(ts)·Δq into tmid.  The iteration
-!      handles the latent-feedback into convadj.
+!   7. Saturation adjustment — convadj + satadj (Newton) + convadj.
+!      Pass A: convadj equilibrates the lapse rate.
+!      Pass B: satadj removes all supersaturation in one Newton step, releasing
+!              Lvap_T(ts)·Δq into tmid; q ≤ qsat(T) is guaranteed after one call.
+!      Pass C: convadj cleans up lapse-rate instability from the latent release.
 !   8. Update derived (pdeldry, pintdry), tint, zint.
 !
 ! CFL / stability summary (Earth-like column at dt_max = 1 d):
 !   Radiative ΔT/step          → dt_max · max|HR|        bounded by dT_target.
 !   Surface turbulent flux     → τ_surf ≈ 8 h            implicit damping.
 !   Slab radiative equilibration → τ_slab ≈ 350 d        well below dt_max.
-!   Condensation onset         → τ_cond ≈ 1 h            relaxation.
+!   Condensation                → saturation adjustment  one Newton step/layer.
 !
 ! Time accounting: model_time_days accumulates dt_days each step.  Stability
 ! snapshots and console prints are model-time based (not step-count based)
@@ -58,15 +58,15 @@ module exocol_rce_loop
 
   use shr_kind_mod,    only: r8 => shr_kind_r8
   use shr_const_mod,   only: SHR_CONST_CSEC, SHR_CONST_RGAS, SHR_CONST_MWWV, &
-                             SHR_CONST_STEBOL
+                             SHR_CONST_STEBOL, SHR_CONST_RWV
   use exoplanet_mod,   only: exo_g
   use ppgrid,          only: pver, pverp
   use exocol_mod
   use exocol_radiation, only: exocol_rad_tend
   use exocol_config,    only: conv_scheme, moisture_scheme, wind_speed, C_D, &
-                              cfg_dz_slab => dz_slab
+                              cfg_dz_slab => dz_slab, tau_conv, cape_trigger
   use exocol_convadj,   only: convadj_dry, convadj_moist, convadj_manabe, &
-                              esat_cc, Lvap_T
+                              convadj_zm, esat_cc, Lvap_T
   use exocol_surface,   only: compute_surface_fluxes
 
   implicit none
@@ -83,7 +83,7 @@ module exocol_rce_loop
   ! linear regime (Manabe-Wetherald 1967; CliMT; RRTM-RCE).
   real(r8), parameter :: dt_max      = 1.0_r8       ! cap [days]
   real(r8), parameter :: dt_min      = 1.0e-4_r8    ! floor [days] (~10 s)
-  real(r8), parameter :: dT_target   = 2.0_r8       ! target |dt·HR| per step [K]
+  real(r8), parameter :: dT_target   = 1.0_r8       ! target |dt·HR| per step [K]
   real(r8), parameter :: cfl_safety  = 0.8_r8       ! safety factor [-]
 
   ! Current adaptive timestep — set each step in run_rce_loop, read by
@@ -118,20 +118,17 @@ module exocol_rce_loop
 
   ! Convadj fixed-point iteration (within each outer step).  Each convadj
   ! pass equilibrates the lapse rate; iteration exits when no layer-midpoint
-  ! T changes more than sat_T_tol between passes.  Called twice per outer
-  ! step: once before condense (initial cleanup) and once after (handle
-  ! latent-release destabilization).  Each round honors max_sat_iter.
-  integer,  parameter :: max_sat_iter = 50          ! cap on inner iterations
+  ! T changes more than sat_T_tol between passes.  Each round honors max_sat_iter.
+  integer,  parameter :: max_sat_iter = 50          ! cap on inner convadj passes
   real(r8), parameter :: sat_T_tol    = 1.0e-4_r8   ! max |ΔT| per convadj pass [K]
 
-  ! Condensation relaxation timescale.  In condense(), the excess vapor above
-  ! qsat is removed via an implicit-Euler step of timescale tau_cond:
-  !   q_new = (q + (dt/τ)·qsat) / (1 + dt/τ)
-  ! For dt ≫ τ this recovers the legacy instant cap (alpha → 1); for dt ≲ τ
-  ! it spreads the condensation across multiple outer steps, eliminating the
-  ! threshold-switch flicker that previously prevented Path B from firing at
-  ! short dt.  τ ≈ 1 hour matches warm-cloud autoconversion timescales.
-  real(r8), parameter :: tau_cond = 3600._r8        ! condensation timescale [s]
+  ! Outer thermodynamic consistency loop: convadj and satadj are iterated
+  ! together until the column simultaneously satisfies lapse-rate stability
+  ! AND q ≤ qsat everywhere.  Converged when satadj removes no vapour (exact
+  ! zero is achievable with Newton satadj).  Starting each radiation step from
+  ! this self-consistent state reduces step-to-step T-profile variability and
+  ! hence instantaneous TOA flux noise.
+  integer,  parameter :: max_inner_phys = 20         ! cap on convadj+satadj cycles
 
   ! Slab-ocean heat capacity.  Density and cp are fixed (seawater); thickness
   ! is configurable via &exocol_nml::dz_slab.  H_slab is computed at run start.
@@ -194,8 +191,9 @@ contains
     real(r8) :: t_window_start               ! model time at start of current window
     real(r8) :: t_last_print                 ! model time of last console print
 
-    integer  :: it, k
+    integer  :: it, k, inner_iter
     integer  :: sat_warn_count               ! count of outer steps where convadj hit max_sat_iter
+    real(r8) :: f_zm                         ! ZM relaxation fraction for current step
     logical  :: converged, profile_stable
     logical  :: prognostic, fixed_rh
 
@@ -243,9 +241,10 @@ contains
     write(*,'(a,i0)')     '   nmax       = ', nmax
     write(*,'(a,f7.4)')   '   hr_tol  [K/day] = ', hr_tol
     write(*,'(a,f6.3)')   '   toa_tol [W/m2]  = ', toa_tol
-    write(*,'(a,f6.1)')   '   tau_cond [s]    = ', tau_cond
+
     write(*,'(a,f6.2,a,es9.2,a)') &
       '   slab: dz =', cfg_dz_slab, ' m   H_slab =', H_slab, ' J/m²/K'
+    write(*,'(a)') '   condensation     : saturation adjustment (Newton)'
     write(*,'(a,/)')      '========================================'
 
     ! Capture initial RH only if the legacy fixed-RH closure is selected.
@@ -366,27 +365,40 @@ contains
       ! ---- 9. Interface temperatures ----
       call update_tint()
 
-      ! ---- 10. Saturation adjustment: convadj → condense → convadj ----
-      ! With smooth condensation (one dt-step of implicit-Euler relaxation),
-      ! condense() should run ONCE per outer step — its alpha already
-      ! integrates dq/dt over the full dt.  We bracket condense with two
-      ! rounds of convadj iteration:
-      !   Pass A: equilibrate the lapse rate (convadj only).
-      !   Pass B: one smooth condensation relaxation.
-      !   Pass C: cleanup convadj after latent release re-destabilizes pairs.
-      ! Each convadj round iterates internally until no T change > sat_T_tol.
-      ! Both rounds use the same max_sat_iter cap.
+      ! ---- 10. Thermodynamic consistency loop: convadj + satadj ----
       precip_total = 0._r8
       cond_heating = 0._r8
 
-      call sat_iter_convadj(sat_warn_count)
-
-      if (prognostic) then
-        call condense(dt_sec, precip_iter)
-        precip_total = precip_total + precip_iter
+      if (trim(adjustl(conv_scheme)) == 'zm') then
+        ! ZM soft scheme: one relaxed pass, condensation, then one hard cleanup.
+        ! f_zm = 1 - exp(-dt/τ_conv): fraction of instability removed this step.
+        ! At dt >> τ_conv (cold start) f_zm → 1 (hard); near equilibrium where
+        ! dt ≈ 0.06 d and τ_conv = 7200 s = 0.083 d, f_zm ≈ 0.51.
+        f_zm = 1.0_r8 - exp(-dt_days / (tau_conv / SHR_CONST_CSEC))
+        call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
+                        cpdry_col, exo_g, ts, f_zm, cape_trigger, pver)
+        if (prognostic) then
+          call condense(dt_sec, precip_iter)
+          precip_total = precip_iter
+        end if
+        ! Hard cleanup (f=1, no CAPE check) removes any instability from
+        ! latent heat release — this is always a fast local process.
+        call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
+                        cpdry_col, exo_g, ts, 1.0_r8, 0.0_r8, pver)
+      else
+        ! Hard schemes: iterate convadj + satadj until q ≤ qsat everywhere.
+        do inner_iter = 1, max_inner_phys
+          call sat_iter_convadj(sat_warn_count)
+          if (prognostic) then
+            call condense(dt_sec, precip_iter)
+            precip_total = precip_total + precip_iter
+            if (precip_iter == 0._r8) exit
+          else
+            exit
+          end if
+        end do
+        call sat_iter_convadj(sat_warn_count)  ! final cleanup after last satadj
       end if
-
-      call sat_iter_convadj(sat_warn_count)
 
       ! ---- 11. Final derived update (q + T changed in sat-adjust loop) ----
       call exocol_update_derived()
@@ -592,6 +604,10 @@ contains
       case ('manabe')
         call convadj_manabe(tmid, tint, h2ommr, zint, pint, pdel, &
                             cpdry_col, exo_g, ts, pver)
+      case ('zm')
+        ! ZM is dispatched in run_rce_loop; this fallback applies one hard pass.
+        call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
+                        cpdry_col, exo_g, ts, 1.0_r8, 0.0_r8, pver)
       case default  ! 'dry'
         call convadj_dry(tmid, tint, h2ommr, pint, pdel, &
                          cpdry_col, exo_g, ts, pver)
@@ -611,61 +627,48 @@ contains
   ! -----------------------------------------------------------------------
 
   subroutine condense(dt_step_sec, precip_mass_flux)
-  ! Where h2ommr > qsat(T,p), relax h2ommr toward qsat on timescale tau_cond
-  ! and release the corresponding latent heat into tmid.
+  ! Saturation adjustment: where h2ommr > qsat(T,p), find the simultaneous
+  ! (T_new, q_new) that satisfy energy conservation and exact saturation.
   !
-  ! Numerics — implicit Euler on dq/dt = -(q − qsat)/τ_cond when q > qsat:
-  !   q_new = (q + (dt/τ)·qsat) / (1 + dt/τ)
-  !   Δq   = q − q_new = (dt/τ)/(1 + dt/τ) · (q − qsat) = alpha · (q − qsat)
-  ! For dt ≫ τ, alpha → 1 — recovers the legacy instant cap.
-  ! For dt ≲ τ, alpha < 1 — spreads condensation across multiple outer steps,
-  ! eliminating the threshold-switch flicker that prevents Path B from firing
-  ! at small adaptive dt.
+  ! Newton solve for Δq (one step per layer, no outer iteration needed):
+  !   T_new  = T + (L/cp) · Δq                 [enthalpy conservation]
+  !   q_new  = q − Δq  =  qsat(T_new)          [exact saturation]
   !
-  ! Note on the choice of L:
-  !   The latent heat used here is Lvap_T(ts), evaluated at the SURFACE
-  !   temperature — not at the layer temperature.  Rationale: every kg of
-  !   vapor in the column was placed there by surface evaporation, which
-  !   debited L(ts) from the slab.  Releasing L(tmid) at condensation would
-  !   credit L_sub for any kg condensing at T<273.16 K while only L_vap was
-  !   originally consumed at the warm surface, injecting a free L_fusion per
-  !   kg cycled.  Using Lvap_T(ts) keeps the latent-heat ledger balanced
-  !   (evap debit ≡ condense credit) and treats the column as if precip
-  !   leaves the column in the same phase that it entered.  Phase-aware qsat
-  !   (esat_cc uses L_sub below freezing → lower qsat over ice) is retained
-  !   — that's a separate, correct piece of physics that affects WHEN
-  !   condensation triggers, not how much heat is released per kg.
+  ! Linearising qsat(T_new) ≈ qsat(T) + (dqsat/dT)·(L/cp)·Δq and solving:
+  !   Δq = (q − qsat(T)) / (1 + (L/cp) · dqsat/dT)
+  ! where dqsat/dT = qsat·(1 + qsat/ε)·L/(Rv·T²)  from Clausius-Clapeyron,
+  ! and ε = Mwv/Mdry.
   !
-  ! After the latent release, qsat(T_new) > qsat(T_old), so the layer may be
-  ! subsaturated relative to its NEW temperature, and the latent heating can
-  ! destabilize adjacent pairs.  The caller follows this routine with a
-  ! convadj-only iteration pass to clean up.
+  ! Correctness of single step: the Clausius-Clapeyron curve is convex
+  ! (d²qsat/dT² > 0), so qsat(T_new) ≥ the linearised value = q_new.
+  ! The Newton step therefore always leaves q_new ≤ qsat(T_new) — the layer
+  ! is guaranteed subsaturated or exactly saturated; no iteration is needed.
   !
-  ! Outputs (one call per outer step):
-  !   precip_mass_flux  — column-integrated condensation mass flux this step
-  !                       [kg/m²/s]; reset to 0 here.
-  !   cond_heating(k)   — ADDED to (caller zeroes once before this call); the
-  !                       inc here is the only contribution per outer step.
-    real(r8), intent(in)  :: dt_step_sec      ! step length [s] for diagnostics
+  ! L is Lvap_T(ts) throughout (matching the surface evap ledger): every kg
+  ! of vapour was placed in the column by surface evaporation that debited
+  ! L(ts) from the slab; releasing L(tmid) at condensation would inject a
+  ! free L_fusion per kg cycled through the ice phase.  Phase-aware qsat
+  ! (esat_cc uses L_sub below freezing) controls WHEN condensation triggers,
+  ! independently of how much heat is released per kg.
+    real(r8), intent(in)  :: dt_step_sec
     real(r8), intent(out) :: precip_mass_flux
 
     integer  :: k
-    real(r8) :: eps_wv, es_k, qsat_k, q_excess, L_release, alpha
+    real(r8) :: eps_wv, es_k, qsat_k, dqsat_dT, q_excess, L_release
 
     eps_wv    = SHR_CONST_MWWV / mwdry_col
-    L_release = Lvap_T(ts)         ! match surface evap ledger
-    ! Implicit-Euler relaxation factor: alpha = (dt/τ)/(1+dt/τ) = dt/(dt+τ)
-    alpha     = dt_step_sec / (dt_step_sec + tau_cond)
+    L_release = Lvap_T(ts)
     precip_mass_flux = 0._r8
 
     do k = 1, pver
       es_k   = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
       qsat_k = eps_wv * es_k / (pmid(k) - es_k)
       if (h2ommr(k) > qsat_k) then
-        q_excess  = alpha * (h2ommr(k) - qsat_k)
+        dqsat_dT  = qsat_k * (1._r8 + qsat_k / eps_wv) &
+                    * L_release / (SHR_CONST_RWV * tmid(k)**2)
+        q_excess  = (h2ommr(k) - qsat_k) / (1._r8 + (L_release / cpdry_col) * dqsat_dT)
         h2ommr(k) = h2ommr(k) - q_excess
-        tmid(k)   = tmid(k) + L_release * q_excess / cpdry_col
-        ! Diagnostic: latent heating [K/day], column precip mass [kg/m²/s].
+        tmid(k)   = tmid(k)   + L_release * q_excess / cpdry_col
         cond_heating(k)  = cond_heating(k) &
                            + L_release * q_excess / cpdry_col / dt_days
         precip_mass_flux = precip_mass_flux + q_excess * pdel(k) / exo_g / dt_step_sec

@@ -109,6 +109,8 @@ module exocol_config
   real(r8),          public, save :: C_D             = 1.5e-3_r8
   real(r8),          public, save :: msdist          = 1.0_r8
   real(r8),          public, save :: dz_slab         = 50.0_r8
+  real(r8),          public, save :: tau_conv        = 3600.0_r8  ! ZM relaxation time [s]
+  real(r8),          public, save :: cape_trigger    =    0.0_r8  ! CAPE activation threshold [J/kg]
 
   ! Hybrid vertical grid: n_sfc_layers near-surface layers are geometrically
   ! spaced with bottom thickness dp_sfc_bot [Pa] and ratio sfc_stretch between
@@ -189,7 +191,8 @@ contains
 
     namelist /exocol_nml/         conv_scheme, moisture_scheme, o3_profile, &
                                   wind_speed, C_D, msdist, dz_slab, &
-                                  n_sfc_layers, dp_sfc_bot, sfc_stretch
+                                  n_sfc_layers, dp_sfc_bot, sfc_stretch, &
+                                  tau_conv, cape_trigger
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -224,7 +227,7 @@ contains
 
     ! Validate conv_scheme
     select case (trim(adjustl(conv_scheme)))
-    case ('dry','moist','manabe')
+    case ('dry','moist','manabe','zm')
       ! ok
     case default
       write(*,'(3a)') &
@@ -299,6 +302,10 @@ contains
     case ('dry');    write(*,'(a)') '  Convection scheme : dry adiabatic'
     case ('moist');  write(*,'(a)') '  Convection scheme : moist rh-weighted'
     case ('manabe'); write(*,'(a)') '  Convection scheme : Manabe-Wetherald (6.5 K/km)'
+    case ('zm')
+      write(*,'(a)') '  Convection scheme : Zhang-McFarlane soft (CAPE-relaxation)'
+      write(*,'(a,f7.1,a)') '    tau_conv     = ', tau_conv,     ' s'
+      write(*,'(a,f7.1,a)') '    cape_trigger = ', cape_trigger, ' J/kg'
     end select
 
     select case (trim(adjustl(moisture_scheme)))
