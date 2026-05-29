@@ -13,6 +13,7 @@ Run from the project root.
 """
 
 import sys
+import os
 import numpy as np
 import netCDF4
 import matplotlib
@@ -49,10 +50,49 @@ def _us_std_atm_T(p_hpa):
     return np.interp(np.log(p_hpa), np.log(P[::-1]), T[::-1])
 
 # ---------------------------------------------------------------------------
+# Saturated moist adiabat
+# ---------------------------------------------------------------------------
+def _moist_adiabat_T(ts_K, ps_hpa, p_hpa):
+    """
+    Saturated moist adiabat from (ts_K, ps_hpa) onto pressure levels p_hpa.
+    Clausius-Clapeyron with phase-aware latent heat (Lv above 273.16 K, Ls below).
+    Integrated in pressure coordinates via RK4. Returns NaN above ps.
+    """
+    Rd = 287.058; Rv = 461.5; cp = 1005.0
+    Lv = 2.501e6; Ls = 2.834e6; eps = Rd / Rv
+
+    def _dtdp(p_pa, T):
+        L  = Lv if T >= 273.16 else Ls
+        es = 611.2 * np.exp(L / Rv * (1.0/273.16 - 1.0/T))
+        qs = eps * es / max(p_pa - (1.0 - eps) * es, 1.0)
+        return (Rd * T / p_pa * (1.0 + L*qs/(Rd*T))) / (cp + L**2*qs/(Rv*T**2))
+
+    n = 4000
+    p0 = ps_hpa * 100.0
+    p1 = float(np.min(p_hpa)) * 100.0
+    p_path = np.linspace(p0, p1, n)
+    T_path = np.empty(n); T_path[0] = ts_K
+    for i in range(1, n):
+        dp = p_path[i] - p_path[i-1]
+        pi, Ti = p_path[i-1], T_path[i-1]
+        k1 = _dtdp(pi,        Ti)
+        k2 = _dtdp(pi+dp/2,   Ti+k1*dp/2)
+        k3 = _dtdp(pi+dp/2,   Ti+k2*dp/2)
+        k4 = _dtdp(pi+dp,     Ti+k3*dp)
+        T_path[i] = Ti + dp*(k1 + 2*k2 + 2*k3 + k4)/6.0
+
+    out = np.full(len(p_hpa), np.nan)
+    for i, p in enumerate(p_hpa):
+        if p * 100.0 <= p0:
+            out[i] = np.interp(p*100.0, p_path[::-1], T_path[::-1])
+    return out
+
+# ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-nc_path  = sys.argv[1] if len(sys.argv) > 1 else "iofiles/exocol_out.nc"
-pdf_path = sys.argv[2] if len(sys.argv) > 2 else "iofiles/exocol_out.pdf"
+nc_path      = sys.argv[1] if len(sys.argv) > 1 else "iofiles/exocol_out.nc"
+pdf_path     = sys.argv[2] if len(sys.argv) > 2 else "iofiles/exocol_out.pdf"
+konrad_path  = sys.argv[3] if len(sys.argv) > 3 else "iofiles/konrad_rce_ref.npz"
 
 # ---------------------------------------------------------------------------
 # Read data
@@ -138,12 +178,19 @@ def setup_yaxis(ax, pmin=None, pmax=None):
 
 # ---- Panel 1: Temperature profile -----------------------------------------
 ax = ax_T
-T_ref = _us_std_atm_T(pmid)
-ax.plot(T_ref, pmid, color="gray",     lw=1.2, ls=":", label="USSA-1976")
-ax.plot(tmid,  pmid, color="firebrick",lw=1.5, label="T$_{mid}$")
+T_ref   = _us_std_atm_T(pmid)
+T_moist = _moist_adiabat_T(ts, ps, pmid)
+ax.plot(T_ref,   pmid, color="gray",          lw=1.2, ls=":",  label="USSA-1976")
+ax.plot(T_moist, pmid, color="mediumseagreen", lw=1.2, ls="--", label="Moist adiabat")
+if os.path.isfile(konrad_path):
+    _kd = np.load(konrad_path)
+    ax.plot(_kd["T_K"], _kd["plev_hpa"], color="steelblue", lw=1.2, ls="-.",
+            label="konrad/RRTMG")
+ax.plot(tmid,    pmid, color="firebrick",      lw=1.5, label="T$_{mid}$")
 ax.plot(tint,  pint, color="salmon",   lw=0.8, ls="--", label="T$_{int}$")
 ax.axhline(ps, color="gray", lw=0.6, ls=":")
 ax.set_xlabel("Temperature (K)")
+ax.set_xlim(left=175)
 ax.set_title("Temperature profile")
 ax.legend(fontsize=9)
 setup_yaxis(ax)

@@ -1,15 +1,16 @@
 &exocol_nml
-  conv_scheme     = 'zm'
+  conv_scheme     = 'sbm'
   tau_conv        = 3600.0
+  rh_sbm          = 0.7
   moisture_scheme = 'prognostic'
   o3_profile      = 'earth'
   wind_speed      = 5.0
   C_D             = 1.5e-3
   msdist          = 1.0
   dz_slab         = 10.0
-  n_sfc_layers    = 10
-  dp_sfc_bot      = 200.0
-  sfc_stretch     = 1.5
+  n_sfc_layers    = 0        ! log grid (recommended default): lowest level ~400 m,
+  dp_sfc_bot      = 200.0    ! Earth-like surface fluxes, stable. n_sfc_layers>0
+  sfc_stretch     = 1.5      ! (hybrid 8.5 m grid) is reserved for future BL mixing.
 /
 
 ! &exocol_init — cold-start initial conditions.

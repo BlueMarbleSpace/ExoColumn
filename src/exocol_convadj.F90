@@ -33,6 +33,7 @@ module exocol_convadj
   public :: convadj_moist
   public :: convadj_manabe
   public :: convadj_zm
+  public :: convadj_sbm
   public :: esat_cc
   public :: Lvap_T
   public :: malr
@@ -434,6 +435,156 @@ contains
     call compute_tint_interp(tmid, pint, nv, tint)
 
   end subroutine convadj_zm
+
+  ! -----------------------------------------------------------------------
+  ! Scheme 4 — Simplified Betts-Miller (Frierson 2007)
+  ! -----------------------------------------------------------------------
+
+  subroutine convadj_sbm(tmid, tint, h2ommr_col, zint_if, pint, pdel, cp, g, ts, &
+                         dt_sec, tau_sbm, rh_ref, L_release, do_moisture, &
+                         precip_mass_flux, cond_tend, nv)
+  ! Simplified Betts-Miller convective adjustment (Frierson 2007, JAS 64:1959).
+  !
+  ! Relaxes the convecting column toward two reference profiles over a
+  ! convective timescale tau_sbm:
+  !   T  →  T_ref   (moist adiabat lifted from the lowest model level)
+  !   q  →  q_ref = rh_ref · qsat(T_ref)        (only when do_moisture)
+  ! with relaxation fraction alpha = min(dt/tau_sbm, 1).  alpha → 1 (hard
+  ! adjustment to the moist adiabat) when dt ≥ tau_sbm, recovering konrad's
+  ! HardAdjustment + MoistLapseRate configuration near equilibrium; alpha < 1
+  ! during fast transients smooths convective temperature jumps (TOA noise).
+  !
+  ! Unlike the rh-weighted convadj_moist/convadj_zm schemes, the TEMPERATURE
+  ! target is the pure moist adiabat regardless of the environmental relative
+  ! humidity (convective plumes are saturated even when the mean column is
+  ! subsaturated).  Relative humidity enters only through the MOISTURE target
+  ! q_ref — the standard separation of T and q closures (Betts-Miller 1986).
+  ! This is what keeps the troposphere moist-adiabatic and avoids the dry-aloft,
+  ! near-dry-adiabatic lapse rate the rh-weighted schemes produce.
+  !
+  ! Energy conservation (Frierson's correction): the column-integrated enthalpy
+  ! added by the temperature relaxation is forced to equal the latent heat
+  ! released by the condensed (precipitated) water, by shifting the reference
+  ! temperature profile by a single constant dT_shift:
+  !   dT_shift = ( Σ cp(T_ref−T)Δp/g − L·Σ(q−q_ref)Δp/g ) / (cp·Σ Δp/g)
+  !   T_ref ← T_ref − dT_shift
+  ! After the shift  Σ cp·ΔT·Δp/g = L·(precip mass)  exactly, for any alpha.
+  ! Water is conserved by construction: precip mass = −Σ Δq·Δp/g = alpha·Wvap.
+  !
+  ! L_release is the latent heat used for the energy balance; the caller passes
+  ! Lvap_T(ts) so the release matches the L(ts) debited from the slab by surface
+  ! evaporation (the column latent-heat ledger; see exocol_rce_loop::condense).
+  !
+  ! Cloud base is the lowest model level (parcel source = tmid(nv)); cloud top
+  ! is the highest contiguous buoyant level (T_ref ≥ T_env).  Above cloud top
+  ! the column is left to radiative equilibrium.  When the column is net
+  ! subsaturated relative to the reference (Σ(q−q_ref) ≤ 0 — no condensation to
+  ! sustain deep convection) the scheme makes no change; use conv_scheme='dry'
+  ! if dry convective adjustment is needed for a very dry atmosphere.
+  !
+  ! Simplification: the parcel is lifted moist-adiabatically from the lowest
+  ! level (no explicit sub-LCL dry-adiabatic segment).  Adequate when the
+  ! lowest layer is near-saturated, as in a moist RCE.
+
+    real(r8), intent(inout) :: tmid(nv)
+    real(r8), intent(inout) :: tint(nv+1)
+    real(r8), intent(inout) :: h2ommr_col(nv)
+    real(r8), intent(in)    :: zint_if(nv+1)
+    real(r8), intent(in)    :: pint(nv+1)
+    real(r8), intent(in)    :: pdel(nv)
+    real(r8), intent(in)    :: cp
+    real(r8), intent(in)    :: g
+    real(r8), intent(in)    :: ts            ! reserved (parcel base = tmid(nv))
+    real(r8), intent(in)    :: dt_sec
+    real(r8), intent(in)    :: tau_sbm
+    real(r8), intent(in)    :: rh_ref
+    real(r8), intent(in)    :: L_release
+    logical,  intent(in)    :: do_moisture
+    real(r8), intent(out)   :: precip_mass_flux    ! [kg/m²/s]
+    real(r8), intent(out)   :: cond_tend(nv)       ! convective T tendency [K/s]
+    integer,  intent(in)    :: nv
+
+    real(r8), parameter :: dz_min = 1._r8
+
+    integer  :: k, k_top
+    real(r8) :: Rd, eps_wv, alpha
+    real(r8) :: Tref(nv), qref(nv)
+    real(r8) :: zmid_k, zmid_kp1, dz, pmid_k, es, dT
+    real(r8) :: Mcol, Qheat, Wvap, dT_shift
+
+    precip_mass_flux = 0._r8
+    cond_tend(:)     = 0._r8
+
+    block
+      use exocol_mod, only: mwdry_col
+      Rd     = SHR_CONST_RGAS / mwdry_col
+      eps_wv = SHR_CONST_MWWV / mwdry_col
+    end block
+
+    ! 1. Reference moist adiabat, lifted from the lowest model level.
+    Tref(nv) = tmid(nv)
+    do k = nv-1, 1, -1
+      zmid_k   = 0.5_r8 * (zint_if(k)   + zint_if(k+1))
+      zmid_kp1 = 0.5_r8 * (zint_if(k+1) + zint_if(k+2))
+      dz = max(zmid_k - zmid_kp1, dz_min)
+      Tref(k) = Tref(k+1) - malr(Tref(k+1), pint(k+1), Rd, g, cp) * dz
+    end do
+
+    ! 2. Cloud top = highest contiguous buoyant level above the surface.
+    k_top = nv
+    do k = nv-1, 1, -1
+      if (Tref(k) >= tmid(k)) then
+        k_top = k
+      else
+        exit
+      end if
+    end do
+    if (k_top >= nv) return        ! no convecting layer
+
+    ! 3. Reference humidity over the convecting column.
+    do k = k_top, nv
+      pmid_k  = 0.5_r8 * (pint(k) + pint(k+1))
+      es      = min(esat_cc(Tref(k)), 0.99_r8 * pmid_k)
+      qref(k) = rh_ref * eps_wv * es / (pmid_k - es)
+    end do
+
+    alpha = min(dt_sec / tau_sbm, 1.0_r8)
+
+    if (.not. do_moisture) then
+      ! Temperature-only relaxation to the moist adiabat (q held fixed).
+      do k = k_top, nv
+        dT           = alpha * (Tref(k) - tmid(k))
+        cond_tend(k) = dT / dt_sec
+        tmid(k)      = tmid(k) + dT
+      end do
+      call compute_tint_interp(tmid, pint, nv, tint)
+      return
+    end if
+
+    ! 4. Energy-conserving reference-temperature shift.
+    Mcol = 0._r8; Qheat = 0._r8; Wvap = 0._r8
+    do k = k_top, nv
+      Mcol  = Mcol  + pdel(k) / g
+      Qheat = Qheat + cp * (Tref(k) - tmid(k)) * pdel(k) / g
+      Wvap  = Wvap  + (h2ommr_col(k) - qref(k)) * pdel(k) / g
+    end do
+
+    if (Wvap <= 0._r8 .or. Mcol <= 0._r8) return   ! too dry: no deep convection
+
+    dT_shift = (Qheat - L_release * Wvap) / (cp * Mcol)
+
+    ! 5. Apply relaxation: T → T_ref − dT_shift, q → q_ref.
+    do k = k_top, nv
+      dT            = alpha * ((Tref(k) - dT_shift) - tmid(k))
+      cond_tend(k)  = dT / dt_sec
+      tmid(k)       = tmid(k) + dT
+      h2ommr_col(k) = max(h2ommr_col(k) + alpha * (qref(k) - h2ommr_col(k)), 0._r8)
+    end do
+    precip_mass_flux = alpha * Wvap / dt_sec
+
+    call compute_tint_interp(tmid, pint, nv, tint)
+
+  end subroutine convadj_sbm
 
   ! -----------------------------------------------------------------------
   ! CAPE diagnostic — surface parcel ascent
