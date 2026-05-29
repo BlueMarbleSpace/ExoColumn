@@ -28,10 +28,13 @@
   rh_init    =   0.7
   coszrs     =   0.5
   cpdry      = 1004.0
-  asdir      =   0.266
-  asdif      =   0.266
-  aldir      =   0.266
-  aldif      =   0.266
+  ! Surface albedo calibrated to Ts = 288 K (modern Earth) with the
+  ! cold-point stratospheric H2O closure active (sbm, prognostic, o3='earth',
+  ! coszrs=0.5, msdist=1.0).  Sensitivity ~ -144 K per unit albedo.
+  asdir      =   0.2873
+  asdif      =   0.2873
+  aldir      =   0.2873
+  aldif      =   0.2873
 /
 
 ! &exocol_composition — dry-air composition and surface pressure (all optional).
