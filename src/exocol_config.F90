@@ -18,6 +18,7 @@ module exocol_config
 !                               'off'        no moisture update
 !   o3_profile       CHARACTER  'uniform'    well-mixed scalar from o3_vmr (default)
 !                               'earth'      mid-latitude climatological profile
+!                               'rcemip'     RCEMIP analytic (Wing 2018 / konrad)
 !                               'none'       zero ozone everywhere
 !   wind_speed       REAL       5.0          surface wind speed [m/s]
 !   C_D              REAL       1.5e-3       bulk exchange coefficient [-]
@@ -268,7 +269,7 @@ contains
 
     ! Validate o3_profile
     select case (trim(adjustl(o3_profile)))
-    case ('uniform','earth','none')
+    case ('uniform','earth','rcemip','none')
       ! ok
     case default
       write(*,'(3a)') &
@@ -427,7 +428,7 @@ contains
                             mwdry_col, cpdry_col, pmid, pint, pdel, &
                             co2mmr, ch4mmr, c2h6mmr,    &
                             h2mmr, n2mmr, o3mmr, o2mmr
-    use exocol_ozone, only: set_earth_o3_profile
+    use exocol_ozone, only: set_earth_o3_profile, set_rcemip_o3_profile
 
     integer, parameter :: NGAS = 7
     integer, parameter :: ICO2=1, ICH4=2, IC2H6=3, &
@@ -550,6 +551,8 @@ contains
       o3mmr(:) = 0.0_r8
     case ('earth')
       call set_earth_o3_profile(pmid, mwdry_new, o3mmr)
+    case ('rcemip')
+      call set_rcemip_o3_profile(pmid, mwdry_new, o3mmr)
     case default  ! 'uniform'
       call apply_gas(o3mmr, IO3, gas_set, mmr_new_scalar, mwdry_in, mwdry_new)
     end select
