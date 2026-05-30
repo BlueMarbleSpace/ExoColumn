@@ -163,10 +163,31 @@ print(f"T @ surface layer : {T_eq[0]:.2f} K   (p = {plev_hpa[0]:.1f} hPa)")
 print(f"T @ TOA           : {T_eq[-1]:.2f} K   (p = {plev_hpa[-1]:.2f} hPa)")
 print(f"Cold point        : {T_eq[icp]:.2f} K @ {plev_hpa[icp]:.1f} hPa ({z_km[icp]:.1f} km)")
 
+# ---------------------------------------------------------------------------
+# Radiative fluxes (RRTMG, on pressure half-levels phlev) for the flux-panel
+# comparison.  konrad's default RCE has no clouds, so all-sky = clear-sky,
+# matching ExoColumn's clear-sky fluxes.  Sign convention: all positive.
+# ---------------------------------------------------------------------------
+try:
+    _r = rce.radiation
+    phlev_hpa = np.asarray(rce.atmosphere["phlev"]) / 100.0   # Pa -> hPa
+    sw_flxd = np.asarray(_r["sw_flxd"][-1, :])   # SW down
+    sw_flxu = np.asarray(_r["sw_flxu"][-1, :])   # SW up
+    lw_flxd = np.asarray(_r["lw_flxd"][-1, :])   # LW down
+    lw_flxu = np.asarray(_r["lw_flxu"][-1, :])   # LW up
+    print(f"Fluxes (TOA)      : OLR={lw_flxu[-1]:.1f}  SWup={sw_flxu[-1]:.1f} W/m2")
+except Exception as _e:
+    print(f"(radiative flux diagnostic unavailable: {_e!r})")
+    _n = len(plev_hpa) + 1
+    phlev_hpa = np.full(_n, np.nan)
+    sw_flxd = sw_flxu = lw_flxd = lw_flxu = np.full(_n, np.nan)
+
 np.savez(
     outpath,
     plev_hpa=plev_hpa, T_K=T_eq, z_km=z_km, rh=rh, h2o_mmr=h2o_mmr,
     o3_mmr=o3_mmr,
+    phlev_hpa=phlev_hpa,
+    sw_flxd=sw_flxd, sw_flxu=sw_flxu, lw_flxd=lw_flxd, lw_flxu=lw_flxu,
     Ts_K=Ts_K, co2_ppm=co2_ppm, ch4_ppm=ch4_ppm,
 )
 print(f"Saved -> {outpath}")
