@@ -201,9 +201,23 @@ ax.plot(LWUP, pint, color="tomato",          lw=1.5, label="LW↑")
 ax.plot(LWDN, pint, color="salmon",          lw=1.5, ls="--", label="LW↓")
 ax.plot(SWDN, pint, color="steelblue",       lw=1.5, label="SW↓")
 ax.plot(SWUP, pint, color="cornflowerblue",  lw=1.5, ls="--", label="SW↑")
+
+# konrad RRTMG flux profiles (dash-dot, same colour per component).
+# NOTE: konrad's default insolation differs from ExoColumn's (TOA SW↓ ≈ 410 vs
+# 338 W/m²), so the SW magnitudes are NOT directly comparable — only the LW/OLR
+# comparison is apples-to-apples.  konrad's default RCE is cloud-free (clear-sky).
+if os.path.isfile(konrad_path):
+    _kf = np.load(konrad_path)
+    if "lw_flxu" in _kf.files and np.any(np.isfinite(_kf["lw_flxu"])):
+        _kfp = _kf["phlev_hpa"]
+        ax.plot(_kf["lw_flxu"], _kfp, color="tomato",         lw=1.0, ls="-.", label="LW↑ (konrad)")
+        ax.plot(_kf["lw_flxd"], _kfp, color="salmon",         lw=1.0, ls="-.", label="LW↓ (konrad)")
+        ax.plot(_kf["sw_flxd"], _kfp, color="steelblue",      lw=1.0, ls="-.", label="SW↓ (konrad)")
+        ax.plot(_kf["sw_flxu"], _kfp, color="cornflowerblue", lw=1.0, ls="-.", label="SW↑ (konrad)")
+
 ax.set_xlabel("Flux (W m$^{-2}$)")
 ax.set_title("Radiative fluxes")
-ax.legend(fontsize=9)
+ax.legend(fontsize=7, ncol=2)
 setup_yaxis(ax)
 
 # ---- Panel 3: Heating rates -----------------------------------------------
