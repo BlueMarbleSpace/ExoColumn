@@ -3,7 +3,7 @@
   tau_conv        = 3600.0
   rh_sbm          = 0.7
   moisture_scheme = 'prognostic'
-  o3_profile      = 'rcemip'
+  o3_profile      = 'earth'
   wind_speed      = 5.0
   C_D             = 1.5e-3
   msdist          = 1.0
@@ -29,13 +29,12 @@
   coszrs     =   0.5
   cpdry      = 1004.0
   ! Surface albedo calibrated to Ts = 288 K (modern Earth) with the
-  ! cold-point stratospheric H2O closure active (sbm, prognostic, o3='rcemip',
-  ! coszrs=0.5, msdist=1.0).  Sensitivity ~ -130 to -150 K per unit albedo.
-  ! (For o3='earth' the calibrated value is 0.2873 — see exocol_config.nml.earth_a2873.)
-  asdir      =   0.2702
-  asdif      =   0.2702
-  aldir      =   0.2702
-  aldif      =   0.2702
+  ! cold-point stratospheric H2O closure active (sbm, prognostic, o3='earth',
+  ! coszrs=0.5, msdist=1.0).  Sensitivity ~ -144 K per unit albedo.
+  asdir      =   0.2873
+  asdif      =   0.2873
+  aldir      =   0.2873
+  aldif      =   0.2873
 /
 
 ! &exocol_composition — dry-air composition and surface pressure (all optional).

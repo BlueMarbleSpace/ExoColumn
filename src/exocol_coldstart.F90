@@ -46,7 +46,7 @@ module exocol_coldstart
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
                             CP_N2,  CP_O3,  CP_O2
   use exocol_convadj, only: esat_cc, malr
-  use exocol_ozone,   only: set_earth_o3_profile
+  use exocol_ozone,   only: set_earth_o3_profile, set_rcemip_o3_profile
 
   implicit none
   private
@@ -216,6 +216,8 @@ contains
       o3mmr(:) = 0.0_r8
     case ('earth')
       call set_earth_o3_profile(pmid, mwdry_new, o3mmr)
+    case ('rcemip')
+      call set_rcemip_o3_profile(pmid, mwdry_new, o3mmr)
     case default  ! 'uniform'
       o3mmr(:) = mmr_dry(6)
     end select
