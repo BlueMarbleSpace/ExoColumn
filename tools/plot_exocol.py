@@ -50,6 +50,25 @@ def _us_std_atm_T(p_hpa):
     return np.interp(np.log(p_hpa), np.log(P[::-1]), T[::-1])
 
 # ---------------------------------------------------------------------------
+# Phase-aware saturation vapour pressure (Clausius-Clapeyron), matching the
+# model's esat_cc and konrad's mixed-phase saturation_pressure closely enough
+# for a relative-humidity diagnostic.
+# ---------------------------------------------------------------------------
+def _esat_cc(T):
+    """Saturation vapour pressure (Pa); Lv above 273.16 K, Ls below."""
+    Rv = 461.5; Lv = 2.501e6; Ls = 2.834e6
+    L = np.where(T >= 273.16, Lv, Ls)
+    return 611.2 * np.exp(L / Rv * (1.0/273.16 - 1.0/T))
+
+def _relative_humidity(h2ommr_kgkg, T_K, p_hpa):
+    """RH (fraction) from H2O mass mixing ratio (moist-air), T, and pressure."""
+    eps = 287.058 / 461.5
+    es = _esat_cc(T_K)
+    p_pa = p_hpa * 100.0
+    qsat = eps * es / (p_pa - (1.0 - eps) * es)   # saturation mixing ratio
+    return h2ommr_kgkg / qsat
+
+# ---------------------------------------------------------------------------
 # Saturated moist adiabat
 # ---------------------------------------------------------------------------
 def _moist_adiabat_T(ts_K, ps_hpa, p_hpa):
@@ -239,6 +258,24 @@ ax.set_xlabel("Mass mixing ratio (kg kg$^{-1}$)")
 ax.set_title("Atmospheric composition")
 ax.legend(fontsize=8.5, loc="lower left")
 setup_yaxis(ax)
+
+# Relative-humidity overlay on a twin (top) linear x-axis. RH is the natural
+# apples-to-apples humidity comparison between ExoColumn and konrad, since the
+# two models sit at different temperatures (so absolute H2O differs even at
+# equal RH).
+ax_rh = ax.twiny()
+RH_exo = _relative_humidity(h2ommr, tmid, pmid)
+ax_rh.plot(RH_exo, pmid, color="royalblue", lw=1.3, ls=":",
+           label="RH (ExoColumn)")
+if os.path.isfile(konrad_path):
+    _kd = np.load(konrad_path)
+    if "rh" in _kd.files and np.any(np.isfinite(_kd["rh"])):
+        ax_rh.plot(_kd["rh"], _kd["plev_hpa"], color="steelblue", lw=1.3,
+                   ls="-.", label="RH (konrad)")
+ax_rh.set_xlim(0.0, 1.2)
+ax_rh.set_xlabel("Relative humidity", fontsize=9)
+ax_rh.tick_params(labelsize=8)
+ax_rh.legend(fontsize=8.5, loc="upper right")
 
 # ---- Panel 5: Column energy budget ----------------------------------------
 # At each interface, the net downward radiative flux is:

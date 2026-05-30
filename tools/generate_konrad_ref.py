@@ -124,7 +124,9 @@ z_km     = np.asarray(rce.atmosphere["z"][-1, :]) / 1000.0  # m -> km
 # version differences in how the humidity model exposes its state).
 try:
     h2o_vmr = np.asarray(rce.atmosphere["H2O"][-1, :])
-    es = konrad.physics.e_eq_water_mk(T_eq)        # saturation vapour pressure [Pa]
+    # konrad 1.0.2: saturation_pressure() is the mixed-phase (water/ice)
+    # equilibrium vapour pressure — phase-aware, matching ExoColumn's esat_cc.
+    es = konrad.physics.saturation_pressure(T_eq)  # saturation vapour pressure [Pa]
     rh = h2o_vmr * np.asarray(rce.atmosphere["plev"][:]) / es
 except Exception as _e:
     print(f"(RH diagnostic unavailable: {_e!r})")
