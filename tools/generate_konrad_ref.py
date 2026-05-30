@@ -122,15 +122,39 @@ plev_hpa = np.asarray(rce.atmosphere["plev"][:]) / 100.0   # Pa -> hPa
 z_km     = np.asarray(rce.atmosphere["z"][-1, :]) / 1000.0  # m -> km
 # Relative humidity diagnosed from the equilibrium H2O vmr (robust to konrad
 # version differences in how the humidity model exposes its state).
+_Mw_h2o = 18.01528   # g/mol
+_Mw_o3  = 47.99820   # g/mol
+_Mw_dry = 28.9647    # g/mol (dry air)
 try:
-    h2o_vmr = np.asarray(rce.atmosphere["H2O"][-1, :])
+    h2o_vmr = np.asarray(rce.atmosphere["H2O"][-1, :])   # mole fraction (moist air)
+    # Mass mixing ratio wrt moist air (kg H2O / kg moist air), matching the
+    # units of ExoColumn's h2ommr so the two can be overlaid directly.
+    h2o_mmr = (h2o_vmr * _Mw_h2o) / (h2o_vmr * _Mw_h2o + (1.0 - h2o_vmr) * _Mw_dry)
     # konrad 1.0.2: saturation_pressure() is the mixed-phase (water/ice)
     # equilibrium vapour pressure — phase-aware, matching ExoColumn's esat_cc.
     es = konrad.physics.saturation_pressure(T_eq)  # saturation vapour pressure [Pa]
     rh = h2o_vmr * np.asarray(rce.atmosphere["plev"][:]) / es
 except Exception as _e:
-    print(f"(RH diagnostic unavailable: {_e!r})")
+    print(f"(H2O/RH diagnostic unavailable: {_e!r})")
     rh = np.full_like(T_eq, np.nan)
+    h2o_mmr = np.full_like(T_eq, np.nan)
+
+# O3 mass mixing ratio wrt dry air (kg O3 / kg dry air), matching ExoColumn's
+# o3mmr.  O3 is a trace gas so the dry/moist distinction is negligible.
+try:
+    o3_vmr  = np.asarray(rce.atmosphere["O3"][-1, :])
+    o3_mmr  = o3_vmr * _Mw_o3 / _Mw_dry
+except Exception as _e:
+    print(f"(O3 diagnostic unavailable: {_e!r})")
+    o3_mmr = np.full_like(T_eq, np.nan)
+
+# Report the well-mixed constituents for the apples-to-apples identity check.
+for _g in ("CO2", "CH4", "O2"):
+    try:
+        _v = float(np.asarray(rce.atmosphere[_g][-1, :])[0])
+        print(f"konrad {_g:4s} vmr   : {_v:.4e}")
+    except Exception:
+        pass
 
 ts_final = float(rce.surface["temperature"][-1])
 icp      = int(np.argmin(T_eq))
@@ -141,7 +165,8 @@ print(f"Cold point        : {T_eq[icp]:.2f} K @ {plev_hpa[icp]:.1f} hPa ({z_km[i
 
 np.savez(
     outpath,
-    plev_hpa=plev_hpa, T_K=T_eq, z_km=z_km, rh=rh,
+    plev_hpa=plev_hpa, T_K=T_eq, z_km=z_km, rh=rh, h2o_mmr=h2o_mmr,
+    o3_mmr=o3_mmr,
     Ts_K=Ts_K, co2_ppm=co2_ppm, ch4_ppm=ch4_ppm,
 )
 print(f"Saved -> {outpath}")
