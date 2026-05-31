@@ -31,16 +31,16 @@
   rh_init    =   0.7
   coszrs     =   0.5
   cpdry      = 1004.0
-  ! Surface albedo calibrated to Ts = 288 K (modern Earth) with the
+  ! Surface albedo calibrated to Ts = 288.01 K (modern Earth) with the
   ! cold-point stratospheric H2O closure active (sbm, prognostic, o3='rcemip',
   ! coszrs=0.5, msdist=1.0) AND argon in the dry-air composition (mwdry 28.97,
-  ! cpdry 1004).  Sensitivity ~ -130 to -150 K per unit albedo.
-  ! (Pre-argon value was 0.2702 → Ts 287.9; argon cooled by ~0.14 K, re-tuned.)
+  ! cpdry 1004).  Local sensitivity ~ -120 K per unit albedo near α=0.27.
+  ! (α=0.2691→287.89, α=0.2682→288.01; pre-argon α=0.2702→287.9.)
   ! (For o3='earth' the calibrated value is 0.2873 — see exocol_config.nml.earth_a2873.)
-  asdir      =   0.2691
-  asdif      =   0.2691
-  aldir      =   0.2691
-  aldif      =   0.2691
+  asdir      =   0.2682
+  asdif      =   0.2682
+  aldir      =   0.2682
+  aldif      =   0.2682
 /
 
 ! &exocol_composition — dry-air composition and surface pressure (all optional).
