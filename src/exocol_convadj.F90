@@ -39,6 +39,7 @@ module exocol_convadj
   public :: malr
   public :: compute_tint_interp
   public :: compute_cape
+  public :: set_latent_heat_mode
 
   ! Manabe-Wetherald critical lapse rate [K/m]
   real(r8), parameter :: gamma_crit = 6.5e-3_r8
@@ -46,6 +47,15 @@ module exocol_convadj
   ! Saturation vapour pressure reference values for esat_cc / malr
   real(r8), parameter :: es0    = 611.2_r8          ! esat at T0_sat [Pa]
   real(r8), parameter :: T0_sat = SHR_CONST_TKFRZ   ! reference temperature [K]
+
+  ! Latent-heat mode flag (set once at init via set_latent_heat_mode).
+  ! .false. (default) → Lvap_T is phase-aware: L_v above T0_sat, L_sub below.
+  ! .true.            → Lvap_T returns the fixed liquid latent heat (L_v) at ALL
+  !                     temperatures, matching konrad's MoistLapseRate (which uses
+  !                     a single heat_of_vaporization constant).  Note esat_cc is
+  !                     left phase-aware in BOTH modes — this mirrors konrad, which
+  !                     pairs a fixed L with a mixed-phase saturation pressure.
+  logical, save :: lh_fixed_vap = .false.
 
 contains
 
@@ -729,14 +739,24 @@ contains
   ! Phase-appropriate latent heat for evaporation/sublimation [J/kg].
   !   T >= 273.16 K  →  L_v (liquid → vapor)
   !   T <  273.16 K  →  L_s (solid  → vapor, includes fusion)
+  ! When lh_fixed_vap is .true. (konrad-match mode) the liquid value L_v is used
+  ! at all temperatures (no sublimation enhancement below freezing).
     real(r8), intent(in) :: T
     real(r8) :: L
-    if (T >= T0_sat) then
+    if (lh_fixed_vap .or. T >= T0_sat) then
       L = SHR_CONST_LATVAP
     else
       L = SHR_CONST_LATSUB
     end if
   end function Lvap_T
+
+  subroutine set_latent_heat_mode(fixed_vap)
+  ! Select the latent-heat treatment used by Lvap_T (and hence by malr, the
+  ! condensation step, SBM, and the surface flux ledger).  Called once at init
+  ! from the driver based on &exocol_nml::latent_heat_mode.
+    logical, intent(in) :: fixed_vap
+    lh_fixed_vap = fixed_vap
+  end subroutine set_latent_heat_mode
 
   pure function malr(T, p, Rd, g_planet, cp_dry) result(gamma_m)
   ! Moist (or ice-) adiabatic lapse rate [K/m] for given T [K], p [Pa], and

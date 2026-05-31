@@ -40,11 +40,11 @@ module exocol_coldstart
                             n_sfc_layers, dp_sfc_bot, sfc_stretch, &
                             co2_vmr, ch4_vmr, c2h6_vmr,           &
                             h2_vmr,  n2_vmr,  o3_vmr, o2_vmr,     &
-                            o3_profile,                            &
+                            ar_vmr,  o3_profile,                   &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
-                            MW_N2,  MW_O3,  MW_O2,                 &
+                            MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
-                            CP_N2,  CP_O3,  CP_O2
+                            CP_N2,  CP_O3,  CP_O2,  CP_AR
   use exocol_convadj, only: esat_cc, malr
   use exocol_ozone,   only: set_earth_o3_profile, set_rcemip_o3_profile
 
@@ -54,15 +54,18 @@ module exocol_coldstart
   public :: cold_start_init
 
   ! Earth-like dry-air defaults used when a gas VMR is not specified in
-  ! &exocol_composition.  These sum to ~0.99 (the missing ~1% corresponds to
-  ! Ar/other inert gases not modelled by ExoRT; not enough to affect mwdry).
+  ! &exocol_composition.  N2/O2/Ar/CO2 are the standard dry-air mole fractions and
+  ! sum to ~1.0.  Argon (DEF_AR) is radiatively inert so it carries no ExoRT gas
+  ! tracer, but it IS included in mwdry and cpdry (mwdry → ~28.97 g/mol, cpdry →
+  ! ~1004 J/kg/K), matching real dry air and konrad's constants.
   real(r8), parameter :: DEF_CO2  = 4.0e-4_r8
   real(r8), parameter :: DEF_CH4  = 0.0_r8
   real(r8), parameter :: DEF_C2H6 = 0.0_r8
   real(r8), parameter :: DEF_H2   = 0.0_r8
-  real(r8), parameter :: DEF_N2   = 0.78_r8
+  real(r8), parameter :: DEF_N2   = 0.78084_r8
   real(r8), parameter :: DEF_O3   = 0.0_r8
-  real(r8), parameter :: DEF_O2   = 0.21_r8
+  real(r8), parameter :: DEF_O2   = 0.20946_r8
+  real(r8), parameter :: DEF_AR   = 0.00934_r8   ! argon (inert; mw/cp only)
 
   ! Cold-start ps default if &exocol_composition::ps is unset.
   real(r8), parameter :: DEFAULT_PS = 1.0e5_r8   ! 1 bar
@@ -78,6 +81,7 @@ contains
     integer  :: k, isub
     real(r8) :: ps_use, vmr_sum, mwdry_new, cpdry_new, Rd, eps_wv
     real(r8) :: vmr_dry(7), Mw_dry(7), mmr_dry(7), cp_dry(7)
+    real(r8) :: ar_vmr_use, ar_mmr
     real(r8) :: T_at_int(pverp)
     real(r8) :: T_lev, p_lev, dlogp_layer, dlogp_sub, dT_sub, Gm
     real(r8) :: es_k, qsat_k
@@ -99,14 +103,19 @@ contains
     if (o3_vmr   >= 0._r8) vmr_dry(6) = o3_vmr
     if (o2_vmr   >= 0._r8) vmr_dry(7) = o2_vmr
 
-    vmr_sum = sum(vmr_dry)
+    ! Argon (inert): Earth default unless overridden.  Not carried as a tracer;
+    ! enters mwdry and cpdry only.
+    ar_vmr_use = DEF_AR
+    if (ar_vmr >= 0._r8) ar_vmr_use = ar_vmr
+
+    vmr_sum = sum(vmr_dry) + ar_vmr_use
     if (abs(vmr_sum - 1.0_r8) > 1.0e-2_r8) then
       write(*,'(a,f8.5,a)') &
         '  WARNING: cold-start dry-air VMRs sum to ', vmr_sum, &
         ' (expected ~1.0). Values used as-is.'
     end if
 
-    mwdry_new = sum(vmr_dry * Mw_dry)
+    mwdry_new = sum(vmr_dry * Mw_dry) + ar_vmr_use * MW_AR
     if (mwdry_new <= 0._r8) then
       write(*,'(a)') '  cold_start_init: computed mwdry <= 0. Aborting.'
       stop 'cold_start_init: bad composition'
@@ -115,14 +124,17 @@ contains
     do k = 1, 7
       mmr_dry(k) = vmr_dry(k) * Mw_dry(k) / mwdry_new
     end do
+    ar_mmr = ar_vmr_use * MW_AR / mwdry_new
 
-    ! Mass-weighted mean cp from the actual composition.  This replaces the
-    ! namelist cpdry so non-Earth compositions (especially H2-rich) get the
-    ! correct specific heat automatically.
-    cpdry_new = sum(mmr_dry * cp_dry)
+    ! Mass-weighted mean cp from the actual composition (argon included).  This
+    ! replaces the namelist cpdry so non-Earth compositions (especially H2-rich)
+    ! get the correct specific heat automatically.
+    cpdry_new = sum(mmr_dry * cp_dry) + ar_mmr * CP_AR
 
     write(*,'(a,f7.3,a)') '    mwdry  = ', mwdry_new, ' g/mol'
     write(*,'(a,f7.1,a)') '    cpdry  = ', cpdry_new, ' J/kg/K (auto-computed from composition)'
+    if (ar_vmr_use > 0._r8) write(*,'(a,es10.3,a,es10.3)') &
+      '    Ar    VMR = ', ar_vmr_use, '  (inert)  MMR = ', ar_mmr
     do k = 1, 7
       if (vmr_dry(k) > 0._r8) then
         write(*,'(a,a4,a,es10.3,a,es10.3)') &
