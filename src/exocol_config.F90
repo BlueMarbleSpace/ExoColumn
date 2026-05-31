@@ -31,6 +31,11 @@ module exocol_config
 !                                            equilibration with same final state;
 !                                            5 m is sufficient for most 1-D RCE
 !                                            experiments.
+!   latent_heat_mode CHARACTER 'phase_aware' L_v above 273.16 K, L_sub below
+!                                            (production default).
+!                               'fixed_vap'  fixed liquid L_v at all T; matches
+!                                            konrad's MoistLapseRate for
+!                                            apples-to-apples comparison.
 !
 ! &exocol_init — cold-start initial conditions (used when input_file is empty)
 !   input_file       CHARACTER  ''           path to an ExoRT-format input.nc.
@@ -51,7 +56,7 @@ module exocol_config
 ! to ps, a moist adiabat integrated upward from ts (capped at t_strato above
 ! the tropopause), h2ommr = rh_init · qsat in the troposphere (zero above),
 ! and dry-gas MMRs set by &exocol_composition with Earth-like fallbacks for
-! unspecified species (N2=0.78, O2=0.21, CO2=4e-4, others=0).
+! unspecified species (N2=0.78084, O2=0.20946, Ar=0.00934, CO2=4e-4, others=0).
 !
 ! &exocol_composition — dry-air composition and surface pressure (all optional)
 !   ps               REAL       <0 sentinel  surface pressure override [Pa].
@@ -72,6 +77,11 @@ module exocol_config
 !                                            input-file profile is kept (rescaled
 !                                            by mwdry_in/mwdry_new when other
 !                                            gases change mwdry).
+!   ar_vmr           REAL       <0 sentinel  Argon mole fraction.  Radiatively
+!                                            inert: carries NO ExoRT absorber and
+!                                            is included only in mwdry and cpdry.
+!                                            Cold start defaults to 0.00934 when
+!                                            unset; file mode defaults to 0.
 !
 ! H2O is intentionally not in this namelist.  Water vapor is a prognostic
 ! variable (surface evaporation + convective transport + condensation sink)
@@ -80,9 +90,9 @@ module exocol_config
 ! moisture profile via the input NetCDF file, not here.
 !
 ! When any *_vmr override is set, mwdry is recomputed from the dry composition:
-!   mwdry_new = Σ_dry VMR_i · Mw_i
-! (using layer-1 input dry-air values for non-overridden gases).  cpdry is NOT
-! recomputed; the input file value is kept.
+!   mwdry_new = Σ_dry VMR_i · Mw_i  (+ ar_vmr · MW_AR for the inert argon)
+! (using layer-1 input dry-air values for non-overridden gases).  cpdry is also
+! recomputed as the mass-weighted mean Σ mmr_i · cp_i (+ argon's share).
 !
 ! Example exocol_config.nml:
 !   &exocol_nml
@@ -116,6 +126,13 @@ module exocol_config
   real(r8),          public, save :: tau_conv        = 3600.0_r8  ! ZM/SBM relaxation time [s]
   real(r8),          public, save :: cape_trigger    =    0.0_r8  ! CAPE activation threshold [J/kg]
   real(r8),          public, save :: rh_sbm          =    0.7_r8  ! SBM reference relative humidity [-]
+
+  ! Latent-heat treatment in the moist adiabat / condensation / surface ledger.
+  !   'phase_aware' (default) : L_v above 273.16 K, L_sub (sublimation) below.
+  !   'fixed_vap'             : fixed liquid L_v at all T, matching konrad's
+  !                             MoistLapseRate (single heat_of_vaporization).
+  ! Applied via exocol_convadj::set_latent_heat_mode (called from the driver).
+  character(len=32), public, save :: latent_heat_mode = 'phase_aware'
 
   ! Vertical grid.  Default n_sfc_layers = 0 → pure log-spacing from p_top to ps
   ! (recommended; lowest level ~400 m, giving Earth-like bulk surface fluxes with
@@ -165,6 +182,11 @@ module exocol_config
   real(r8), public, save :: n2_vmr   = COMPOSITION_UNSET
   real(r8), public, save :: o3_vmr   = COMPOSITION_UNSET
   real(r8), public, save :: o2_vmr   = COMPOSITION_UNSET
+  ! Argon: radiatively inert (no ExoRT absorber), so it is NOT carried as a gas
+  ! tracer — it contributes only to the dry-air mwdry and cpdry.  Cold-start uses
+  ! the Earth default (DEF_AR ≈ 0.00934) when this is unset; file mode uses 0
+  ! when unset (backward-compatible with argon-free input files).
+  real(r8), public, save :: ar_vmr   = COMPOSITION_UNSET
 
   ! ---- Dry-gas molecular weights [kg/kmol = g/mol] ----
   ! IUPAC atomic weights to 4 sig figs.  H2O is excluded from mwdry by
@@ -176,6 +198,7 @@ module exocol_config
   real(r8), parameter, public :: MW_N2   = 28.013_r8
   real(r8), parameter, public :: MW_O3   = 47.998_r8
   real(r8), parameter, public :: MW_O2   = 31.999_r8
+  real(r8), parameter, public :: MW_AR   = 39.948_r8   ! argon (inert; mw/cp only)
 
   ! ---- Dry-gas specific heats at ~300 K [J/kg/K] ----
   ! Used to auto-compute the mass-weighted mean cpdry_col from composition.
@@ -188,6 +211,7 @@ module exocol_config
   real(r8), parameter, public :: CP_N2   = 1039.0_r8
   real(r8), parameter, public :: CP_O3   =  820.0_r8
   real(r8), parameter, public :: CP_O2   =  919.0_r8
+  real(r8), parameter, public :: CP_AR   =  520.3_r8   ! argon, monatomic (5R/2M)
 
   public :: read_config
   public :: apply_composition_overrides
@@ -205,11 +229,12 @@ contains
     namelist /exocol_nml/         conv_scheme, moisture_scheme, o3_profile, &
                                   wind_speed, C_D, msdist, dz_slab, &
                                   n_sfc_layers, dp_sfc_bot, sfc_stretch, &
-                                  tau_conv, cape_trigger, rh_sbm
+                                  tau_conv, cape_trigger, rh_sbm, &
+                                  latent_heat_mode
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
-                                  h2_vmr, n2_vmr, o3_vmr, o2_vmr
+                                  h2_vmr, n2_vmr, o3_vmr, o2_vmr, ar_vmr
 
     integer :: unit, ios
     logical :: exists
@@ -350,6 +375,11 @@ contains
     end select
     write(*,'(a,f6.3,a)') '  Star distance     : msdist = ', msdist, ' AU'
     write(*,'(a,f6.2,a)') '  Slab thickness    : dz_slab = ', dz_slab, ' m'
+    if (trim(latent_heat_mode) == 'fixed_vap') then
+      write(*,'(a)') '  Latent heat       : fixed L_v (konrad-match; no sublimation)'
+    else
+      write(*,'(a)') '  Latent heat       : phase-aware (L_v / L_sub below 273.16 K)'
+    end if
     if (n_sfc_layers > 0) then
       write(*,'(a,i0,a,f6.1,a,f5.3)') &
         '  Vertical grid     : hybrid — ', n_sfc_layers, &
@@ -384,6 +414,7 @@ contains
       if (n2_vmr   >= 0.0_r8) write(*,'(a,es10.3)')   '    n2_vmr   = ', n2_vmr
       if (o3_vmr   >= 0.0_r8) write(*,'(a,es10.3)')   '    o3_vmr   = ', o3_vmr
       if (o2_vmr   >= 0.0_r8) write(*,'(a,es10.3)')   '    o2_vmr   = ', o2_vmr
+      if (ar_vmr   >= 0.0_r8) write(*,'(a,es10.3)')   '    ar_vmr   = ', ar_vmr
     end if
   end subroutine announce
 
@@ -396,7 +427,7 @@ contains
            (co2_vmr  >= 0.0_r8) .or. (ch4_vmr >= 0.0_r8) .or. &
            (c2h6_vmr >= 0.0_r8) .or. (h2_vmr  >= 0.0_r8) .or. &
            (n2_vmr   >= 0.0_r8) .or. (o3_vmr  >= 0.0_r8) .or. &
-           (o2_vmr   >= 0.0_r8)
+           (o2_vmr   >= 0.0_r8) .or. (ar_vmr  >= 0.0_r8)
   end function any_composition_override
 
   ! -----------------------------------------------------------------------
@@ -438,6 +469,7 @@ contains
     real(r8) :: mmr1_in(NGAS), mmr_new_scalar(NGAS)
     real(r8) :: mwdry_in, mwdry_new, vmr_sum, scale
     real(r8) :: cp_gas(NGAS), cpdry_new
+    real(r8) :: ar_vmr_use, ar_mmr
     integer  :: i
     logical  :: any_gas_override, gas_set(NGAS)
     character(len=4) :: gas_name(NGAS)
@@ -467,7 +499,12 @@ contains
     override_in(IO2)   = o2_vmr
 
     gas_set(:) = (override_in(:) >= 0.0_r8)
-    any_gas_override = any(gas_set)
+    ! Argon (inert): default 0 in file mode for backward compatibility with
+    ! argon-free input files; participates only when explicitly set.  Setting it
+    ! alone is enough to trigger the mwdry/cpdry recompute below.
+    ar_vmr_use = 0.0_r8
+    if (ar_vmr >= 0.0_r8) ar_vmr_use = ar_vmr
+    any_gas_override = any(gas_set) .or. (ar_vmr >= 0.0_r8)
 
     ! ---- ps override (independent of gas overrides) ----
     if (ps >= 0.0_r8) then
@@ -517,15 +554,15 @@ contains
       end if
     end do
 
-    vmr_sum = sum(vmr_tgt)
+    vmr_sum = sum(vmr_tgt) + ar_vmr_use
     if (abs(vmr_sum - 1.0_r8) > 1.0e-2_r8) then
       write(*,'(a,f8.5,a)') &
         '  WARNING: dry-air VMRs sum to ', vmr_sum, &
         ' (expected ~1.0). Values used as-is; check your namelist.'
     end if
 
-    ! New mean molecular weight of dry air.
-    mwdry_new = sum(vmr_tgt * Mw)
+    ! New mean molecular weight of dry air (argon included as inert background).
+    mwdry_new = sum(vmr_tgt * Mw) + ar_vmr_use * MW_AR
     if (mwdry_new <= 0.0_r8) then
       write(*,'(a)') &
         '  exocol_config: computed mwdry_new <= 0; gas-composition override skipped.'
@@ -562,8 +599,12 @@ contains
     cp_gas(ICO2)  = CP_CO2;  cp_gas(ICH4)  = CP_CH4;  cp_gas(IC2H6) = CP_C2H6
     cp_gas(IH2)   = CP_H2;   cp_gas(IN2)   = CP_N2
     cp_gas(IO3)   = CP_O3;   cp_gas(IO2)   = CP_O2
-    cpdry_new = sum(mmr_new_scalar * cp_gas)
+    ! Argon mass fraction (inert) contributes to the mass-weighted mean cp.
+    ar_mmr = ar_vmr_use * MW_AR / mwdry_new
+    cpdry_new = sum(mmr_new_scalar * cp_gas) + ar_mmr * CP_AR
 
+    if (ar_vmr_use > 0.0_r8) write(*,'(a,es10.3,a,f7.4)') &
+      '  Composition: Ar  VMR = ', ar_vmr_use, ' (inert)  MMR = ', ar_mmr
     write(*,'(a,f7.3,a,f7.3,a)') &
       '  Composition: mwdry ', mwdry_in, ' → ', mwdry_new, ' g/mol'
     write(*,'(a,f7.1,a,f7.1,a)') &
