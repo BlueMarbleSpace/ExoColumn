@@ -203,9 +203,11 @@ ax.plot(SWDN, pint, color="steelblue",       lw=1.5, label="SW↓")
 ax.plot(SWUP, pint, color="cornflowerblue",  lw=1.5, ls="--", label="SW↑")
 
 # konrad RRTMG flux profiles (dash-dot, same colour per component).
-# NOTE: konrad's default insolation differs from ExoColumn's (TOA SW↓ ≈ 410 vs
-# 338 W/m²), so the SW magnitudes are NOT directly comparable — only the LW/OLR
-# comparison is apples-to-apples.  konrad's default RCE is cloud-free (clear-sky).
+# konrad's insolation is matched to ExoColumn's in generate_konrad_ref.py
+# (solar_constant=676.64, zenith=60° → TOA SW↓ = 338.3 W/m², coszrs=0.5), so the
+# SW↓ profiles now overlay directly (TOA and surface agree to ~0.5 W/m²).  Any
+# residual SW↑ difference is the surface-albedo choice, not the insolation.
+# konrad's default RCE is cloud-free (clear-sky).
 if os.path.isfile(konrad_path):
     _kf = np.load(konrad_path)
     if "lw_flxu" in _kf.files and np.any(np.isfinite(_kf["lw_flxu"])):
