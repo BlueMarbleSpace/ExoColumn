@@ -39,12 +39,16 @@ canonical cold-start RCE as konrad's framework allows:
                    o3_profile='earth'); O2 keeps its default ~0.21 vmr.
   * Surface      : FixedTemperature(Ts_K), matching ExoColumn's prognostic Ts
                    at equilibrium (~287.96 K for the canonical run).
-  * Humidity     : FixedRH, vertically uniform 0.75.  konrad's standard
-                   validation closure (Kluft et al. 2019).  Note ExoColumn's
-                   prognostic moisture is NOT uniform — it decreases aloft and
-                   dries out near the cold point — so some residual tropospheric
-                   temperature difference vs ExoColumn is expected and physical,
-                   not a configuration artifact.
+  * Humidity     : FixedRH, vertically uniform 0.70 — matched to ExoColumn's SBM
+                   reference humidity (rh_sbm=0.70).  ExoColumn's prognostic RH is
+                   itself nearly vertically uniform (~0.70-0.73 through the
+                   troposphere), so the uniform-RH shape is a good match and only
+                   the value needed aligning (konrad's default was 0.75).
+                   Stratosphere uses konrad's default ColdPointCoupling(), the
+                   same freeze-drying closure as ExoColumn's cold-point cold trap.
+                   Residual q differences aloft are driven by the temperature
+                   (deep-trop warm bias, warmer cold point), NOT the humidity
+                   assumption, and are expected/physical, not a config artifact.
 
 Working environment (Python 3.11):
     konrad 1.0.2, numpy 1.26.4, scipy 1.13.1
@@ -95,16 +99,49 @@ for _gas in ("N2O", "CO", "CFC11", "CFC12", "CFC22", "CCl4"):
         atmosphere[_gas][:] = 0.0
 
 # ---------------------------------------------------------------------------
+# Insolation: match ExoColumn's solar boundary condition so the SW fluxes are
+# apples-to-apples on the flux-comparison panel.
+#
+# konrad's DEFAULT RRTMG is the RCEMIP tropical-ocean sun
+# (solar_constant=551.58 W/m^2, zenith_angle=42.05deg -> TOA SW down 409.6 W/m^2),
+# whereas ExoColumn uses the GLOBAL-MEAN EARTH sun (coszrs=0.5 i.e. zenith 60deg,
+# TOA SW down ~338.3 W/m^2 = S0/4).  With konrad's FixedTemperature surface the
+# SW magnitude does NOT feed back on the (Ts-anchored) tropospheric T profile, so
+# matching it leaves the validated T comparison intact and only relaxes the
+# stratospheric ozone SW heating slightly -- a real, small physical response.
+#
+# We reproduce BOTH the magnitude and the slant path: zenith_angle=60deg matches
+# ExoColumn's coszrs=0.5, and solar_constant=676.64 gives 676.64*cos(60)=338.3.
+# ---------------------------------------------------------------------------
+EXOCOL_COSZRS    = 0.5         # ExoColumn &exocol_init::coszrs
+EXOCOL_SW_TOA    = 338.32      # ExoColumn TOA SW down [W/m^2] (S0/4, modern Earth)
+zenith_deg       = np.degrees(np.arccos(EXOCOL_COSZRS))   # -> 60 deg
+solar_constant   = EXOCOL_SW_TOA / EXOCOL_COSZRS          # -> 676.64 W/m^2
+print(f"Insolation     : S0={solar_constant:.2f} W/m^2, zenith={zenith_deg:.2f} deg "
+      f"-> TOA SW down {solar_constant*EXOCOL_COSZRS:.2f} W/m^2 (matches ExoColumn)")
+radiation = konrad.radiation.RRTMG(
+    solar_constant=solar_constant,
+    zenith_angle=zenith_deg,
+)
+
+# ---------------------------------------------------------------------------
 # RCE: fixed surface temperature, hard convective adjustment to a true MOIST
 #       ADIABAT (MoistLapseRate), fixed relative humidity.
 # ---------------------------------------------------------------------------
 rce = konrad.RCE(
     atmosphere,
+    radiation=radiation,
     surface=konrad.surface.FixedTemperature(temperature=Ts_K),
     convection=konrad.convection.HardAdjustment(),
     lapserate=konrad.lapserate.MoistLapseRate(),
+    # RH target matched to ExoColumn's SBM reference humidity (rh_sbm=0.70), so
+    # the tropospheric q comparison is apples-to-apples.  ExoColumn's emergent RH
+    # is itself nearly vertically uniform (~0.70-0.73), so VerticallyUniform is
+    # the right shape; only the value (was konrad's default 0.75) needed aligning.
+    # The default stratosphere_coupling=ColdPointCoupling() already matches
+    # ExoColumn's cold-point cold trap, so it is left at the default.
     humidity=konrad.humidity.FixedRH(
-        rh_func=konrad.humidity.VerticallyUniform(0.75)
+        rh_func=konrad.humidity.VerticallyUniform(0.70)
     ),
     timestep="12h",
     max_duration="500d",   # moist-adiabat RCE; ample margin for convergence
