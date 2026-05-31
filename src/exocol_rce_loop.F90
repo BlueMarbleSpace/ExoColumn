@@ -734,17 +734,19 @@ contains
   ! every step, so it tracks the radiative-convective solution — a colder cold
   ! point gives a drier stratosphere (less H2O cooling) and vice versa.
   !
-  ! Implementation as a global floor: freeze-dried air at the cold point is the
-  ! driest air in the whole column — every layer below is warmer and moister
-  ! (the convectively-moistened troposphere), and every layer above conserves
-  ! the same mixing ratio on ascent.  So qsat(T_cp) is the column-wide minimum
-  ! humidity, and we impose it as a floor at every level.  In the troposphere
-  ! q >> qsat(T_cp), so max() is a no-op there; in the otherwise-dry stratosphere
-  ! (both above the cold point AND in the gap between the convective top and the
-  ! cold point) it sets q = qsat(T_cp).  This avoids a dry warm gap forming
-  ! between the convective top and the cold point, which would otherwise push
-  ! the cold point unphysically high.  Since T >= T_cp everywhere, qsat >= q_cp,
-  ! so no supersaturation is introduced.
+  ! Implementation: freeze-dried air at the cold point is the driest air in the
+  ! whole column — every layer below is warmer and moister (the convectively-
+  ! moistened troposphere), and every layer above conserves the same mixing ratio
+  ! on ascent.  ABOVE the cold point we ASSIGN q = qsat(T_cp) (the conserved entry
+  ! value, vertically uniform), so the upper stratosphere tracks the cold point
+  ! both up and down.  AT/BELOW the cold point we apply qsat(T_cp) as a FLOOR:
+  ! in the troposphere q >> qsat(T_cp) so it is a no-op, while in the gap between
+  ! the convective top and the cold point it fills q = qsat(T_cp), avoiding a dry
+  ! warm gap that would otherwise push the cold point unphysically high.  Since
+  ! T >= T_cp everywhere, qsat >= q_cp, so no supersaturation is introduced.
+  ! (A pure column-wide max() floor was used previously, but its one-way ratchet
+  ! stranded stale higher humidity in the warm upper stratosphere when the cold
+  ! point cooled, producing an unphysical moist bump above the cold point.)
     use exocol_mod, only: tmid, pmid, h2ommr, mwdry_col
     use ppgrid,     only: pver
     integer  :: k, k_cp
@@ -757,9 +759,24 @@ contains
     es_cp = min(esat_cc(tmid(k_cp)), 0.99_r8 * pmid(k_cp))
     q_cp  = eps_wv * es_cp / (pmid(k_cp) - es_cp)
 
-    ! Impose the freeze-drying value as a column-wide humidity floor.
+    ! Above the cold point (k < k_cp): the conserved entry value is exactly q_cp,
+    ! so ASSIGN it (not max).  A pure max() floor is a one-way ratchet — it can
+    ! only raise q — so when the cold point cools over the run the warm upper
+    ! stratosphere keeps a stale, higher humidity it can never shed (it is far
+    ! subsaturated, so condense never removes it), producing an unphysical
+    ! moist bump above the cold point.  Assigning lets the upper stratosphere
+    ! track the cold point both up AND down.  Safe: q_cp = qsat(T_cp) ≤ qsat
+    ! everywhere above (the cold point is the coldest level), so no supersaturation.
+    !
+    ! At and below the cold point (k >= k_cp): keep the floor.  It fills the dry
+    ! gap between the convective top and the cold point at q_cp and is a no-op in
+    ! the moist troposphere (q >> q_cp there).
     do k = 1, pver
-      h2ommr(k) = max(h2ommr(k), q_cp)
+      if (k < k_cp) then
+        h2ommr(k) = q_cp
+      else
+        h2ommr(k) = max(h2ommr(k), q_cp)
+      end if
     end do
   end subroutine apply_stratospheric_coldtrap
 
