@@ -478,6 +478,7 @@ contains
             '  ΔTOA_win=', dToa_mean, &
             '  ΔTpro=', max_dT_mean, &
             '  Δq=', max_dq_mean
+          flush(6)
         end if
 
         ts_mean_prev     = ts_mean
@@ -510,6 +511,7 @@ contains
           '  LE=', LE, &
           '  SH=', SH, &
           '  P[mm/d]=', precip_diag
+        flush(6)     ! live progress when stdout is redirected to a file
         t_last_print = model_time_days
       end if
 
