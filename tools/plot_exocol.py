@@ -19,8 +19,17 @@ import netCDF4
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+matplotlib.rcParams.update({
+    "font.size":       13,
+    "axes.titlesize":  14,
+    "axes.labelsize":  13,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.fontsize": 12,
+})
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.lines import Line2D
 
 # ---------------------------------------------------------------------------
 # US Standard Atmosphere 1976 reference profile
@@ -49,43 +58,6 @@ def _us_std_atm_T(p_hpa):
 
     return np.interp(np.log(p_hpa), np.log(P[::-1]), T[::-1])
 
-# ---------------------------------------------------------------------------
-# Saturated moist adiabat
-# ---------------------------------------------------------------------------
-def _moist_adiabat_T(ts_K, ps_hpa, p_hpa):
-    """
-    Saturated moist adiabat from (ts_K, ps_hpa) onto pressure levels p_hpa.
-    Clausius-Clapeyron with phase-aware latent heat (Lv above 273.16 K, Ls below).
-    Integrated in pressure coordinates via RK4. Returns NaN above ps.
-    """
-    Rd = 287.058; Rv = 461.5; cp = 1005.0
-    Lv = 2.501e6; Ls = 2.834e6; eps = Rd / Rv
-
-    def _dtdp(p_pa, T):
-        L  = Lv if T >= 273.16 else Ls
-        es = 611.2 * np.exp(L / Rv * (1.0/273.16 - 1.0/T))
-        qs = eps * es / max(p_pa - (1.0 - eps) * es, 1.0)
-        return (Rd * T / p_pa * (1.0 + L*qs/(Rd*T))) / (cp + L**2*qs/(Rv*T**2))
-
-    n = 4000
-    p0 = ps_hpa * 100.0
-    p1 = float(np.min(p_hpa)) * 100.0
-    p_path = np.linspace(p0, p1, n)
-    T_path = np.empty(n); T_path[0] = ts_K
-    for i in range(1, n):
-        dp = p_path[i] - p_path[i-1]
-        pi, Ti = p_path[i-1], T_path[i-1]
-        k1 = _dtdp(pi,        Ti)
-        k2 = _dtdp(pi+dp/2,   Ti+k1*dp/2)
-        k3 = _dtdp(pi+dp/2,   Ti+k2*dp/2)
-        k4 = _dtdp(pi+dp,     Ti+k3*dp)
-        T_path[i] = Ti + dp*(k1 + 2*k2 + 2*k3 + k4)/6.0
-
-    out = np.full(len(p_hpa), np.nan)
-    for i, p in enumerate(p_hpa):
-        if p * 100.0 <= p0:
-            out[i] = np.interp(p*100.0, p_path[::-1], T_path[::-1])
-    return out
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -103,7 +75,6 @@ pmid = ds["pmid"][:] / 100.0   # Pa → hPa
 pint = ds["pint"][:] / 100.0   # Pa → hPa
 
 tmid = ds["tmid"][:]
-tint = ds["tint"][:]
 
 LWUP = ds["LWUP"][:]
 LWDN = ds["LWDN"][:]
@@ -112,7 +83,6 @@ SWDN = ds["SWDN"][:]
 
 LWHR   = ds["LWHR"][:]
 SWHR   = ds["SWHR"][:]
-totHR  = LWHR + SWHR
 
 cond_heating = ds["cond_heating"][:]   # K/day, per layer
 
@@ -122,6 +92,9 @@ ch4mmr  = ds["ch4mmr"][:]
 o2mmr   = ds["o2mmr"][:]
 o3mmr   = ds["o3mmr"][:]
 n2mmr   = ds["n2mmr"][:]
+# Argon is radiatively inert and not written to the output file;
+# compute from the known VMR (0.00934) and molecular weight (39.948 g/mol).
+armmr   = np.full_like(n2mmr, 0.00934 * 39.948 / 28.97)
 
 ts = float(ds["ts"][0])
 ps = float(ds["ps"][0]) / 100.0
@@ -138,38 +111,26 @@ ds.close()
 # SH [W/m²] * g [m/s²] / (cp [J/kg/K] * Δp [Pa]) * 86400 → K/day
 # ---------------------------------------------------------------------------
 _g = 9.80665
-SH_HR = np.zeros_like(totHR)
+SH_HR = np.zeros_like(LWHR)
 pdel_bot = float(pint_pa[-1] - pint_pa[-2])   # Pa, bottom layer thickness
 SH_HR[-1] = SH_diag * _g / (cp_col * pdel_bot) * 86400.0
 
 # ---------------------------------------------------------------------------
-# Derived budget quantities (at interface levels)
-# ---------------------------------------------------------------------------
-SW_net  = SWDN - SWUP          # net downward SW at each interface [W/m²]
-LW_net  = LWDN - LWUP          # net downward LW at each interface [W/m²]
-Rad_net = SW_net + LW_net      # total radiative net (the "sum" of rad terms)
-
-Rad_toa = float(Rad_net[0])    # TOA: ASR − OLR  (≈ 0 at equilibrium)
-Rad_srf = float(Rad_net[-1])   # Surface: SW_net + LW_net before turbulent fluxes
-residual = Rad_srf - LE_diag - SH_diag   # full surface budget residual (≈ 0 at equilibrium)
-
-# ---------------------------------------------------------------------------
-# Figure layout: 3 rows × 2 cols; bottom panel spans both columns
+# Figure layout: 2 rows × 2 cols
 # ---------------------------------------------------------------------------
 fig = plt.figure(figsize=(11, 12))
 fig.suptitle(
-    f"ExoColumn RCE equilibrium  |  Ts = {ts:.2f} K,  ps = {ps:.1f} hPa",
-    fontsize=13, fontweight="bold"
+    f"ExoColumn Earth calibration",
+    fontsize=15, fontweight="bold"
 )
 
-gs = gridspec.GridSpec(3, 2, figure=fig, hspace=0.40, wspace=0.30,
-                       top=0.94, bottom=0.06, left=0.08, right=0.97)
+gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.28, wspace=0.30,
+                       top=0.91, bottom=0.06, left=0.08, right=0.97)
 
 ax_T   = fig.add_subplot(gs[0, 0])
 ax_fl  = fig.add_subplot(gs[0, 1])
 ax_hr  = fig.add_subplot(gs[1, 0])
 ax_q   = fig.add_subplot(gs[1, 1])
-ax_bgt = fig.add_subplot(gs[2, :])   # energy budget — full width
 
 def setup_yaxis(ax, pmin=None, pmax=None):
     ax.set_yscale("log")
@@ -178,154 +139,144 @@ def setup_yaxis(ax, pmin=None, pmax=None):
 
 # ---- Panel 1: Temperature profile -----------------------------------------
 ax = ax_T
-T_ref   = _us_std_atm_T(pmid)
-T_moist = _moist_adiabat_T(ts, ps, pmid)
-ax.plot(T_ref,   pmid, color="gray",          lw=1.2, ls=":",  label="USSA-1976")
-ax.plot(T_moist, pmid, color="mediumseagreen", lw=1.2, ls="--", label="Moist adiabat")
+T_ref = _us_std_atm_T(pmid)
+ax.plot(T_ref, pmid, color="dimgray",   lw=1.5, ls=":")
 if os.path.isfile(konrad_path):
     _kd = np.load(konrad_path)
-    ax.plot(_kd["T_K"], _kd["plev_hpa"], color="steelblue", lw=1.2, ls="-.",
-            label="konrad/RRTMG")
-ax.plot(tmid,    pmid, color="firebrick",      lw=1.5, label="T$_{mid}$")
-ax.plot(tint,  pint, color="salmon",   lw=0.8, ls="--", label="T$_{int}$")
+    ax.plot(_kd["T_K"], _kd["plev_hpa"], color="gray", lw=1.0, ls="-.")
+ax.plot(tmid, pmid, color="firebrick", lw=1.5)
 ax.axhline(ps, color="gray", lw=0.6, ls=":")
+
+def _iT(T_arr, p_arr, p_target):
+    return float(np.interp(np.log(p_target), np.log(p_arr[::-1]), T_arr[::-1]))
+
+# Direct labels: (T_array, p_array, label, color, p_hPa, dx_K, ha)
+_T_lbls = [(T_ref, pmid, "US Std Atm, 1976", "dimgray", 120.0, -51, "left"),
+           (tmid,  pmid, "ExoColumn", "firebrick", 20.0, -30, "left")]
+if os.path.isfile(konrad_path):
+    _T_lbls.append((_kd["T_K"], _kd["plev_hpa"], "konrad", "gray", 400.0, -30, "left"))
+for T_arr, p_arr, lbl, color, p_lbl, dx, ha in _T_lbls:
+    ax.text(_iT(T_arr, p_arr, p_lbl) + dx, p_lbl, lbl,
+            color=color, ha=ha, va="center", fontsize=12)
+
 ax.set_xlabel("Temperature (K)")
-ax.set_xlim(left=175)
 ax.set_title("Temperature profile")
-ax.legend(fontsize=9)
 setup_yaxis(ax)
 
 # ---- Panel 2: Radiative fluxes --------------------------------------------
 ax = ax_fl
-ax.plot(LWUP, pint, color="tomato",          lw=1.5, label="LW↑")
-ax.plot(LWDN, pint, color="salmon",          lw=1.5, ls="--", label="LW↓")
-ax.plot(SWDN, pint, color="steelblue",       lw=1.5, label="SW↓")
-ax.plot(SWUP, pint, color="cornflowerblue",  lw=1.5, ls="--", label="SW↑")
+ax.plot(LWUP, pint, color="lightcoral",  lw=1.5)
+ax.plot(LWDN, pint, color="crimson",     lw=1.5)
+ax.plot(SWDN, pint, color="steelblue",   lw=1.5)
+ax.plot(SWUP, pint, color="cornflowerblue", lw=1.5)
 
-# konrad RRTMG flux profiles (dash-dot, same colour per component).
-# konrad's insolation is matched to ExoColumn's in generate_konrad_ref.py
-# (solar_constant=676.64, zenith=60° → TOA SW↓ = 338.3 W/m², coszrs=0.5), so the
-# SW↓ profiles now overlay directly (TOA and surface agree to ~0.5 W/m²).  Any
-# residual SW↑ difference is the surface-albedo choice, not the insolation.
-# konrad's default RCE is cloud-free (clear-sky).
+def _iflux(flux, p_arr, p_target):
+    return float(np.interp(np.log(p_target), np.log(p_arr[::-1]), flux[::-1]))
+
+# (flux, label, color, p_hPa, dx W/m², ha)
+# ExoColumn labels and konrad labels staggered in pressure so they don't collide.
+_flx_lbls = [
+    (LWUP, "LW↑",   "lightcoral",     30.0, -50, "left"),
+    (LWDN, "LW↓",   "crimson",        30.0, +55, "right"),
+    (SWDN, "SW↓",   "steelblue",      30.0, +50, "right"),
+    (SWUP, "SW↑",   "cornflowerblue", 30.0, +10, "left"),
+]
+for flux, lbl, color, p_lbl, dx, ha in _flx_lbls:
+    x = _iflux(flux, pint, p_lbl)
+    ax.text(x + dx, p_lbl, lbl, color=color, ha=ha, va="center", fontsize=12)
+
+_style_handles = [
+    Line2D([0], [0], color="gray", lw=1.5, ls="-",  label="ExoColumn"),
+    Line2D([0], [0], color="gray", lw=1.0, ls="-.", label="konrad"),
+]
 if os.path.isfile(konrad_path):
     _kf = np.load(konrad_path)
     if "lw_flxu" in _kf.files and np.any(np.isfinite(_kf["lw_flxu"])):
         _kfp = _kf["phlev_hpa"]
-        ax.plot(_kf["lw_flxu"], _kfp, color="tomato",         lw=1.0, ls="-.", label="LW↑ (konrad)")
-        ax.plot(_kf["lw_flxd"], _kfp, color="salmon",         lw=1.0, ls="-.", label="LW↓ (konrad)")
-        ax.plot(_kf["sw_flxd"], _kfp, color="steelblue",      lw=1.0, ls="-.", label="SW↓ (konrad)")
-        ax.plot(_kf["sw_flxu"], _kfp, color="cornflowerblue", lw=1.0, ls="-.", label="SW↑ (konrad)")
+        ax.plot(_kf["lw_flxu"], _kfp, color="lightcoral",    lw=1.0, ls="-.")
+        ax.plot(_kf["lw_flxd"], _kfp, color="crimson",       lw=1.0, ls="-.")
+        ax.plot(_kf["sw_flxd"], _kfp, color="steelblue",     lw=1.0, ls="-.")
+        ax.plot(_kf["sw_flxu"], _kfp, color="cornflowerblue", lw=1.0, ls="-.")
+    ax.legend(handles=_style_handles, loc="center",
+              bbox_to_anchor=(0.44, 0.92), bbox_transform=ax_fl.transAxes)
 
 ax.set_xlabel("Flux (W m$^{-2}$)")
 ax.set_title("Radiative fluxes")
-ax.legend(fontsize=7, ncol=2)
 setup_yaxis(ax)
 
 # ---- Panel 3: Heating rates -----------------------------------------------
 ax = ax_hr
 ax.axvline(0, color="gray", lw=0.6, ls=":")
 grandHR = LWHR + SWHR + cond_heating + SH_HR
-ax.plot(LWHR,         pmid, color="tomato",       lw=1.5, label="LW rad")
-ax.plot(SWHR,         pmid, color="steelblue",    lw=1.5, label="SW rad")
-ax.plot(totHR,        pmid, color="black",        lw=1.8, ls="--", label="Rad total")
-ax.plot(cond_heating, pmid, color="mediumorchid", lw=1.5, label="Cond (latent)")
-ax.plot(SH_HR,        pmid, color="darkorange",   lw=1.5, label="Sensible (sfc)")
-ax.plot(grandHR,      pmid, color="black",        lw=2.2, label="Grand total")
+ax.plot(LWHR,         pmid, color="tomato",       lw=1.5)
+ax.plot(SWHR,         pmid, color="steelblue",    lw=1.5)
+ax.plot(cond_heating, pmid, color="mediumorchid", lw=1.5)
+ax.plot(SH_HR,        pmid, color="darkorange",   lw=1.5)
+ax.plot(grandHR,      pmid, color="black",        lw=2.2)
+
+def _ihr(data, p_target):
+    return float(np.interp(np.log(p_target), np.log(pmid[::-1]), data[::-1]))
+
+# (data, label, color, p_hPa, dx K/day, ha)
+_hr_lbls = [
+    (LWHR,         "Longwave\nradiation",         "tomato",       13.0,         +1.0, "left"),
+    (SWHR,         "Shortwave\nradiation",         "steelblue",   13.0,         -5.0, "left"),
+    (cond_heating, "Latent heating",  "mediumorchid", 200.0,        +1.3, "left"),
+    (SH_HR,        "Sensible heating", "darkorange",   800, +1.3, "left"),
+    (grandHR,      "Total",    "black",        5.0,        +0.3, "left"),
+]
+for data, lbl, color, p_lbl, dx, ha in _hr_lbls:
+    x = _ihr(data, p_lbl)
+    ax.text(x + dx, p_lbl, lbl, color=color, ha=ha, va="center", fontsize=12)
+
 ax.set_xlabel("Heating rate (K day$^{-1}$)")
 ax.set_title("Heating rates")
-ax.legend(fontsize=9)
 setup_yaxis(ax)
 
 # ---- Panel 4: Atmospheric composition ----------------------------------------
 ax = ax_q
+_ppm = 1e6
+# (mmr_array, label, color, label_p_hPa, side)
+# p levels chosen so no two labels share the same y; offsets kept small so
+# the label sits tight against the curve rather than floating mid-panel.
 _gases = [
-    (n2mmr,  "N$_2$",                 "dimgray"),
-    (o2mmr,  "O$_2$",                 "steelblue"),
-    (h2ommr, "H$_2$O (moist-air)",    "royalblue"),
-    (co2mmr, "CO$_2$",                "tomato"),
-    (o3mmr,  "O$_3$",                 "mediumseagreen"),
-    (ch4mmr, "CH$_4$",                "darkorange"),
+    # (mmr, label, color, p_hPa, ha,      mult)
+    (n2mmr,  "N$_2$",   "dimgray",        100.0, "left",  1.5),
+    (o2mmr,  "O$_2$",   "steelblue",       15.0, "right", 0.7),
+    (armmr,  "Ar",      "mediumpurple",   100.0, "left",  1.5),
+    (h2ommr, "H$_2$O",  "royalblue",      100.0, "left",  1.5),
+    (h2ommr, "H$_2$O\n(konrad)",  "royalblue",      400.0, "left",  0.6),
+    (co2mmr, "CO$_2$",  "tomato",          15.0, "left",  1.5),
+    (o3mmr,  "O$_3$",   "mediumseagreen",  15.0, "left",  4.0),  # nudged right past peak
+    (ch4mmr, "CH$_4$",  "darkorange",     300.0, "right", 0.7),
 ]
-for mmr, label, color in _gases:
+for mmr, lbl, color, p_lbl, ha, mult in _gases:
     if mmr.max() > 0:
-        ax.plot(mmr, pmid, color=color, lw=1.5, label=label)
+        ax.plot(mmr * _ppm, pmid, color=color, lw=1.5)
+        valid = mmr > 0
+        x_lbl = np.exp(np.interp(np.log(p_lbl),
+                                  np.log(pmid[valid][::-1]),
+                                  np.log(mmr[valid][::-1] * _ppm)))
+        ax.text(x_lbl * mult, p_lbl, lbl, color=color,
+                ha=ha, va="center", fontsize=12)
 
-# konrad overlays for the two constituents that are NOT identical by
-# construction: H2O (prognostic in both, but the profiles differ) and O3
-# (different climatologies — Anderson/SPARC in ExoColumn, konrad's own).
-# CO2, CH4 and O2 are set to the same VMRs in both models, so they are not
-# overlaid.  Convention: colour = species, dash-dot line = konrad.
 if os.path.isfile(konrad_path):
     _kd = np.load(konrad_path)
     if "h2o_mmr" in _kd.files and np.any(np.isfinite(_kd["h2o_mmr"])):
-        ax.plot(_kd["h2o_mmr"], _kd["plev_hpa"], color="royalblue", lw=1.3,
-                ls="-.", label="H$_2$O (konrad)")
+        ax.plot(_kd["h2o_mmr"] * _ppm, _kd["plev_hpa"], color="royalblue",
+                lw=1.0, ls="-.")
     if "o3_mmr" in _kd.files and np.any(np.isfinite(_kd["o3_mmr"])):
-        ax.plot(_kd["o3_mmr"], _kd["plev_hpa"], color="mediumseagreen", lw=1.3,
-                ls="-.", label="O$_3$ (konrad)")
+        ax.plot(_kd["o3_mmr"] * _ppm, _kd["plev_hpa"], color="mediumseagreen",
+                lw=1.0, ls="-.")
 
 ax.set_xscale("log")
-# Clamp the range: konrad's near-surface O3 underflows to ~1e-38, which would
-# otherwise stretch the log axis and squash every other constituent.
-ax.set_xlim(1e-9, 5.0)
-ax.set_xlabel("Mass mixing ratio (kg kg$^{-1}$)")
+# Clamp: konrad O3 underflows to ~1e-32 ppm near the surface; clamping keeps
+# the other constituents visible.
+ax.set_xlim(1e-3, 5e6)
+ax.set_xlabel("Mass mixing ratio (ppm)")
 ax.set_title("Atmospheric composition")
-ax.legend(fontsize=8.5, loc="lower left")
 setup_yaxis(ax)
 
-# ---- Panel 5: Column energy budget ----------------------------------------
-# At each interface, the net downward radiative flux is:
-#   SW_net = SWDN − SWUP   (positive downward)
-#   LW_net = LWDN − LWUP   (negative = net upward in most of column)
-#   Rad_net = SW_net + LW_net  (the sum of all radiative terms)
-#
-# At the surface, turbulent fluxes close the budget:
-#   Rad_srf − LE − SH  =  surface residual  (≈ 0 at equilibrium)
-#
-# TOA balance requires Rad_toa ≈ 0.
-ax = ax_bgt
-ax.axvline(0, color="gray", lw=0.6, ls=":", zorder=0)
-ax.axhline(pint[-1], color="gray", lw=0.5, ls="--", alpha=0.4, zorder=0)
-
-# Three main profiles
-ax.plot(SW_net,  pint, color="steelblue", lw=1.5,
-        label="SW net  (SWDN − SWUP)")
-ax.plot(LW_net,  pint, color="tomato",   lw=1.5,
-        label="LW net  (LWDN − LWUP)")
-ax.plot(Rad_net, pint, color="black",    lw=2.2,
-        label="Rad net  = SW + LW  ← sum of rad terms")
-
-# Surface budget decomposition:
-#   start at Rad_srf, subtract LE, subtract SH, arrive at residual
-p_srf = pint[-1]
-x0 = Rad_srf                    # radiative input to surface
-x1 = x0 - LE_diag              # after latent heat flux leaves
-x2 = x1 - SH_diag              # after sensible heat flux leaves = residual
-
-# Connecting line at surface level showing the budget steps
-ax.plot([x0, x1, x2], [p_srf, p_srf, p_srf],
-        color="gray", lw=1.2, ls="-", zorder=4)
-
-# Markers at each budget step
-ax.scatter([x0], [p_srf], color="black",      s=55, zorder=6,
-           label=f"Rad$_{{srf}}$ = {x0:+.1f} W m$^{{-2}}$")
-ax.scatter([x1], [p_srf], color="mediumorchid", marker="s", s=55, zorder=6,
-           label=f"− LE ({LE_diag:.0f} W m$^{{-2}}$) → {x1:+.1f}")
-ax.scatter([x2], [p_srf], color="darkorange",  marker="^", s=70, zorder=6,
-           label=f"− SH ({SH_diag:.0f} W m$^{{-2}}$) → residual = {x2:+.1f}")
-
-# TOA annotation
-ax.scatter([Rad_toa], [pint[0]], color="navy", marker="*", s=100, zorder=6,
-           label=f"TOA imbalance = {Rad_toa:+.2f} W m$^{{-2}}$")
-
-ax.set_xlabel("Net downward flux (W m$^{-2}$)")
-ax.set_title(
-    "Column energy budget — net fluxes at each interface  "
-    f"[TOA = {Rad_toa:+.2f}  |  Surface residual = {residual:+.1f} W m$^{{-2}}$]"
-)
-ax.legend(fontsize=8.5, ncol=2, loc="upper left")
-setup_yaxis(ax)
 
 # ---------------------------------------------------------------------------
 # Save
