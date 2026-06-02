@@ -65,10 +65,11 @@ module exocol_rce_loop
   use exocol_radiation, only: exocol_rad_tend
   use exocol_config,    only: conv_scheme, moisture_scheme, wind_speed, C_D, &
                               cfg_dz_slab => dz_slab, tau_conv, cape_trigger, &
-                              rh_sbm
+                              rh_sbm, pbl_scheme, surface_flux, z0_rough
   use exocol_convadj,   only: convadj_dry, convadj_moist, convadj_manabe, &
                               convadj_zm, convadj_sbm, esat_cc, Lvap_T
   use exocol_surface,   only: compute_surface_fluxes
+  use exocol_pbl,       only: pbl_diffuse
 
   implicit none
   private
@@ -84,8 +85,53 @@ module exocol_rce_loop
   ! linear regime (Manabe-Wetherald 1967; CliMT; RRTM-RCE).
   real(r8), parameter :: dt_max      = 1.0_r8       ! cap [days]
   real(r8), parameter :: dt_min      = 1.0e-4_r8    ! floor [days] (~10 s)
-  real(r8), parameter :: dT_target   = 1.0_r8       ! target |dt·HR| per step [K]
+  real(r8), parameter :: dT_target   = 1.0_r8       ! target |dt·HR| per sub-step [K]
   real(r8), parameter :: cfl_safety  = 0.8_r8       ! safety factor [-]
+
+  ! ---- Radiation sub-cycling (resolution-independent convergence) ----
+  ! The expensive 68-band radiation call is made ONCE per outer step; the
+  ! resulting heating rate HR(k) is held frozen and applied in N_sub cheap
+  ! explicit sub-steps, with convection / condensation / surface exchange
+  ! between each.  This decouples two limits the old single-explicit step
+  ! conflated:
+  !   * the explicit radiative CFL (dt_sub·max|HR| ≤ dT_target) — a STABILITY
+  !     limit set by the single stiffest layer.  At fine resolution a thin
+  !     cold-point / cold-trap layer concentrates a sharp flux divergence into
+  !     little mass and develops max|HR| ~ 16 K/day; keying the whole timestep
+  !     on it throttles the column to ~0.05 d and the slab never equilibrates
+  !     (the original resolution-stiffness bug).  Handled by N_sub.
+  !   * the explicit radiative CFL of the BULK column — the rate at which the
+  !     climatically-relevant (mass-bearing) layers evolve.  This sets dt_outer.
+  ! dt_outer is keyed to hr_for_dt = max|HR| EXCLUDING the stiffest layers that
+  ! together hold less than f_excl_mass of the column mass (the thin cold-point
+  ! spikes).  At PVER=70 there is no stiff outlier so hr_for_dt = max|HR| and
+  ! dt_outer reproduces the reference scheme; at high resolution the cold-point
+  ! spike is excluded from dt_outer (it cannot drive the slow climate) and is
+  ! absorbed by N_sub = ceil(dt_outer·max|HR|/(cfl·dT_target)).  Applying the
+  ! full dt_outer·HR in N_sub conserving sub-steps is energy-conserving exactly.
+  ! (An earlier attempt keyed dt_outer on the NET tendency; that runs away —
+  ! convection cancels radiation so net ΔT stays small while the column is still
+  ! radiatively stiff, and the slab derails to a spurious cold attractor.)
+  ! See docs/resolution_independence.md.
+  real(r8), parameter :: f_excl_mass = 0.0_r8       ! column-mass fraction of stiffest layers excluded from dt_outer
+  integer,  parameter :: nsub_max    = 2000         ! cap on radiation sub-steps
+
+  ! Physics sub-stepping.  The local physics (surface fluxes, boundary-layer
+  ! mixing, convection, condensation) is integrated at a short sub-step
+  ! dt_sub ≤ dt_phys_max within each outer (frozen-radiation) step.  Frierson's
+  ! BL + SBM are designed for short (~minute) timesteps where convection
+  ! restratifies between mixings and the surface adds little moisture per step;
+  ! at the long radiative timestep one step over-mixes/over-moistens the column
+  ! and the boundary-layer depth diagnosis goes unstable (runaway or collapse).
+  ! Sub-stepping the cheap local physics (radiation frozen over the outer step)
+  ! restores the short-timescale balance.  N_sub is raised so dt_sub ≤ this cap.
+  real(r8), parameter :: dt_phys_max = 0.01_r8      ! max local-physics sub-step [days] (~14 min)
+
+  ! Throwaway diagnostic: when .true., the loop dumps the stiff-layer profile
+  ! and probes the radiative Jacobian (∂HR/∂T) once the stiff layer forms,
+  ! then stops.  Used to design the implicit-radiation solver.  Set .false.
+  ! for production.
+  logical, parameter :: diag_jacobian = .false.
 
   ! Current adaptive timestep — set each step in run_rce_loop, read by
   ! condense() (which converts cond_heating to K/day for diagnostics).
@@ -158,12 +204,23 @@ contains
     real(r8), dimension(pverp) :: LWUP, LWDN, SWUP, SWDN
 
     real(r8), dimension(pver) :: rh_init             ! fixed-RH legacy target
-    real(r8) :: dt_sec
     real(r8) :: max_hr, toa_signed, toa_flux
     real(r8) :: F_net_srf_rad
     real(r8) :: LE, SH
     real(r8) :: precip_total                         ! column precip mass flux [kg/m²/s]
     real(r8) :: precip_iter                          ! precip from one condensation call
+
+    ! ---- Radiation sub-cycling state ----
+    real(r8) :: dt_outer_days                        ! outer (radiation) step
+    real(r8) :: dt_sub_days, dt_sub_sec              ! sub-step = dt_outer / N_sub
+    real(r8) :: LE_acc_outer, SH_acc_outer           ! dt-weighted flux sums over sub-steps
+    real(r8) :: precip_acc_outer                     ! dt-weighted precip sum over sub-steps
+    integer  :: N_sub, isub_rad
+
+    ! Boundary-layer diagnostics (last sub-step of the outer step)
+    real(r8) :: pbl_h_diag                           ! diagnosed BL height [m]
+    integer  :: pbl_ktop_diag                        ! highest mixed layer index
+    real(r8) :: C_drag_diag                          ! MOS surface drag coefficient
 
     ! Window-averaged Path B accumulators.  Each step adds dt-weighted state to
     ! the sums; at end of window (model_time_days − t_window_start ≥ stab_check_days)
@@ -201,10 +258,11 @@ contains
     ! Compute slab heat capacity from configured thickness.
     H_slab = rho_w * cp_w * cfg_dz_slab
 
-    ! Initialize state.  dt_days is a module variable; reset to dt_max here so
-    ! re-entering the loop after a previous run starts fresh.
+    ! Initialize state.  dt_days is a module variable (the SUB-step dt, used by
+    ! condense for its heating-rate diagnostic); reset here so re-entering the
+    ! loop after a previous run starts fresh.
     dt_days          = dt_max
-    dt_sec           = dt_days * SHR_CONST_CSEC
+    dt_outer_days    = dt_max
     model_time_days  = 0._r8
     t_window_start   = 0._r8
     t_last_print     = -print_every_days     ! print at it=1
@@ -221,6 +279,9 @@ contains
     tmid_mean_prev   = 0._r8
     h2ommr_mean_prev = 0._r8
     LE = 0._r8;  SH = 0._r8
+    pbl_h_diag       = 0._r8
+    pbl_ktop_diag    = pver
+    C_drag_diag      = C_D
     sat_warn_count   = 0
     LE_sum           = 0._r8
     SH_sum           = 0._r8
@@ -255,104 +316,148 @@ contains
 
     do it = 1, nmax
 
-      ! ---- 1. Radiation tendency (diagnostic; applied after adaptive dt) ----
+      ! ---- 1. Radiation tendency (ONCE per outer step; frozen over sub-steps) ----
       call exocol_rad_tend(LWHR, SWHR, LWUP, LWDN, SWUP, SWDN)
       max_hr     = maxval(abs(LWHR(:) + SWHR(:)))
       toa_signed = SWDN(1) - SWUP(1) + LWDN(1) - LWUP(1)
       toa_flux   = abs(toa_signed)
-
-      ! ---- 2. Adaptive timestep ----
-      ! Size dt so the most active layer's per-step ΔT is bounded by dT_target,
-      ! keeping explicit-Euler radiation in its linear regime.  In quiescent
-      ! states max|HR| → 0 and dt saturates at dt_max.
-      if (max_hr > 0._r8) then
-        dt_days = cfl_safety * dT_target / max_hr
-      else
-        dt_days = dt_max
-      end if
-      dt_days = max(dt_min, min(dt_max, dt_days))
-      dt_sec  = dt_days * SHR_CONST_CSEC
-      model_time_days = model_time_days + dt_days
-
-      ! ---- 3. Apply radiation tendency ----
-      do k = 1, pver
-        tmid(k) = tmid(k) + dt_days * (LWHR(k) + SWHR(k))
-      end do
-
-      ! ---- 4–6. Surface turbulent fluxes, slab, and bottom-layer deposit ----
-      ! The coupled slab-atmosphere system is subcycled at dt_sfc ≤ τ_surf so
-      ! that explicit Euler stays stable for any bottom-layer thickness.
-      !
-      ! τ_surf = (pdel/g) / (ρ·C_D·U) — the bottom-layer moisture relaxation
-      ! time.  The old scheme used implicit-Euler damping 1/(1+dt/τ), which is
-      ! unconditionally stable but collapses LE → dm·(qsat−q)/dt → 0 when
-      ! τ_surf << dt (thin surface layers from the hybrid grid).  The subcycle
-      ! avoids this: for thick layers τ_surf >> dt, n_sub = 1 and the cost is
-      ! identical to the old scheme; for thin layers n_sub grows but each
-      ! subcycle is only one cheap flux call.
-      !
-      ! F_net_srf_rad is held fixed at the value from the current radiation
-      ! call (computed once, applied to every subcycle — valid because the
-      ! outer radiation timestep is already longer than τ_slab ~ 350 d).
       F_net_srf_rad = (SWDN(pverp) - SWUP(pverp)) + (LWDN(pverp) - LWUP(pverp))
 
+      ! ---- DIAGNOSTIC (throwaway): radiative stiffness + Jacobian probe ----
+      ! Fires once the stiff cold-point layer is well-formed, dumps the profile
+      ! and probes J=∂HR/∂T, then stops.  Remove after the resolution study.
+      if (diag_jacobian .and. it >= 100 .and. max_hr > 8.0_r8) then
+        call diagnose_radiative_stiffness(LWHR, SWHR, it)
+        stop 'diagnostic complete'
+      end if
+
+      ! ---- 2. Outer (radiation) timestep — keyed to the BULK radiative CFL ----
+      ! Size dt_outer so the per-step ΔT of the climatically-relevant (mass-
+      ! bearing) layers is bounded by dT_target, EXCLUDING the stiffest layers
+      ! that together hold less than f_excl_mass of the column mass.  A thin
+      ! cold-point / cold-trap layer concentrates a sharp flux divergence into
+      ! negligible mass and has a large local |HR| that cannot drive the slow
+      ! climate; excluding it keeps dt_outer at the bulk rate (≈ the reference
+      ! scheme at PVER=70) instead of throttling to that one layer's CFL.  The
+      ! excluded layer is still integrated stably below via the sub-cycle.
       block
-        real(r8) :: Rd, rho_air_bot, layer_mass_bot, tau_surf
-        real(r8) :: dt_sfc, ts_sub, T_sub, q_sub
-        real(r8) :: LE_sub, SH_sub, LE_acc, SH_acc, L_sub, lambda_sub, F_sfc_sub
-        integer  :: n_sub, isub
-
-        Rd             = SHR_CONST_RGAS / mwdry_col
-        rho_air_bot    = pmid(pver) / (Rd * tmid(pver))
-        layer_mass_bot = pdel(pver) / exo_g
-        tau_surf       = layer_mass_bot / (rho_air_bot * C_D * wind_speed)
-
-        ! n_sub so that dt_sfc < tau_surf (CFL ≤ 1 for the bottom layer).
-        ! For τ >> dt (thick layer), n_sub = 1 — single undamped explicit step.
-        n_sub  = max(1, int(dt_sec / tau_surf) + 1)
-        dt_sfc = dt_sec / real(n_sub, r8)
-
-        ts_sub = ts
-        T_sub  = tmid(pver)
-        q_sub  = h2ommr(pver)
-        LE_acc = 0._r8
-        SH_acc = 0._r8
-
-        do isub = 1, n_sub
-          call compute_surface_fluxes(ts_sub, T_sub, q_sub, pmid(pver), &
-                                      mwdry_col, cpdry_col, wind_speed, C_D, &
-                                      LE_sub, SH_sub)
-
-          ! Slab budget (semi-implicit Planck at sub-step scale)
-          if (prognostic) then
-            F_sfc_sub = F_net_srf_rad - LE_sub - SH_sub
-          else
-            F_sfc_sub = F_net_srf_rad
+        real(r8) :: hrabs(pver), excl_budget, acc_mass, hr_for_dt
+        logical  :: avail(pver)
+        integer  :: kk, kmax
+        hrabs       = abs(LWHR + SWHR)
+        excl_budget = f_excl_mass * sum(pdel)
+        avail       = .true.
+        acc_mass    = 0._r8
+        hr_for_dt   = maxval(hrabs)
+        do
+          kmax = 0
+          do kk = 1, pver
+            if (avail(kk)) then
+              if (kmax == 0) then
+                kmax = kk
+              else if (hrabs(kk) > hrabs(kmax)) then
+                kmax = kk
+              end if
+            end if
+          end do
+          if (kmax == 0) then
+            hr_for_dt = 0._r8;  exit              ! all layers excluded (unreachable)
           end if
-          lambda_sub = 4._r8 * SHR_CONST_STEBOL * ts_sub**3
-          ts_sub     = ts_sub + dt_sfc * F_sfc_sub &
-                              / (H_slab + dt_sfc * lambda_sub)
-
-          ! Bottom-layer moisture and temperature sources
-          if (prognostic) then
-            L_sub = Lvap_T(ts_sub)
-            T_sub = T_sub + dt_sfc * SH_sub / (cpdry_col * layer_mass_bot)
-            q_sub = max(q_sub + dt_sfc * (LE_sub / L_sub) / layer_mass_bot, &
-                        0._r8)
+          ! Stop at the stiffest layer whose mass would overrun the exclusion
+          ! budget — that layer is KEPT and sets the bulk rate.
+          if (acc_mass + pdel(kmax) > excl_budget) then
+            hr_for_dt = hrabs(kmax);  exit
           end if
-
-          LE_acc = LE_acc + LE_sub * dt_sfc
-          SH_acc = SH_acc + SH_sub * dt_sfc
+          acc_mass    = acc_mass + pdel(kmax)     ! exclude this thin stiff layer
+          avail(kmax) = .false.
         end do
 
-        ! Commit subcycled state to the column
-        ts           = ts_sub
-        tmid(pver)   = T_sub
-        h2ommr(pver) = q_sub
+        if (hr_for_dt > 0._r8) then
+          dt_outer_days = cfl_safety * dT_target / hr_for_dt
+        else
+          dt_outer_days = dt_max
+        end if
+      end block
+      dt_outer_days   = max(dt_min, min(dt_max, dt_outer_days))
+      model_time_days = model_time_days + dt_outer_days
 
-        ! Time-averaged fluxes for diagnostics and window accumulators
-        LE = LE_acc / dt_sec
-        SH = SH_acc / dt_sec
+      ! ---- 3. Sub-step count from the TRUE max radiative CFL ----
+      ! Each sub-step applies frozen HR explicitly: require dt_sub·max|HR| ≤
+      ! dT_target so even the excluded stiff layer integrates stably.  N_sub = 1
+      ! whenever there is no stiff outlier (dt_outer already meets the CFL).
+      if (max_hr > 0._r8) then
+        N_sub = ceiling(dt_outer_days * max_hr / (cfl_safety * dT_target))
+      else
+        N_sub = 1
+      end if
+      ! Also enforce the local-physics sub-step cap (dt_sub ≤ dt_phys_max) when a
+      ! boundary-layer scheme is active — its short-timescale physics (BL mixing
+      ! coupled to SBM and the surface) is unstable at the long radiative step.
+      ! The legacy path (no BL) does not need it and keeps its original cadence.
+      if (trim(adjustl(pbl_scheme)) /= 'none') then
+        N_sub = max(N_sub, ceiling(dt_outer_days / dt_phys_max))
+      end if
+      N_sub       = max(1, min(nsub_max, N_sub))
+      dt_sub_days = dt_outer_days / real(N_sub, r8)
+      dt_sub_sec  = dt_sub_days * SHR_CONST_CSEC
+      dt_days     = dt_sub_days     ! module var → condense heating-rate diagnostic
+
+      ! Reset outer-step flux / precip accumulators.
+      LE_acc_outer     = 0._r8
+      SH_acc_outer     = 0._r8
+      precip_acc_outer = 0._r8
+
+      ! ================= Radiation sub-cycle (frozen HR) =================
+      do isub_rad = 1, N_sub
+
+      ! ---- 3a. Apply frozen radiation tendency (small, CFL-bounded step) ----
+      do k = 1, pver
+        tmid(k) = tmid(k) + dt_sub_days * (LWHR(k) + SWHR(k))
+      end do
+
+      ! ---- 4–6. Surface turbulent fluxes + slab ocean ----
+      ! Compute LE, SH and the (MOS) drag coefficient from the current near-
+      ! surface state and step the slab ocean (semi-implicit Planck damping).
+      !
+      ! The turbulent fluxes are NOT deposited into the bottom grid layer here
+      ! (when a boundary-layer scheme is active).  Depositing the full flux into
+      ! a thin hybrid bottom layer spikes its T and q — collapsing the LCL and
+      ! making the layer radiatively stiff.  Instead the fluxes are injected as a
+      ! bottom SOURCE inside the implicit BL diffusion (step 10a), which spreads
+      ! them through the boundary layer in one conservative implicit step (no
+      ! spike, unconditionally stable).  Energy is conserved exactly: the slab
+      ! debits LE+SH and the BL injects the same SH (sensible) and E = LE/L
+      ! (moisture; its latent heat is realised later at condensation).
+      !
+      ! When pbl_scheme='none' there is no BL to distribute the flux, so the
+      ! legacy explicit bottom-layer deposit is retained (valid for the log grid,
+      ! whose bottom layer is thick enough that a single dt_sub step is stable).
+      block
+        real(r8) :: za_bot, p0_sfc, lambda_s, F_sfc, layer_mass_bot
+        za_bot = 0.5_r8 * (zint(pver) + zint(pverp))   ! lowest-level height
+        p0_sfc = pint(pverp)                           ! surface pressure
+
+        call compute_surface_fluxes(surface_flux, ts, tmid(pver), h2ommr(pver), &
+                                    pmid(pver), za_bot, p0_sfc, z0_rough, &
+                                    mwdry_col, cpdry_col, wind_speed, C_D, &
+                                    LE, SH, C_drag_diag)
+
+        ! Slab budget (semi-implicit Planck)
+        if (prognostic) then
+          F_sfc = F_net_srf_rad - LE - SH
+        else
+          F_sfc = F_net_srf_rad
+        end if
+        lambda_s = 4._r8 * SHR_CONST_STEBOL * ts**3
+        ts       = ts + dt_sub_sec * F_sfc / (H_slab + dt_sub_sec * lambda_s)
+
+        ! Legacy explicit deposit (only when no BL scheme distributes the flux).
+        if (prognostic .and. trim(adjustl(pbl_scheme)) == 'none') then
+          layer_mass_bot = pdel(pver) / exo_g
+          tmid(pver)   = tmid(pver) + dt_sub_sec * SH / (cpdry_col * layer_mass_bot)
+          h2ommr(pver) = max(h2ommr(pver) &
+                         + dt_sub_sec * (LE / Lvap_T(ts)) / layer_mass_bot, 0._r8)
+        end if
       end block
 
       ! ---- 7. Legacy fixed-RH closure ----
@@ -379,14 +484,14 @@ contains
           real(r8) :: precip_sbm
           real(r8), dimension(pver) :: cond_tend_sbm
           call convadj_sbm(tmid, tint, h2ommr, zint, pint, pdel, &
-                           cpdry_col, exo_g, ts, dt_sec, tau_conv, rh_sbm, &
+                           cpdry_col, exo_g, ts, dt_sub_sec, tau_conv, rh_sbm, &
                            Lvap_T(ts), prognostic, precip_sbm, cond_tend_sbm, pver)
           do k = 1, pver
             cond_heating(k) = cond_heating(k) + cond_tend_sbm(k) * SHR_CONST_CSEC
           end do
           precip_total = precip_sbm
           if (prognostic) then
-            call condense(dt_sec, precip_iter)
+            call condense(dt_sub_sec, precip_iter)
             precip_total = precip_total + precip_iter
           end if
         end block
@@ -394,12 +499,12 @@ contains
         ! ZM soft scheme: one relaxed pass, condensation, then one hard cleanup.
         ! f_zm = 1 - exp(-dt/τ_conv): fraction of instability removed this step.
         ! At dt >> τ_conv (cold start) f_zm → 1 (hard); near equilibrium where
-        ! dt ≈ 0.06 d and τ_conv = 7200 s = 0.083 d, f_zm ≈ 0.51.
-        f_zm = 1.0_r8 - exp(-dt_days / (tau_conv / SHR_CONST_CSEC))
+        ! dt_sub ≈ 0.06 d and τ_conv = 7200 s = 0.083 d, f_zm ≈ 0.51.
+        f_zm = 1.0_r8 - exp(-dt_sub_days / (tau_conv / SHR_CONST_CSEC))
         call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
                         cpdry_col, exo_g, ts, f_zm, cape_trigger, pver)
         if (prognostic) then
-          call condense(dt_sec, precip_iter)
+          call condense(dt_sub_sec, precip_iter)
           precip_total = precip_iter
         end if
         ! Hard cleanup (f=1, no CAPE check) removes any instability from
@@ -411,7 +516,7 @@ contains
         do inner_iter = 1, max_inner_phys
           call sat_iter_convadj(sat_warn_count)
           if (prognostic) then
-            call condense(dt_sec, precip_iter)
+            call condense(dt_sub_sec, precip_iter)
             precip_total = precip_total + precip_iter
             if (precip_iter == 0._r8) exit
           else
@@ -419,6 +524,36 @@ contains
           end if
         end do
         call sat_iter_convadj(sat_warn_count)  ! final cleanup after last satadj
+      end if
+
+      ! ---- 10a. Boundary-layer mixing (after convection) ----
+      ! Mix dry static energy and q through the convective sub-cloud boundary
+      ! layer (Frierson K-profile).  Run AFTER SBM so the BL height is diagnosed
+      ! from the convectively-stratified profile (sv increasing along the moist
+      ! adiabat) rather than a profile the BL itself just homogenised — without
+      ! this ordering the long RCE timestep flattens sv and the diagnosed depth
+      ! runs away.  The result is the physically-correct structure: dry-adiabatic
+      ! sub-cloud layer below, moist adiabat (set by SBM) above.  Makes the
+      ! near-surface state — and hence the surface fluxes — resolution-independent.
+      if (trim(adjustl(pbl_scheme)) /= 'none') then
+        block
+          real(r8) :: pbl_h, surf_sh, surf_e
+          integer  :: pbl_ktop
+          ! Surface fluxes injected as the BL bottom source (prognostic only).
+          if (prognostic) then
+            surf_sh = SH
+            surf_e  = LE / Lvap_T(ts)
+          else
+            surf_sh = 0._r8
+            surf_e  = 0._r8
+          end if
+          call pbl_diffuse(tmid, h2ommr, pmid, pint, pdel, zint, &
+                           mwdry_col, cpdry_col, wind_speed, C_drag_diag, &
+                           surf_sh, surf_e, dt_sub_sec, prognostic, pver, &
+                           pbl_h, pbl_ktop)
+          pbl_h_diag    = pbl_h
+          pbl_ktop_diag = pbl_ktop
+        end block
       end if
 
       ! ---- 10b. Stratospheric cold-point cold trap (Brewer-Dobson) ----
@@ -434,21 +569,34 @@ contains
       ! ---- 12. Heights ----
       call update_zint()
 
+      ! ---- Accumulate sub-step fluxes / precip (dt-weighted) for outer means ----
+      LE_acc_outer     = LE_acc_outer     + LE           * dt_sub_days
+      SH_acc_outer     = SH_acc_outer     + SH           * dt_sub_days
+      precip_acc_outer = precip_acc_outer + precip_total * dt_sub_days
+
+      end do
+      ! ================= end radiation sub-cycle =================
+
+      ! Outer-step time-mean fluxes / precip for diagnostics + window accumulators.
+      LE           = LE_acc_outer     / dt_outer_days
+      SH           = SH_acc_outer     / dt_outer_days
+      precip_total = precip_acc_outer / dt_outer_days
+
       ! ---- Diagnostics for output ----
       LE_diag     = LE
       SH_diag     = SH
       precip_diag = precip_total * 86400._r8   ! kg/m²/s → mm/day (ρ_water = 1000 kg/m³)
 
       ! ---- Window-mean accumulators (Path B convergence basis) ----
-      ts_sum         = ts_sum         + ts            * dt_days
-      toa_signed_sum = toa_signed_sum + toa_signed    * dt_days
-      tmid_sum       = tmid_sum       + tmid          * dt_days
-      h2ommr_sum     = h2ommr_sum     + h2ommr        * dt_days
-      window_dt_sum  = window_dt_sum  + dt_days
-      LE_sum         = LE_sum         + LE            * dt_days
-      SH_sum         = SH_sum         + SH            * dt_days
-      F_srf_rad_sum  = F_srf_rad_sum  + F_net_srf_rad * dt_days
-      precip_day_sum = precip_day_sum + precip_diag   * dt_days
+      ts_sum         = ts_sum         + ts            * dt_outer_days
+      toa_signed_sum = toa_signed_sum + toa_signed    * dt_outer_days
+      tmid_sum       = tmid_sum       + tmid          * dt_outer_days
+      h2ommr_sum     = h2ommr_sum     + h2ommr        * dt_outer_days
+      window_dt_sum  = window_dt_sum  + dt_outer_days
+      LE_sum         = LE_sum         + LE            * dt_outer_days
+      SH_sum         = SH_sum         + SH            * dt_outer_days
+      F_srf_rad_sum  = F_srf_rad_sum  + F_net_srf_rad * dt_outer_days
+      precip_day_sum = precip_day_sum + precip_diag   * dt_outer_days
 
       ! ---- End-of-window: form means, compare to previous, reset ----
       if (model_time_days - t_window_start >= stab_check_days) then
@@ -501,16 +649,19 @@ contains
 
       ! ---- Console print (model-time based) ----
       if (it == 1 .or. model_time_days - t_last_print >= print_every_days) then
-        write(*,'(a,i7,a,f9.2,a,f7.4,a,f7.3,a,f8.3,a,f7.2,a,f6.1,a,f6.1,a,f6.2)') &
+        write(*,'(a,i7,a,f9.2,a,f7.4,a,i5,a,f7.3,a,f8.3,a,f7.2,a,f6.1,a,f6.1,a,f6.2)') &
           '  step=', it, &
           '  t[d]=', model_time_days, &
-          '  dt[d]=', dt_days, &
+          '  dt[d]=', dt_outer_days, &
+          '  Nsub=', N_sub, &
           '  max|HR|=', max_hr, &
           '  TOA=', toa_flux, &
           '  Ts=', ts, &
           '  LE=', LE, &
           '  SH=', SH, &
           '  P[mm/d]=', precip_diag
+        write(*,'(a,f7.1,a,i4)') '            PBL: h[m]=', pbl_h_diag, &
+          '  ktop=', pbl_ktop_diag
         flush(6)     ! live progress when stdout is redirected to a file
         t_last_print = model_time_days
       end if
@@ -781,6 +932,102 @@ contains
       end if
     end do
   end subroutine apply_stratospheric_coldtrap
+
+  ! -----------------------------------------------------------------------
+  ! THROWAWAY DIAGNOSTIC: radiative stiffness + Jacobian structure probe
+  ! -----------------------------------------------------------------------
+
+  subroutine diagnose_radiative_stiffness(LWHR0, SWHR0, it_now)
+  ! Dump the current column profile and probe the radiative Jacobian
+  ! J(i,j) = ∂HR_i/∂T_j by +1 K finite difference at representative layers.
+  ! Writes iofiles/diag_profile.txt and iofiles/diag_jacobian.txt and prints a
+  ! console summary.  Purpose: measure where the stiff layer is and how far a
+  ! single-layer T perturbation's HR response spreads (the band half-width),
+  ! to decide whether a banded backward-Euler radiation solve is feasible/cheap.
+    use exocol_mod, only: tmid, pmid, h2ommr, pdel
+    use ppgrid,     only: pver, pverp
+    real(r8), intent(in) :: LWHR0(pver), SWHR0(pver)
+    integer,  intent(in) :: it_now
+
+    real(r8) :: HR0(pver), Jcol(pver)
+    real(r8) :: LWHR_p(pver), SWHR_p(pver)
+    real(r8) :: LWUP(pverp), LWDN(pverp), SWUP(pverp), SWDN(pverp)
+    real(r8) :: tsave, dTp, diagv, offmax, bandfrac
+    integer  :: k, j, ip, kstiff, ku, kl, u, bw
+    integer, parameter :: nprobe = 9
+    integer :: probes(nprobe)
+
+    HR0    = LWHR0 + SWHR0
+    kstiff = maxloc(abs(HR0), dim=1)
+    dTp    = 1.0_r8
+
+    ! --- profile dump ---
+    open(newunit=u, file='iofiles/diag_profile.txt', status='replace')
+    write(u,'(a)') '# k  pmid[Pa]  tmid[K]  h2ommr[kg/kg]  pdel[Pa]  LWHR  SWHR  absHR[K/day]'
+    do k = 1, pver
+      write(u,'(i5,7es15.6)') k, pmid(k), tmid(k), h2ommr(k), pdel(k), &
+                              LWHR0(k), SWHR0(k), abs(HR0(k))
+    end do
+    close(u)
+
+    ! Probe layers: cluster around the stiff layer + a few references.
+    probes = (/ max(1,kstiff-6), max(1,kstiff-2), max(1,kstiff-1), kstiff, &
+                min(pver,kstiff+1), min(pver,kstiff+2), min(pver,kstiff+6), &
+                max(1,kstiff/2), pver-1 /)
+
+    write(*,'(/,a)') '================ JACOBIAN DIAGNOSTIC ================'
+    write(*,'(a,i0,a,i0,a)') '  step=', it_now, '  pver=', pver, ''
+    write(*,'(a,i0,a,es12.4,a,f8.3)') '  stiff layer kstiff=', kstiff, &
+          '  pmid=', pmid(kstiff), ' Pa  HR=', HR0(kstiff)
+    write(*,'(a)') '  probe j   pmid[Pa]    diag J(j,j)[1/day]  band(|J|>5%diag)  max|offdiag|/|diag|'
+
+    open(newunit=u, file='iofiles/diag_jacobian.txt', status='replace')
+    write(u,'(a,i0)') '# kstiff=', kstiff
+    write(u,'(a)') '# columns: i  pmid[i]  then J(i,j) for each probe j'
+    write(u,'(a,9i14)') '# probe j list: ', (probes(ip), ip=1,nprobe)
+
+    block
+      real(r8) :: Jmat(pver, nprobe)
+      do ip = 1, nprobe
+        j        = probes(ip)
+        tsave    = tmid(j)
+        tmid(j)  = tmid(j) + dTp
+        call exocol_rad_tend(LWHR_p, SWHR_p, LWUP, LWDN, SWUP, SWDN)
+        tmid(j)  = tsave
+        Jcol     = ((LWHR_p + SWHR_p) - HR0) / dTp
+        Jmat(:,ip) = Jcol
+
+        ! band half-width: furthest layer from j with |J| > 5% of |diag|
+        diagv    = abs(Jcol(j))
+        bandfrac = 0.05_r8 * max(diagv, 1.0e-30_r8)
+        kl = j;  ku = j
+        do k = 1, pver
+          if (abs(Jcol(k)) > bandfrac) then
+            if (k < kl) kl = k
+            if (k > ku) ku = k
+          end if
+        end do
+        bw = max(j-kl, ku-j)
+        ! max off-diagonal magnitude relative to diagonal
+        offmax = 0._r8
+        do k = 1, pver
+          if (k /= j) offmax = max(offmax, abs(Jcol(k)))
+        end do
+        write(*,'(i9,es13.4,es16.4,i14,f20.4)') j, pmid(j), Jcol(j), bw, &
+              offmax / max(diagv,1.0e-30_r8)
+      end do
+
+      ! raw matrix dump
+      do k = 1, pver
+        write(u,'(i5,es14.5,9es14.5)') k, pmid(k), (Jmat(k,ip), ip=1,nprobe)
+      end do
+    end block
+    close(u)
+
+    write(*,'(a)') '  wrote iofiles/diag_profile.txt, iofiles/diag_jacobian.txt'
+    write(*,'(a,/)') '===================================================='
+    flush(6)
+  end subroutine diagnose_radiative_stiffness
 
   ! -----------------------------------------------------------------------
   ! Legacy fixed-RH closure (only invoked when moisture_scheme='fixed_rh')
