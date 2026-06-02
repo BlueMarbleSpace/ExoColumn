@@ -127,6 +127,29 @@ module exocol_config
   real(r8),          public, save :: cape_trigger    =    0.0_r8  ! CAPE activation threshold [J/kg]
   real(r8),          public, save :: rh_sbm          =    0.7_r8  ! SBM reference relative humidity [-]
 
+  ! Boundary-layer vertical mixing (exocol_pbl).
+  !   'none'     : no BL mixing (legacy; resolution-DEPENDENT near-surface state).
+  !   'kprofile' : free-convective Holtslag-Boville K-profile diffusion of dry
+  !                static energy and q through the diagnosed BL depth — makes the
+  !                near-surface state (and hence LE/SH and the climate) resolution
+  !                independent.  Conservative, implicit, unconditionally stable.
+  ! Boundary-layer mixing scheme.  Default 'none' (legacy; reproduces the
+  ! calibrated Ts=288.01 reference).  'kprofile' = Frierson diffusive BL — WORK
+  ! IN PROGRESS (engages and is stable under physics sub-stepping, but the
+  ! bulk-Richardson depth diagnosis still drifts; needs the prognostic damped
+  ! depth).  Use with surface_flux='mos' and the hybrid grid (n_sfc_layers>0).
+  character(len=32), public, save :: pbl_scheme      = 'none'
+
+  ! Surface turbulent flux scheme (exocol_surface).
+  !   'bulk' (default) : legacy fixed-C_D bulk aerodynamic in actual temperature.
+  !   'mos'            : simplified Monin-Obukhov similarity (Frierson 2006) —
+  !            potential-temperature fluxes with a height-dependent drag
+  !            coefficient C = κ²/ln²(z_a/z0); resolution-independent in the
+  !            surface layer.  Requires the hybrid fine-surface grid
+  !            (n_sfc_layers>0, z_a~10 m) and pbl_scheme='kprofile'.
+  character(len=32), public, save :: surface_flux    = 'bulk'
+  real(r8),          public, save :: z0_rough        = 3.21e-5_r8  ! roughness length [m] (Frierson)
+
   ! Latent-heat treatment in the moist adiabat / condensation / surface ledger.
   !   'phase_aware' (default) : L_v above 273.16 K, L_sub (sublimation) below.
   !   'fixed_vap'             : fixed liquid L_v at all T, matching konrad's
@@ -230,7 +253,8 @@ contains
                                   wind_speed, C_D, msdist, dz_slab, &
                                   n_sfc_layers, dp_sfc_bot, sfc_stretch, &
                                   tau_conv, cape_trigger, rh_sbm, &
-                                  latent_heat_mode
+                                  latent_heat_mode, pbl_scheme, &
+                                  surface_flux, z0_rough
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
