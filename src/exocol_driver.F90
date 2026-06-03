@@ -33,7 +33,8 @@ PROGRAM exocol_driver
   use exocol_mod
   use exocol_config,         only: read_config, apply_composition_overrides, &
                                    cfg_input_file => input_file, &
-                                   latent_heat_mode
+                                   latent_heat_mode, &
+                                   cfg_gravity => gravity
   use exocol_io,             only: read_initial_conditions, write_output
   use exocol_coldstart,      only: cold_start_init
   use exocol_rce_loop,       only: run_rce_loop
@@ -53,6 +54,7 @@ PROGRAM exocol_driver
   ! ---- 0. Read runtime configuration (scheme selection, etc.) ----
   call read_config('exocol_config.nml')
   call set_latent_heat_mode(trim(latent_heat_mode) == 'fixed_vap')
+  exo_g = cfg_gravity   ! planet gravity; must precede cold_start_init and ExoRT init
 
   ! ---- 1. Allocate column state ----
   call exocol_init()
