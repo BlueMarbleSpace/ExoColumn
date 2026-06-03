@@ -83,16 +83,10 @@ PVER ?= 70
 $(shell printf 'module sys_rootdir\n  implicit none\n  public\n  character(len=256), parameter :: exort_rootdir = "%s/"\nend module sys_rootdir\n' \
   "$(EXORT_ROOT)" > $(EXCOL_DIR)/sys_rootdir.F90)
 
-# Generate src/exoplanet_mod.F90 from ExoRT's source.  Three transformations:
-#   1. Substitute our chosen exo_pver (compile-time layer count).
-#   2. Strip the `parameter` attribute from exo_g so it can be set at runtime
-#      from &exocol_nml::gravity in exocol_driver after read_config.
-#   3. Remove the commented-out alternative gravity lines (no longer needed).
-# ExoRT's source file is never modified.
-$(shell sed -E \
-  -e 's|^([[:space:]]*integer[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_pver[[:space:]]*=[[:space:]]*)[0-9]+.*|\1$(PVER)  ! set by ExoColumn build (PVER=$(PVER))|' \
-  -e 's|^([[:space:]]*)real\(r8\)[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_g[[:space:]]*=.*|\1real(r8) :: exo_g = 9.80616_r8  ! set at runtime from \&exocol_nml::gravity|' \
-  -e '/^[[:space:]]*!real\(r8\).*exo_g/d' \
+# Generate src/exoplanet_mod.F90 from ExoRT's source with our chosen exo_pver
+# value.  Matches the (single) uncommented `exo_pver = N` line and rewrites it;
+# commented variants are left alone.  ExoRT's file is preserved.
+$(shell sed -E 's|^([[:space:]]*integer[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_pver[[:space:]]*=[[:space:]]*)[0-9]+.*|\1$(PVER)  ! set by ExoColumn build (PVER=$(PVER))|' \
   $(SRC_DIR)/exoplanet_mod.F90 > $(EXCOL_DIR)/exoplanet_mod.F90)
 
 # ---- ExoRT objects (same as n68equiv.exe target minus main.F90) ----
