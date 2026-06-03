@@ -36,7 +36,7 @@ module exocol_surface
 
   use shr_kind_mod,  only: r8 => shr_kind_r8
   use shr_const_mod, only: SHR_CONST_RGAS, SHR_CONST_MWWV
-  use exoplanet_mod, only: exo_g
+  use exocol_mod,    only: gravity
   use exocol_convadj, only: esat_cc, Lvap_T
 
   implicit none
@@ -110,8 +110,8 @@ contains
 
       ! Bulk Richardson at the lowest level from virtual dry static energy.
       sv_s = cpdry * ts    * (1._r8 + 0.608_r8 * qsat_surf)              ! z = 0
-      sv_a = cpdry * t_bot * (1._r8 + 0.608_r8 * q_bot) + exo_g * za
-      Ria  = exo_g * za * (sv_a - sv_s) / (sv_s * max(wind_speed, 1.0_r8)**2)
+      sv_a = cpdry * t_bot * (1._r8 + 0.608_r8 * q_bot) + gravity * za
+      Ria  = gravity * za * (sv_a - sv_s) / (sv_s * max(wind_speed, 1.0_r8)**2)
 
       C  = mos_drag_coef(z_flux_ref, z0, Ria)
       LE = rho_a * L_surf * C * wind_speed * (qsat_surf - q_bot)
