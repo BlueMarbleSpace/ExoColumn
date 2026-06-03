@@ -22,7 +22,6 @@ module exocol_config
 !                               'none'       zero ozone everywhere
 !   wind_speed       REAL       5.0          surface wind speed [m/s]
 !   C_D              REAL       1.5e-3       bulk exchange coefficient [-]
-!   gravity          REAL       9.80616      surface gravitational acceleration [m/s²]
 !   msdist           REAL       1.0          planet-star distance factor [AU];
 !                                            TOA stellar flux scales as 1/msdist²
 !   dz_slab          REAL       50.0         slab-ocean thickness [m].  Sets the
@@ -127,7 +126,6 @@ module exocol_config
   real(r8),          public, save :: tau_conv        = 3600.0_r8  ! ZM/SBM relaxation time [s]
   real(r8),          public, save :: cape_trigger    =    0.0_r8  ! CAPE activation threshold [J/kg]
   real(r8),          public, save :: rh_sbm          =    0.7_r8  ! SBM reference relative humidity [-]
-  real(r8),          public, save :: gravity         = 9.80616_r8 ! surface gravity [m/s²]
 
   ! Surface turbulent flux scheme (exocol_surface).
   !   'mos' (default) : simplified Monin-Obukhov similarity (Frierson 2006) —
@@ -230,7 +228,7 @@ contains
                                   wind_speed, C_D, msdist, dz_slab, &
                                   tau_conv, cape_trigger, rh_sbm, &
                                   latent_heat_mode, &
-                                  surface_flux, z0_rough, gravity
+                                  surface_flux, z0_rough
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -317,13 +315,6 @@ contains
       dz_slab = 50.0_r8
     end if
 
-    ! Validate gravity (must be positive)
-    if (gravity <= 0.0_r8) then
-      write(*,'(a,es10.3,a)') &
-        '  WARNING: gravity must be > 0 (got ', gravity, ') — defaulting to 9.80616'
-      gravity = 9.80616_r8
-    end if
-
     call announce()
 
   end subroutine read_config
@@ -362,7 +353,6 @@ contains
     case ('earth');   write(*,'(a)') '  Ozone profile     : Earth mid-latitude climatology'
     case ('none');    write(*,'(a)') '  Ozone profile     : none (zero ozone)'
     end select
-    write(*,'(a,f8.5,a)') '  Surface gravity   : g = ', gravity, ' m/s^2'
     write(*,'(a,f6.3,a)') '  Star distance     : msdist = ', msdist, ' AU'
     write(*,'(a,f6.2,a)') '  Slab thickness    : dz_slab = ', dz_slab, ' m'
     if (trim(latent_heat_mode) == 'fixed_vap') then
