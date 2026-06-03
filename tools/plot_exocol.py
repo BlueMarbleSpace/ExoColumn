@@ -134,7 +134,7 @@ ax_q   = fig.add_subplot(gs[1, 1])
 
 def setup_yaxis(ax, pmin=None, pmax=None):
     ax.set_yscale("log")
-    ax.set_ylim(pmax or pmid.max() * 1.05, pmin or pmid.min() * 0.95)
+    ax.set_ylim(pmax or ps * 1.02, pmin or pmid.min() * 0.95)
     ax.set_ylabel("Pressure (hPa)")
 
 # ---- Panel 1: Temperature profile -----------------------------------------
@@ -143,8 +143,10 @@ T_ref = _us_std_atm_T(pmid)
 ax.plot(T_ref, pmid, color="dimgray",   lw=1.5, ls=":")
 if os.path.isfile(konrad_path):
     _kd = np.load(konrad_path)
-    ax.plot(_kd["T_K"], _kd["plev_hpa"], color="gray", lw=1.0, ls="-.")
-ax.plot(tmid, pmid, color="firebrick", lw=1.5)
+    _kT = np.append(_kd["T_K"], float(_kd["Ts_K"]))
+    _kp = np.append(_kd["plev_hpa"], float(_kd["phlev_hpa"].max()))
+    ax.plot(_kT, _kp, color="gray", lw=1.0, ls="-.")
+ax.plot(np.append(tmid, ts), np.append(pmid, ps), color="firebrick", lw=1.5)
 ax.axhline(ps, color="gray", lw=0.6, ls=":")
 
 def _iT(T_arr, p_arr, p_target):
@@ -154,7 +156,7 @@ def _iT(T_arr, p_arr, p_target):
 _T_lbls = [(T_ref, pmid, "US Std Atm, 1976", "dimgray", 120.0, -51, "left"),
            (tmid,  pmid, "ExoColumn", "firebrick", 20.0, -30, "left")]
 if os.path.isfile(konrad_path):
-    _T_lbls.append((_kd["T_K"], _kd["plev_hpa"], "konrad", "gray", 400.0, -30, "left"))
+    _T_lbls.append((_kT, _kp, "konrad", "gray", 400.0, -30, "left"))
 for T_arr, p_arr, lbl, color, p_lbl, dx, ha in _T_lbls:
     ax.text(_iT(T_arr, p_arr, p_lbl) + dx, p_lbl, lbl,
             color=color, ha=ha, va="center", fontsize=12)
