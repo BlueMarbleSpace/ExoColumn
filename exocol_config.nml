@@ -38,18 +38,17 @@
   rh_init    =   0.7
   coszrs     =   0.5
   cpdry      = 1004.0
-  ! Surface albedo calibrated to Ts = 288.01 K (modern Earth) with the
-  ! cold-point stratospheric H2O closure active (sbm, prognostic, o3='rcemip',
-  ! coszrs=0.5, msdist=1.0), argon in the dry-air composition (mwdry 28.97,
-  ! cpdry 1004), AND the assign-above-cold-point cold trap (no upper-strat bump).
+  ! Surface albedo calibrated to Ts = 288.00 K (modern Earth) with the
+  ! MOS surface flux (z_flux_ref=10 m), surface mixed layer (convadj_surface),
+  ! non-deadlocking dry fallback, cold-point stratospheric H2O closure active,
+  ! sbm, prognostic, o3='rcemip', coszrs=0.5, msdist=1.0, argon in dry-air
+  ! composition (mwdry 28.97, cpdry 1004), PVER=70 log-spaced grid.
   ! Local sensitivity ~ -120 K per unit albedo near α=0.27.
-  ! (α=0.2674→288.01 post bump-fix; the bump fix dried the upper strat and cooled
-  !  Ts ~0.10 K, so α dropped from the pre-fix 0.2682→288.01.)
   ! (For o3='earth' the calibrated value is 0.2873 — see exocol_config.nml.earth_a2873.)
-  asdir      =   0.2744
-  asdif      =   0.2744
-  aldir      =   0.2744
-  aldif      =   0.2744
+  asdir      =   0.2736
+  asdif      =   0.2736
+  aldir      =   0.2736
+  aldif      =   0.2736
 /
 
 ! &exocol_composition — dry-air composition and surface pressure (all optional).
