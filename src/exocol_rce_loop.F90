@@ -59,6 +59,7 @@ module exocol_rce_loop
   use shr_kind_mod,    only: r8 => shr_kind_r8
   use shr_const_mod,   only: SHR_CONST_CSEC, SHR_CONST_RGAS, SHR_CONST_MWWV, &
                              SHR_CONST_STEBOL, SHR_CONST_RWV
+  use exoplanet_mod,   only: exo_g
   use ppgrid,          only: pver, pverp
   use exocol_mod
   use exocol_radiation, only: exocol_rad_tend
@@ -461,7 +462,7 @@ contains
 
         ! Explicit deposit of the mechanical surface fluxes into the bottom layer.
         if (prognostic) then
-          layer_mass_bot = pdel(pver) / gravity
+          layer_mass_bot = pdel(pver) / exo_g
           tmid(pver)   = tmid(pver) + dt_sub_sec * SH / (cpdry_col * layer_mass_bot)
           h2ommr(pver) = max(h2ommr(pver) &
                          + dt_sub_sec * (LE / Lvap_T(ts)) / layer_mass_bot, 0._r8)
@@ -497,7 +498,7 @@ contains
           if (use_surf_couple) then
             ts_pre_couple = ts
             call convadj_surface(tmid, tint, h2ommr, ts, H_slab, &
-                                 pint, pmid, pdel, cpdry_col, gravity, pver)
+                                 pint, pmid, pdel, cpdry_col, exo_g, pver)
             ! The mixed-layer coupling carries a convective surface sensible flux
             ! (the slab debit H_slab·Δts).  Fold it into the SH diagnostic so the
             ! reported surface energy budget closes (F_srf_rad − LE − SH ≈ 0); it
@@ -506,7 +507,7 @@ contains
             SH = SH + H_slab * (ts_pre_couple - ts) / dt_sub_sec
           end if
           call convadj_sbm(tmid, tint, h2ommr, zint, pint, pdel, &
-                           cpdry_col, gravity, ts, dt_sub_sec, tau_conv, rh_sbm, &
+                           cpdry_col, exo_g, ts, dt_sub_sec, tau_conv, rh_sbm, &
                            Lvap_T(ts), prognostic, precip_sbm, cond_tend_sbm, pver)
           do k = 1, pver
             cond_heating(k) = cond_heating(k) + cond_tend_sbm(k) * SHR_CONST_CSEC
@@ -520,7 +521,7 @@ contains
           ! cleaned up to q <= qsat in the same step.
           if (use_dry_fallback) &
             call convadj_dry(tmid, tint, h2ommr, pint, pdel, &
-                             cpdry_col, gravity, ts, pver)
+                             cpdry_col, exo_g, ts, pver)
           if (prognostic) then
             call condense(dt_sub_sec, precip_iter)
             precip_total = precip_total + precip_iter
@@ -533,7 +534,7 @@ contains
         ! dt_sub ≈ 0.06 d and τ_conv = 7200 s = 0.083 d, f_zm ≈ 0.51.
         f_zm = 1.0_r8 - exp(-dt_sub_days / (tau_conv / SHR_CONST_CSEC))
         call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
-                        cpdry_col, gravity, ts, f_zm, cape_trigger, pver)
+                        cpdry_col, exo_g, ts, f_zm, cape_trigger, pver)
         if (prognostic) then
           call condense(dt_sub_sec, precip_iter)
           precip_total = precip_iter
@@ -541,7 +542,7 @@ contains
         ! Hard cleanup (f=1, no CAPE check) removes any instability from
         ! latent heat release — this is always a fast local process.
         call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
-                        cpdry_col, gravity, ts, 1.0_r8, 0.0_r8, pver)
+                        cpdry_col, exo_g, ts, 1.0_r8, 0.0_r8, pver)
       else
         ! Hard schemes: iterate convadj + satadj until q ≤ qsat everywhere.
         do inner_iter = 1, max_inner_phys
@@ -790,17 +791,17 @@ contains
       select case (trim(adjustl(conv_scheme)))
       case ('moist')
         call convadj_moist(tmid, tint, h2ommr, zint, pint, pdel, &
-                           cpdry_col, gravity, ts, pver)
+                           cpdry_col, exo_g, ts, pver)
       case ('manabe')
         call convadj_manabe(tmid, tint, h2ommr, zint, pint, pdel, &
-                            cpdry_col, gravity, ts, pver)
+                            cpdry_col, exo_g, ts, pver)
       case ('zm')
         ! ZM is dispatched in run_rce_loop; this fallback applies one hard pass.
         call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
-                        cpdry_col, gravity, ts, 1.0_r8, 0.0_r8, pver)
+                        cpdry_col, exo_g, ts, 1.0_r8, 0.0_r8, pver)
       case default  ! 'dry'
         call convadj_dry(tmid, tint, h2ommr, pint, pdel, &
-                         cpdry_col, gravity, ts, pver)
+                         cpdry_col, exo_g, ts, pver)
       end select
 
       dT_sat = maxval(abs(tmid - tmid_pre))
@@ -861,7 +862,7 @@ contains
         tmid(k)   = tmid(k)   + L_release * q_excess / cpdry_col
         cond_heating(k)  = cond_heating(k) &
                            + L_release * q_excess / cpdry_col / dt_days
-        precip_mass_flux = precip_mass_flux + q_excess * pdel(k) / gravity / dt_step_sec
+        precip_mass_flux = precip_mass_flux + q_excess * pdel(k) / exo_g / dt_step_sec
       end if
     end do
 
@@ -909,8 +910,9 @@ contains
   ! (A pure column-wide max() floor was used previously, but its one-way ratchet
   ! stranded stale higher humidity in the warm upper stratosphere when the cold
   ! point cooled, producing an unphysical moist bump above the cold point.)
-    use exocol_mod,    only: tmid, pmid, pdel, h2ommr, mwdry_col, gravity
+    use exocol_mod,    only: tmid, pmid, pdel, h2ommr, mwdry_col
     use ppgrid,        only: pver
+    use exoplanet_mod, only: exo_g
     integer  :: k, k_cp
     real(r8) :: eps_wv, es_cp, q_cp, q_old, q_new, dW_strat, W_trop, frac
 
@@ -953,7 +955,7 @@ contains
       else
         q_new = max(h2ommr(k), q_cp)          ! floor the dry gap
       end if
-      dW_strat  = dW_strat + (q_new - q_old) * pdel(k) / gravity
+      dW_strat  = dW_strat + (q_new - q_old) * pdel(k) / exo_g
       h2ommr(k) = q_new
     end do
 
@@ -963,7 +965,7 @@ contains
     ! water back, so the redistribution is exactly water-conserving either way.
     W_trop = 0._r8
     do k = 1, pver
-      if (h2ommr(k) > q_cp) W_trop = W_trop + h2ommr(k) * pdel(k) / gravity
+      if (h2ommr(k) > q_cp) W_trop = W_trop + h2ommr(k) * pdel(k) / exo_g
     end do
     if (W_trop > dW_strat .and. W_trop > 0._r8) then
       frac = dW_strat / W_trop
@@ -1116,12 +1118,12 @@ contains
 
   subroutine update_zint()
   ! ifx host-association workaround: explicit USE inside the contained subroutine.
-    use exocol_mod, only: zint, tmid, pint, mwdry_col, gravity
+    use exocol_mod, only: zint, tmid, pint, mwdry_col
     integer  :: k
     real(r8) :: R_gas
     R_gas = SHR_CONST_RGAS / mwdry_col
     do k = pver, 1, -1
-      zint(k) = zint(k+1) + (R_gas / gravity) * tmid(k) * log(pint(k+1) / pint(k))
+      zint(k) = zint(k+1) + (R_gas / exo_g) * tmid(k) * log(pint(k+1) / pint(k))
     end do
   end subroutine update_zint
 

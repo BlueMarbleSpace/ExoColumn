@@ -33,7 +33,6 @@ module exocol_mod
   real(r8), public :: cpdry_col ! specific heat of dry air [J/kg/K]
   real(r8), public :: coszrs    ! cosine of solar zenith angle
   real(r8), public :: msdist    ! planet–star distance factor (1/eccf; 1.0 = 1 AU)
-  real(r8), public :: gravity   = 9.80616_r8  ! surface gravity [m/s²]; set from &exocol_nml
 
   ! Surface albedos
   real(r8), public :: asdir     ! SW visible  direct  albedo (0.2–0.7 µm)

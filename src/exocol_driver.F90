@@ -23,7 +23,7 @@ PROGRAM exocol_driver
 !-----------------------------------------------------------------------
 
   use shr_kind_mod,          only: r8 => shr_kind_r8
-  use exoplanet_mod                       ! exo_pver, solar_file, etc.
+  use exoplanet_mod                       ! exo_pver, exo_g, solar_file, etc.
   use exo_radiation_mod,     only: init_planck
   use exo_init_ref,          only: init_ref
   use initialize_rad_mod_1D, only: initialize_kcoeff, initialize_solar, &
@@ -54,7 +54,7 @@ PROGRAM exocol_driver
   ! ---- 0. Read runtime configuration (scheme selection, etc.) ----
   call read_config('exocol_config.nml')
   call set_latent_heat_mode(trim(latent_heat_mode) == 'fixed_vap')
-  gravity = cfg_gravity  ! planet gravity; must precede cold_start_init and ExoRT init
+  exo_g = cfg_gravity   ! planet gravity; must precede cold_start_init and ExoRT init
 
   ! ---- 1. Allocate column state ----
   call exocol_init()
