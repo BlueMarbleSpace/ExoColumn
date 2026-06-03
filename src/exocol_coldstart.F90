@@ -25,6 +25,7 @@ module exocol_coldstart
 
   use shr_kind_mod,   only: r8 => shr_kind_r8
   use shr_const_mod,  only: SHR_CONST_RGAS, SHR_CONST_MWWV
+  use exoplanet_mod,  only: exo_g
   use ppgrid,         only: pver, pverp
   use exocol_mod
   use exocol_config,  only: cs_ts       => ts,      &
@@ -158,7 +159,7 @@ contains
       '    p_top → ps : ', p_top, ' Pa → ', ps_use, ' Pa'
     write(*,'(a,f8.2,a,f8.2,a)') &
       '    pmid(pver) : ', pmid(pver)/100._r8, ' hPa  (bottom midpoint ≈', &
-      (ps_use - pmid(pver)) / (1.2_r8 * gravity), ' m altitude)'
+      (ps_use - pmid(pver)) / (1.2_r8 * exo_g), ' m altitude)'
 
     ! ---- 3. Temperature: moist adiabat from surface, capped at t_strato ----
     Rd     = SHR_CONST_RGAS / mwdry_new
@@ -183,8 +184,8 @@ contains
         dlogp_layer = log(pint(k) / pint(k+1))    ! < 0  (going up)
         dlogp_sub   = dlogp_layer / real(NSUB, r8)
         do isub = 1, NSUB
-          Gm     = malr(T_lev, p_lev, Rd, gravity, cpdry_new)
-          dT_sub = Gm * Rd * T_lev / gravity * dlogp_sub   ! < 0
+          Gm     = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+          dT_sub = Gm * Rd * T_lev / exo_g * dlogp_sub   ! < 0
           T_lev  = T_lev + dT_sub
           p_lev  = p_lev * exp(dlogp_sub)
           if (T_lev <= t_strato) then
@@ -236,7 +237,7 @@ contains
     ! ---- 6. Hydrostatic heights ----
     zint(pverp) = 0._r8
     do k = pver, 1, -1
-      zint(k) = zint(k+1) + (Rd / gravity) * tmid(k) * log(pint(k+1) / pint(k))
+      zint(k) = zint(k+1) + (Rd / exo_g) * tmid(k) * log(pint(k+1) / pint(k))
     end do
 
     ! ---- 7. Surface + scalar state ----
