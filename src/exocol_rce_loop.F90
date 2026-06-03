@@ -65,11 +65,11 @@ module exocol_rce_loop
   use exocol_radiation, only: exocol_rad_tend
   use exocol_config,    only: conv_scheme, moisture_scheme, wind_speed, C_D, &
                               cfg_dz_slab => dz_slab, tau_conv, cape_trigger, &
-                              rh_sbm, pbl_scheme, surface_flux, z0_rough
-  use exocol_convadj,   only: convadj_dry, convadj_moist, convadj_manabe, &
-                              convadj_zm, convadj_sbm, esat_cc, Lvap_T
+                              rh_sbm, surface_flux, z0_rough
+  use exocol_convadj,   only: convadj_dry, convadj_surface, convadj_moist, &
+                              convadj_manabe, convadj_zm, convadj_sbm, &
+                              esat_cc, Lvap_T
   use exocol_surface,   only: compute_surface_fluxes
-  use exocol_pbl,       only: pbl_diffuse, pbl_reset
 
   implicit none
   private
@@ -112,20 +112,11 @@ module exocol_rce_loop
   ! (An earlier attempt keyed dt_outer on the NET tendency; that runs away —
   ! convection cancels radiation so net ΔT stays small while the column is still
   ! radiatively stiff, and the slab derails to a spurious cold attractor.)
-  ! See docs/resolution_independence.md.
+  ! See docs/resolution_independence.md.  With f_excl_mass = 0 (default) no layer
+  ! is excluded, so dt_outer = the bulk radiative CFL and N_sub = 1 — i.e. the
+  ! reference single-explicit-step scheme; the scaffolding is dormant.
   real(r8), parameter :: f_excl_mass = 0.0_r8       ! column-mass fraction of stiffest layers excluded from dt_outer
   integer,  parameter :: nsub_max    = 2000         ! cap on radiation sub-steps
-
-  ! Physics sub-stepping.  The local physics (surface fluxes, boundary-layer
-  ! mixing, convection, condensation) is integrated at a short sub-step
-  ! dt_sub ≤ dt_phys_max within each outer (frozen-radiation) step.  Frierson's
-  ! BL + SBM are designed for short (~minute) timesteps where convection
-  ! restratifies between mixings and the surface adds little moisture per step;
-  ! at the long radiative timestep one step over-mixes/over-moistens the column
-  ! and the boundary-layer depth diagnosis goes unstable (runaway or collapse).
-  ! Sub-stepping the cheap local physics (radiation frozen over the outer step)
-  ! restores the short-timescale balance.  N_sub is raised so dt_sub ≤ this cap.
-  real(r8), parameter :: dt_phys_max = 0.01_r8      ! max local-physics sub-step [days] (~14 min)
 
   ! Throwaway diagnostic: when .true., the loop dumps the stiff-layer profile
   ! and probes the radiative Jacobian (∂HR/∂T) once the stiff layer forms,
@@ -137,6 +128,40 @@ module exocol_rce_loop
   ! water-conservative (it sources its stratospheric water from the troposphere
   ! rather than creating it), so it no longer leaks latent heat at TOA.
   logical, parameter :: use_coldtrap = .true.
+
+  ! Non-deadlocking convective fallback (default on).  The SBM scheme gates OFF
+  ! when the convecting column is net-subsaturated relative to its reference
+  ! (Wvap <= 0): it cannot sustain a precipitating moist adiabat, so it makes no
+  ! change.  In a 1-D column at a long timestep that gate is a trap — once the
+  ! free troposphere dries (e.g. during the cold-start warming overshoot) SBM
+  ! stays off, the free troposphere radiatively cools and dries further, and it
+  ! cannot recover (a cold layer holds no moisture without latent warming, and
+  ! cannot warm without deep convection, which needs the moisture).  The column
+  ! collapses to an unphysical cold-dry state with a near-surface inversion.
+  ! This collapse occurs independently of the boundary layer (it appears with
+  ! the bulk and MOS surface schemes, with and without BL mixing); it is the
+  ! gate, not the surface coupling.  Fix: when SBM is gated off, fall back to
+  ! DRY convective adjustment, which mixes any dry-unstable layers to the dry
+  ! adiabat (conserving enthalpy and water — no latent-heat or moisture
+  ! creation).  This keeps the column convectively coupled and the sub-cloud
+  ! layer warm, so surface evaporation can re-moisten it until the moist branch
+  ! re-engages.  convadj_dry is a no-op on a moist-adiabatic or radiatively
+  ! stable profile (it only fires on dry-superadiabatic layers), so the
+  ! supersaturated 'bulk' reference equilibrium (Ts=288) is preserved.
+  logical, parameter :: use_dry_fallback = .true.
+
+  ! Surface-coupled mixed layer (default on).  convadj_surface roots a dry
+  ! convective adjustment at the slab so the lowest layers are mixed toward the
+  ! surface temperature (a fixed-pressure-depth sub-cloud mixed layer), the
+  ! resolution-independent replacement for the Frierson K-profile boundary layer.
+  ! Without it, a bulk/MOS surface flux at a ~400 m lowest level leaves the bottom
+  ! layer radiatively decoupled (super-adiabatic gap) — a too-cold convective
+  ! parcel base (cold free troposphere) and a saturating bottom layer that chokes
+  ! evaporation (dry column → moist convection gates off).  It is a no-op on a
+  ! stable surface layer (theta_bottom >= theta_surf, as in the 'bulk' reference),
+  ! so it does not disturb that equilibrium.  Energy-conserving: the bottom-layer
+  ! warming is debited from the slab.
+  logical, parameter :: use_surf_couple = .true.
 
   ! Current adaptive timestep — set each step in run_rce_loop, read by
   ! condense() (which converts cond_heating to K/day for diagnostics).
@@ -222,9 +247,6 @@ contains
     real(r8) :: precip_acc_outer                     ! dt-weighted precip sum over sub-steps
     integer  :: N_sub, isub_rad
 
-    ! Boundary-layer diagnostics (last sub-step of the outer step)
-    real(r8) :: pbl_h_diag                           ! diagnosed BL height [m]
-    integer  :: pbl_ktop_diag                        ! highest mixed layer index
     real(r8) :: C_drag_diag                          ! MOS surface drag coefficient
 
     ! Window-averaged Path B accumulators.  Each step adds dt-weighted state to
@@ -284,10 +306,7 @@ contains
     tmid_mean_prev   = 0._r8
     h2ommr_mean_prev = 0._r8
     LE = 0._r8;  SH = 0._r8
-    pbl_h_diag       = 0._r8
-    pbl_ktop_diag    = pver
     C_drag_diag      = C_D
-    call pbl_reset()                 ! clear prognostic BL depth for a fresh run
     sat_warn_count   = 0
     LE_sum           = 0._r8
     SH_sum           = 0._r8
@@ -396,13 +415,6 @@ contains
       else
         N_sub = 1
       end if
-      ! Also enforce the local-physics sub-step cap (dt_sub ≤ dt_phys_max) when a
-      ! boundary-layer scheme is active — its short-timescale physics (BL mixing
-      ! coupled to SBM and the surface) is unstable at the long radiative step.
-      ! The legacy path (no BL) does not need it and keeps its original cadence.
-      if (trim(adjustl(pbl_scheme)) /= 'none') then
-        N_sub = max(N_sub, ceiling(dt_outer_days / dt_phys_max))
-      end if
       N_sub       = max(1, min(nsub_max, N_sub))
       dt_sub_days = dt_outer_days / real(N_sub, r8)
       dt_sub_sec  = dt_sub_days * SHR_CONST_CSEC
@@ -424,20 +436,11 @@ contains
       ! ---- 4–6. Surface turbulent fluxes + slab ocean ----
       ! Compute LE, SH and the (MOS) drag coefficient from the current near-
       ! surface state and step the slab ocean (semi-implicit Planck damping).
-      !
-      ! The turbulent fluxes are NOT deposited into the bottom grid layer here
-      ! (when a boundary-layer scheme is active).  Depositing the full flux into
-      ! a thin hybrid bottom layer spikes its T and q — collapsing the LCL and
-      ! making the layer radiatively stiff.  Instead the fluxes are injected as a
-      ! bottom SOURCE inside the implicit BL diffusion (step 10a), which spreads
-      ! them through the boundary layer in one conservative implicit step (no
-      ! spike, unconditionally stable).  Energy is conserved exactly: the slab
-      ! debits LE+SH and the BL injects the same SH (sensible) and E = LE/L
-      ! (moisture; its latent heat is realised later at condensation).
-      !
-      ! When pbl_scheme='none' there is no BL to distribute the flux, so the
-      ! legacy explicit bottom-layer deposit is retained (valid for the log grid,
-      ! whose bottom layer is thick enough that a single dt_sub step is stable).
+      ! The mechanical (MOS) sensible and latent fluxes are deposited explicitly
+      ! into the bottom grid layer; the log grid's bottom layer is thick enough
+      ! that a single step is stable.  (The convective surface sensible flux that
+      ! keeps the sub-cloud layer coupled to Ts is handled separately by
+      ! convadj_surface in the convection block.)
       block
         real(r8) :: za_bot, p0_sfc, lambda_s, F_sfc, layer_mass_bot
         za_bot = 0.5_r8 * (zint(pver) + zint(pverp))   ! lowest-level height
@@ -457,8 +460,8 @@ contains
         lambda_s = 4._r8 * SHR_CONST_STEBOL * ts**3
         ts       = ts + dt_sub_sec * F_sfc / (H_slab + dt_sub_sec * lambda_s)
 
-        ! Legacy explicit deposit (only when no BL scheme distributes the flux).
-        if (prognostic .and. trim(adjustl(pbl_scheme)) == 'none') then
+        ! Explicit deposit of the mechanical surface fluxes into the bottom layer.
+        if (prognostic) then
           layer_mass_bot = pdel(pver) / exo_g
           tmid(pver)   = tmid(pver) + dt_sub_sec * SH / (cpdry_col * layer_mass_bot)
           h2ommr(pver) = max(h2ommr(pver) &
@@ -487,8 +490,22 @@ contains
         ! saturation-adjustment mop-up then removes any residual (stratiform)
         ! supersaturation outside the convecting column.
         block
-          real(r8) :: precip_sbm
+          real(r8) :: precip_sbm, ts_pre_couple
           real(r8), dimension(pver) :: cond_tend_sbm
+          ! Surface-coupled mixed layer FIRST, so SBM lifts its moist adiabat from
+          ! a bottom layer that is coupled to the surface temperature (warm,
+          ! ventilated parcel base) rather than a radiatively-decoupled cold one.
+          if (use_surf_couple) then
+            ts_pre_couple = ts
+            call convadj_surface(tmid, tint, h2ommr, ts, H_slab, &
+                                 pint, pmid, pdel, cpdry_col, exo_g, pver)
+            ! The mixed-layer coupling carries a convective surface sensible flux
+            ! (the slab debit H_slab·Δts).  Fold it into the SH diagnostic so the
+            ! reported surface energy budget closes (F_srf_rad − LE − SH ≈ 0); it
+            ! is a real slab→atmosphere flux, just realised by convection rather
+            ! than the mechanical bulk/MOS formula.
+            SH = SH + H_slab * (ts_pre_couple - ts) / dt_sub_sec
+          end if
           call convadj_sbm(tmid, tint, h2ommr, zint, pint, pdel, &
                            cpdry_col, exo_g, ts, dt_sub_sec, tau_conv, rh_sbm, &
                            Lvap_T(ts), prognostic, precip_sbm, cond_tend_sbm, pver)
@@ -496,6 +513,15 @@ contains
             cond_heating(k) = cond_heating(k) + cond_tend_sbm(k) * SHR_CONST_CSEC
           end do
           precip_total = precip_sbm
+          ! Non-deadlocking fallback: dry-adjust any dry-unstable layers SBM left
+          ! behind (e.g. when its net-subsaturation gate tripped).  No-op on a
+          ! moist-adiabatic / radiatively stable profile, so the reference
+          ! equilibrium is untouched; prevents the cold-dry collapse otherwise.
+          ! Runs before condense so any q homogenised into a colder layer is
+          ! cleaned up to q <= qsat in the same step.
+          if (use_dry_fallback) &
+            call convadj_dry(tmid, tint, h2ommr, pint, pdel, &
+                             cpdry_col, exo_g, ts, pver)
           if (prognostic) then
             call condense(dt_sub_sec, precip_iter)
             precip_total = precip_total + precip_iter
@@ -530,36 +556,6 @@ contains
           end if
         end do
         call sat_iter_convadj(sat_warn_count)  ! final cleanup after last satadj
-      end if
-
-      ! ---- 10a. Boundary-layer mixing (after convection) ----
-      ! Mix dry static energy and q through the convective sub-cloud boundary
-      ! layer (Frierson K-profile).  Run AFTER SBM so the BL height is diagnosed
-      ! from the convectively-stratified profile (sv increasing along the moist
-      ! adiabat) rather than a profile the BL itself just homogenised — without
-      ! this ordering the long RCE timestep flattens sv and the diagnosed depth
-      ! runs away.  The result is the physically-correct structure: dry-adiabatic
-      ! sub-cloud layer below, moist adiabat (set by SBM) above.  Makes the
-      ! near-surface state — and hence the surface fluxes — resolution-independent.
-      if (trim(adjustl(pbl_scheme)) /= 'none') then
-        block
-          real(r8) :: pbl_h, surf_sh, surf_e
-          integer  :: pbl_ktop
-          ! Surface fluxes injected as the BL bottom source (prognostic only).
-          if (prognostic) then
-            surf_sh = SH
-            surf_e  = LE / Lvap_T(ts)
-          else
-            surf_sh = 0._r8
-            surf_e  = 0._r8
-          end if
-          call pbl_diffuse(tmid, h2ommr, pmid, pint, pdel, zint, &
-                           mwdry_col, cpdry_col, wind_speed, C_drag_diag, &
-                           surf_sh, surf_e, dt_sub_sec, prognostic, pver, &
-                           pbl_h, pbl_ktop)
-          pbl_h_diag    = pbl_h
-          pbl_ktop_diag = pbl_ktop
-        end block
       end if
 
       ! ---- 10b. Stratospheric cold-point cold trap (Brewer-Dobson) ----
@@ -676,9 +672,6 @@ contains
           '  LE=', LE, &
           '  SH=', SH, &
           '  P[mm/d]=', precip_diag
-        if (trim(adjustl(pbl_scheme)) /= 'none') &
-          write(*,'(a,f7.1,a,i4)') '            PBL: h[m]=', pbl_h_diag, &
-            '  ktop=', pbl_ktop_diag
         flush(6)     ! live progress when stdout is redirected to a file
         t_last_print = model_time_days
       end if
