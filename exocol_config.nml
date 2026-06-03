@@ -8,20 +8,16 @@
   C_D             = 1.5e-3
   msdist          = 1.0
   dz_slab         = 10.0
-  ! ---- Surface/boundary-layer scheme ----
-  ! Default below is the calibrated reference (Ts=288.01): bulk surface fluxes,
-  ! no BL mixing, pure log grid.  The Frierson Monin-Obukhov + diffusive-BL
-  ! scheme (resolution-independent surface coupling) is WORK IN PROGRESS; enable
-  ! it with:
-  !     surface_flux = 'mos'
-  !     pbl_scheme   = 'kprofile'
-  !     n_sfc_layers = 12      (hybrid fine-surface grid, lowest level ~8.5 m)
-  surface_flux    = 'bulk'
-  pbl_scheme      = 'none'
+  ! ---- Surface turbulent flux scheme ----
+  ! 'mos' (default, recommended): Monin-Obukhov fluxes with the drag coefficient
+  !   referenced at the standard 10 m height.  Paired with the surface-coupled
+  !   mixed layer (convadj_surface) and the non-deadlocking dry-convective
+  !   fallback, this gives an Earth-like, resolution-robust climate (Ts≈288,
+  !   Bowen≈0.24) on the pure log grid — no boundary-layer scheme needed.
+  ! 'bulk': legacy fixed-C_D bulk aerodynamic (resolution-dependent); retained
+  !   for comparison/regression (reproduces the calibrated Ts=288.01).
+  surface_flux    = 'mos'
   z0_rough        = 3.21e-5  ! surface roughness length [m] (Frierson; used by 'mos')
-  n_sfc_layers    = 0        ! 0 = pure log grid (reference). >0 = hybrid (needs 'mos'+'kprofile').
-  dp_sfc_bot      = 200.0
-  sfc_stretch     = 1.5
   latent_heat_mode = 'phase_aware'  ! production default (L_v above 0°C, L_sub below).
                                     ! Set 'fixed_vap' to match konrad's moist adiabat
                                     ! (fixed L_v at all T) for apples-to-apples tests.
@@ -50,10 +46,10 @@
   ! (α=0.2674→288.01 post bump-fix; the bump fix dried the upper strat and cooled
   !  Ts ~0.10 K, so α dropped from the pre-fix 0.2682→288.01.)
   ! (For o3='earth' the calibrated value is 0.2873 — see exocol_config.nml.earth_a2873.)
-  asdir      =   0.2674
-  asdif      =   0.2674
-  aldir      =   0.2674
-  aldif      =   0.2674
+  asdir      =   0.2744
+  asdif      =   0.2744
+  aldir      =   0.2744
+  aldif      =   0.2744
 /
 
 ! &exocol_composition — dry-air composition and surface pressure (all optional).

@@ -37,7 +37,6 @@ module exocol_coldstart
                             cs_ps       => ps,      &  ! &exocol_composition
                             cfg_msdist  => msdist,  &  ! &exocol_nml
                             t_strato, p_top, rh_init,             &
-                            n_sfc_layers, dp_sfc_bot, sfc_stretch, &
                             co2_vmr, ch4_vmr, c2h6_vmr,           &
                             h2_vmr,  n2_vmr,  o3_vmr, o2_vmr,     &
                             ar_vmr,  o3_profile,                   &
@@ -270,67 +269,18 @@ contains
   ! -----------------------------------------------------------------------
 
   subroutine build_pressure_grid(ps_use)
-  ! Build the full pint/pmid/pdel arrays.
-  !
-  ! When n_sfc_layers > 0 (hybrid mode):
-  !   Bottom n_sfc_layers interfaces are built upward from ps using a
-  !   geometric series: pdel(pver) = dp_sfc_bot, pdel(pver-1) = dp*sfc_stretch,
-  !   etc.  The remaining pver-n_sfc_layers upper layers are log-spaced from
-  !   p_top down to p_match (the top of the surface block).
-  !
-  ! When n_sfc_layers = 0: pure log-spacing from p_top to ps (legacy).
+  ! Build the full pint/pmid/pdel arrays by pure log-spacing from p_top to ps
+  ! (lowest level ~400 m at pver=70).  The surface-coupled mixed layer
+  ! (convadj_surface) handles the near-surface coupling, so no fine near-surface
+  ! grid is needed.
     real(r8), intent(in) :: ps_use
 
-    integer  :: k, n_upper, n_sfc
-    real(r8) :: p_match, dp_k
+    integer :: k
 
-    n_sfc = n_sfc_layers
-
-    ! Validate: surface layers must not exceed the total column.
-    if (n_sfc >= pver) then
-      write(*,'(a,i0,a,i0,a)') &
-        '  WARNING: n_sfc_layers (', n_sfc, &
-        ') >= pver (', pver, ') — reverting to pure log-spacing'
-      n_sfc = 0
-    end if
-
-    if (n_sfc == 0) then
-      ! Pure log-spacing (legacy / n_sfc_layers = 0)
-      do k = 1, pverp
-        pint(k) = exp(log(p_top) + &
-                      real(k-1, r8) / real(pverp-1, r8) * log(ps_use / p_top))
-      end do
-
-    else
-      ! --- Surface block: geometric layers from ps upward ---
-      pint(pverp) = ps_use
-      do k = pver, pver - n_sfc + 1, -1
-        dp_k   = dp_sfc_bot * sfc_stretch**(pver - k)
-        pint(k) = pint(k+1) - dp_k
-      end do
-      p_match = pint(pver - n_sfc + 1)
-
-      if (p_match <= p_top) then
-        write(*,'(a,es10.3,a)') &
-          '  WARNING: surface layers span above p_top (p_match = ', p_match, &
-          ' Pa) — reduce n_sfc_layers or dp_sfc_bot. Reverting to log-spacing.'
-        do k = 1, pverp
-          pint(k) = exp(log(p_top) + &
-                        real(k-1, r8) / real(pverp-1, r8) * log(ps_use / p_top))
-        end do
-
-      else
-        ! --- Upper block: log-spaced from p_top to p_match ---
-        n_upper = pver - n_sfc
-        do k = 1, n_upper + 1
-          pint(k) = exp(log(p_top) + &
-                        real(k-1, r8) / real(n_upper, r8) * log(p_match / p_top))
-        end do
-        ! pint(n_upper+1) is written twice (log-spaced then surface block both
-        ! set it to p_match); values are identical, no conflict.
-
-      end if
-    end if
+    do k = 1, pverp
+      pint(k) = exp(log(p_top) + &
+                    real(k-1, r8) / real(pverp-1, r8) * log(ps_use / p_top))
+    end do
 
     ! Midpoints and layer thicknesses
     do k = 1, pver

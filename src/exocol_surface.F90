@@ -6,24 +6,25 @@ module exocol_surface
 !   'mos'  (default) — simplified Monin-Obukhov similarity, following Frierson,
 !          Held & Zurita-Gotor (2006, J. Atmos. Sci. 63, 2548), the lineage of
 !          ExoColumn's SBM convection.  Fluxes use POTENTIAL-temperature (dry
-!          static energy) differences and a drag coefficient that depends on the
-!          lowest-level height z_a through the surface-layer log law:
+!          static energy) differences and a neutral drag coefficient evaluated at
+!          a FIXED reference height z_ref (the conventional 10 m anemometer height,
+!          z_flux_ref below), NOT the lowest model level:
 !
-!            C = κ² / [ln(z_a/z0)]²                       (R_ia < 0, unstable→neutral)
-!            C = κ² / [ln(z_a/z0)]² · (1 − R_ia/Ri_c)²    (0 < R_ia < Ri_c, stable)
-!            C = 0                                        (R_ia > Ri_c)
+!            C = κ² / [ln(z_ref/z0)]²                       (R_ia < 0, unstable→neutral)
+!            C = κ² / [ln(z_ref/z0)]² · (1 − R_ia/Ri_c)²    (0 < R_ia < Ri_c, stable)
+!            C = 0                                          (R_ia > Ri_c)
 !
 !            SH = ρ_a·cp·C·U·(Θ_s − Θ_a)        Θ_s = Ts, Θ_a = T_a·(p0/p_a)^κ
 !            LE = ρ_a·L(Ts)·C·U·(q*_s − q_a)
 !
-!          The z_a dependence of C is what makes the flux RESOLUTION-INDEPENDENT:
-!          as the grid is refined and z_a shrinks, C grows and (Θ_s − Θ_a)
-!          shrinks so their product (the constant-flux-layer value) is preserved.
-!          This is only valid when z_a sits inside the surface layer (z_a ≲ 0.1·h),
-!          i.e. with the hybrid fine-surface grid (n_sfc_layers > 0, z_a ~ 10 m).
-!          The unstable branch is treated as neutral (Φ = 1), so no Obukhov-length
-!          iteration is needed.  R_ia uses the VIRTUAL dry static energy
-!          s_v = cp·T_v + g·z (T_v = T(1+0.608 q)).
+!          Referencing C at a fixed 10 m height makes it RESOLUTION-INDEPENDENT
+!          (it no longer depends on where the lowest model level falls) and gives
+!          an Earth-magnitude exchange coefficient (C ~ 1e-3).  The near-surface
+!          column is kept well mixed by the surface-coupled mixed layer
+!          (exocol_convadj::convadj_surface), so Θ_a/q_a are a consistent
+!          near-surface reference state.  The unstable branch is treated as
+!          neutral (Φ = 1), so no Obukhov-length iteration is needed.  R_ia uses
+!          the VIRTUAL dry static energy s_v = cp·T_v + g·z (T_v = T(1+0.608 q)).
 !
 !   'bulk' (legacy) — fixed-C_D bulk aerodynamic formulas in ACTUAL temperature,
 !          SH = ρ·cp·C_D·U·(Ts − T_a), LE = ρ·L·C_D·U·(q*_s − q_a).  Retained for
@@ -31,8 +32,7 @@ module exocol_surface
 !          project_resolution_root_cause).
 !
 ! Sign convention: positive LE, SH transfer energy / water from surface to
-! atmosphere.  compute_surface_fluxes also returns the exchange coefficient C so
-! the boundary-layer scheme can build a consistent eddy diffusivity.
+! atmosphere.  compute_surface_fluxes also returns the exchange coefficient C.
 
   use shr_kind_mod,  only: r8 => shr_kind_r8
   use shr_const_mod, only: SHR_CONST_RGAS, SHR_CONST_MWWV
@@ -47,6 +47,17 @@ module exocol_surface
 
   real(r8), parameter :: vk    = 0.4_r8        ! von Karman constant
   real(r8), parameter :: ri_c  = 1.0_r8        ! critical bulk Richardson (Frierson)
+
+  ! Reference height [m] at which the neutral drag coefficient is evaluated.
+  ! The drag coefficient is conventionally defined at the 10 m anemometer height
+  ! (C ~ 1e-3 over the ocean).  Evaluating the MOS log-law at the lowest model
+  ! level instead (z_a ~ 400 m on the 70-level log grid) gives a ~2.5x smaller C
+  ! and so too little evaporation.  Anchoring it at the standard 10 m height
+  ! restores an Earth-like exchange coefficient AND makes C resolution-independent
+  ! (it no longer depends on the grid's lowest-level height).  The surface mixed
+  ! layer (convadj_surface) keeps the near-surface column well mixed, so the flux
+  ! gradient is consistent with this near-surface reference.
+  real(r8), parameter :: z_flux_ref = 10.0_r8
 
 contains
 
@@ -102,7 +113,7 @@ contains
       sv_a = cpdry * t_bot * (1._r8 + 0.608_r8 * q_bot) + exo_g * za
       Ria  = exo_g * za * (sv_a - sv_s) / (sv_s * max(wind_speed, 1.0_r8)**2)
 
-      C  = mos_drag_coef(za, z0, Ria)
+      C  = mos_drag_coef(z_flux_ref, z0, Ria)
       LE = rho_a * L_surf * C * wind_speed * (qsat_surf - q_bot)
       SH = rho_a * cpdry  * C * wind_speed * (theta_s - theta_a)
     end if

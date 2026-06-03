@@ -127,27 +127,19 @@ module exocol_config
   real(r8),          public, save :: cape_trigger    =    0.0_r8  ! CAPE activation threshold [J/kg]
   real(r8),          public, save :: rh_sbm          =    0.7_r8  ! SBM reference relative humidity [-]
 
-  ! Boundary-layer vertical mixing (exocol_pbl).
-  !   'none'     : no BL mixing (legacy; resolution-DEPENDENT near-surface state).
-  !   'kprofile' : free-convective Holtslag-Boville K-profile diffusion of dry
-  !                static energy and q through the diagnosed BL depth — makes the
-  !                near-surface state (and hence LE/SH and the climate) resolution
-  !                independent.  Conservative, implicit, unconditionally stable.
-  ! Boundary-layer mixing scheme.  Default 'none' (legacy; reproduces the
-  ! calibrated Ts=288.01 reference).  'kprofile' = Frierson diffusive BL — WORK
-  ! IN PROGRESS (engages and is stable under physics sub-stepping, but the
-  ! bulk-Richardson depth diagnosis still drifts; needs the prognostic damped
-  ! depth).  Use with surface_flux='mos' and the hybrid grid (n_sfc_layers>0).
-  character(len=32), public, save :: pbl_scheme      = 'none'
-
   ! Surface turbulent flux scheme (exocol_surface).
-  !   'bulk' (default) : legacy fixed-C_D bulk aerodynamic in actual temperature.
-  !   'mos'            : simplified Monin-Obukhov similarity (Frierson 2006) —
-  !            potential-temperature fluxes with a height-dependent drag
-  !            coefficient C = κ²/ln²(z_a/z0); resolution-independent in the
-  !            surface layer.  Requires the hybrid fine-surface grid
-  !            (n_sfc_layers>0, z_a~10 m) and pbl_scheme='kprofile'.
-  character(len=32), public, save :: surface_flux    = 'bulk'
+  !   'mos' (default) : simplified Monin-Obukhov similarity (Frierson 2006) —
+  !            potential-temperature fluxes with a neutral drag coefficient
+  !            C = κ²/ln²(z_ref/z0) referenced at the conventional 10 m height
+  !            (resolution-independent, Earth-magnitude evaporation).  Paired with
+  !            the surface-coupled mixed layer (convadj_surface) and the
+  !            non-deadlocking dry-convective fallback, this gives an Earth-like,
+  !            resolution-robust climate (Ts≈288, Bowen≈0.24) on the log grid with
+  !            no boundary-layer mixing scheme.
+  !   'bulk'          : legacy fixed-C_D bulk aerodynamic in actual temperature;
+  !            the near-surface state is resolution-DEPENDENT.  Retained for
+  !            comparison / regression (reproduces the calibrated Ts=288.01).
+  character(len=32), public, save :: surface_flux    = 'mos'
   real(r8),          public, save :: z0_rough        = 3.21e-5_r8  ! roughness length [m] (Frierson)
 
   ! Latent-heat treatment in the moist adiabat / condensation / surface ledger.
@@ -156,23 +148,6 @@ module exocol_config
   !                             MoistLapseRate (single heat_of_vaporization).
   ! Applied via exocol_convadj::set_latent_heat_mode (called from the driver).
   character(len=32), public, save :: latent_heat_mode = 'phase_aware'
-
-  ! Vertical grid.  Default n_sfc_layers = 0 → pure log-spacing from p_top to ps
-  ! (recommended; lowest level ~400 m, giving Earth-like bulk surface fluxes with
-  ! the standard C_D and a numerically well-behaved column).
-  !
-  ! Setting n_sfc_layers > 0 builds a HYBRID grid: that many near-surface layers
-  ! are geometrically spaced (bottom thickness dp_sfc_bot [Pa], ratio sfc_stretch
-  ! between consecutive layers), with the remaining pver - n_sfc_layers layers
-  ! log-spaced above.  This puts the lowest level at ~8.5 m (dp_sfc_bot=200 Pa).
-  ! NOTE: without an explicit boundary-layer mixing scheme the thin bottom layer
-  ! equilibrates to Ts (collapsing the flux gradient → suppressed LE/SH) and goes
-  ! radiatively stiff in a moist column (collapsing the adaptive dt under sbm).
-  ! The hybrid grid is therefore reserved for future work that adds BL mixing;
-  ! use the log grid (n_sfc_layers = 0) for production runs.
-  integer,  public, save :: n_sfc_layers = 0
-  real(r8), public, save :: dp_sfc_bot   = 200.0_r8   ! bottom layer dp [Pa] (~8.5 m)
-  real(r8), public, save :: sfc_stretch  = 1.5_r8     ! geometric ratio [-]
 
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
@@ -251,9 +226,8 @@ contains
 
     namelist /exocol_nml/         conv_scheme, moisture_scheme, o3_profile, &
                                   wind_speed, C_D, msdist, dz_slab, &
-                                  n_sfc_layers, dp_sfc_bot, sfc_stretch, &
                                   tau_conv, cape_trigger, rh_sbm, &
-                                  latent_heat_mode, pbl_scheme, &
+                                  latent_heat_mode, &
                                   surface_flux, z0_rough
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
@@ -341,24 +315,6 @@ contains
       dz_slab = 50.0_r8
     end if
 
-    ! Validate hybrid grid parameters
-    if (n_sfc_layers < 0) then
-      write(*,'(a,i0,a)') &
-        '  WARNING: n_sfc_layers must be >= 0 (got ', n_sfc_layers, ') — defaulting to 0'
-      n_sfc_layers = 0
-    end if
-    if (dp_sfc_bot <= 0.0_r8) then
-      write(*,'(a,es10.3,a)') &
-        '  WARNING: dp_sfc_bot must be > 0 (got ', dp_sfc_bot, ') — defaulting to 200.0'
-      dp_sfc_bot = 200.0_r8
-    end if
-    if (n_sfc_layers > 0 .and. sfc_stretch <= 1.0_r8) then
-      write(*,'(a,f8.4,a)') &
-        '  WARNING: sfc_stretch must be > 1 when n_sfc_layers > 0 (got ', &
-        sfc_stretch, ') — defaulting to 1.5'
-      sfc_stretch = 1.5_r8
-    end if
-
     call announce()
 
   end subroutine read_config
@@ -404,13 +360,7 @@ contains
     else
       write(*,'(a)') '  Latent heat       : phase-aware (L_v / L_sub below 273.16 K)'
     end if
-    if (n_sfc_layers > 0) then
-      write(*,'(a,i0,a,f6.1,a,f5.3)') &
-        '  Vertical grid     : hybrid — ', n_sfc_layers, &
-        ' surface layers, dp_bot = ', dp_sfc_bot, ' Pa, stretch = ', sfc_stretch
-    else
-      write(*,'(a)') '  Vertical grid     : log-spaced (n_sfc_layers = 0)'
-    end if
+    write(*,'(a)') '  Vertical grid     : log-spaced'
 
     if (len_trim(input_file) == 0) then
       write(*,'(a)')         '  Initialization    : cold start (from &exocol_init)'

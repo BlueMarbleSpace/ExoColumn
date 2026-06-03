@@ -30,6 +30,7 @@ module exocol_convadj
   private
 
   public :: convadj_dry
+  public :: convadj_surface
   public :: convadj_moist
   public :: convadj_manabe
   public :: convadj_zm
@@ -143,6 +144,121 @@ contains
     call compute_tint_interp(tmid, pint, nv, tint)
 
   end subroutine convadj_dry
+
+  ! -----------------------------------------------------------------------
+  ! Surface-coupled dry convective adjustment (slab-rooted mixed layer)
+  ! -----------------------------------------------------------------------
+
+  subroutine convadj_surface(tmid, tint, h2ommr_col, ts, H_slab, &
+                             pint, pmid, pdel, cp, g, nv)
+  ! Couple the lowest model layers to the surface temperature by a slab-rooted
+  ! dry convective adjustment — the resolution-independent, composition-general
+  ! replacement for a boundary-layer mixing scheme in single-column RCE.
+  !
+  ! WHY: with a bulk/Monin-Obukhov surface flux and no boundary layer, the lowest
+  ! model layer radiatively decouples from the surface (a super-adiabatic
+  ! near-surface gap, theta_surf > theta_bottom).  That cold, dry bottom layer (a)
+  ! gives the convective scheme a too-cold parcel base, anchoring the moist
+  ! adiabat — and hence the whole free troposphere — several K too cold, and (b)
+  ! lets surface evaporation pile moisture into the bottom layer, raising q there
+  ! and choking the evaporative flux, so the column dries and the moist
+  ! convective closure gates off.  A real boundary layer mixes this gap away.
+  !
+  ! WHAT: the slab (temperature ts, heat capacity H_slab [J/m^2/K]) is treated as
+  ! the bottom node of a dry convective adjustment.  Any super-adiabatic layers
+  ! contiguous with the surface — capped at a fixed pressure depth dp_surf_mix —
+  ! are mixed toward the dry adiabat rooted at ts:
+  !   * the slab<->bottom-layer pair conserves total enthalpy H_slab*ts +
+  !     cp*T*dp/g, so the warming of the bottom layer is debited from the slab
+  !     (ts drops by the matching amount — this IS the convective surface sensible
+  !     flux, replacing the under-estimated mechanical value at a 400 m lowest
+  !     level);
+  !   * air<->air pairs use the standard dry adjustment (conserve cp*T*dp,
+  !     homogenise q).
+  ! Only unstable pairs are touched, so a stable / moist-adiabatic surface layer
+  ! (e.g. the 'bulk' reference, where theta_bottom > theta_surf) is left untouched
+  ! — the routine is a no-op there.  The fixed pressure-depth cap makes the mixed
+  ! layer the same physical depth at every vertical resolution (resolution
+  ! independence) and bounds the slab debit; it needs no diagnosed BL height.
+    real(r8), intent(inout) :: tmid(nv)
+    real(r8), intent(inout) :: tint(nv+1)
+    real(r8), intent(inout) :: h2ommr_col(nv)
+    real(r8), intent(inout) :: ts             ! slab temperature [K] (debited)
+    real(r8), intent(in)    :: H_slab         ! slab heat capacity [J/m^2/K]
+    real(r8), intent(in)    :: pint(nv+1)
+    real(r8), intent(in)    :: pmid(nv)
+    real(r8), intent(in)    :: pdel(nv)
+    real(r8), intent(in)    :: cp
+    real(r8), intent(in)    :: g
+    integer,  intent(in)    :: nv
+
+    real(r8), parameter :: dp_surf_mix = 1.5e4_r8   ! mixed-layer depth cap [Pa] (~1.3 km)
+    integer,  parameter :: max_pass    = 50
+
+    integer  :: k, kmin, ipass
+    logical  :: adjusted
+    real(r8) :: kappa, p0, p_cap
+    real(r8) :: exn_nv, Cslab, Cbot, ts_new
+    real(r8) :: ratio_kappa, theta_k_scaled, H, q_mixed, Tkp1_new
+
+    block
+      use exocol_mod, only: mwdry_col
+      kappa = (SHR_CONST_RGAS / mwdry_col) / cp
+    end block
+
+    p0    = pint(nv+1)
+    p_cap = p0 - dp_surf_mix
+
+    ! Lowest layer index whose midpoint lies within the mixed-layer cap.
+    kmin = nv
+    do k = nv, 1, -1
+      if (pmid(k) >= p_cap) then
+        kmin = k
+      else
+        exit
+      end if
+    end do
+
+    do ipass = 1, max_pass
+      adjusted = .false.
+
+      ! --- slab <-> bottom layer (energy-conserving, slab debited) ---
+      ! Super-adiabatic if theta_bottom < theta_surf, i.e. tmid(nv) < ts*exner.
+      exn_nv = (pmid(nv) / p0)**kappa
+      if (tmid(nv) < ts * exn_nv - 1.e-10_r8) then
+        Cslab  = H_slab
+        Cbot   = cp * pdel(nv) / g
+        ! Common potential temperature theta' = ts_new: conserve
+        !   H_slab*ts + Cbot*tmid(nv) = H_slab*ts_new + Cbot*(ts_new*exn_nv)
+        ts_new   = (Cslab * ts + Cbot * tmid(nv)) / (Cslab + Cbot * exn_nv)
+        tmid(nv) = ts_new * exn_nv
+        ts       = ts_new
+        adjusted = .true.
+      end if
+
+      ! --- air <-> air pairs upward within the cap (standard dry adjustment) ---
+      do k = nv-1, kmin, -1
+        ratio_kappa    = (pmid(k) / pmid(k+1))**kappa
+        theta_k_scaled = tmid(k) / ratio_kappa
+        if (theta_k_scaled < tmid(k+1)) then
+          H         = pdel(k)*tmid(k) + pdel(k+1)*tmid(k+1)
+          Tkp1_new  = H / (pdel(k)*ratio_kappa + pdel(k+1))
+          tmid(k)   = ratio_kappa * Tkp1_new
+          tmid(k+1) = Tkp1_new
+          q_mixed   = (pdel(k)*h2ommr_col(k) + pdel(k+1)*h2ommr_col(k+1)) &
+                      / (pdel(k) + pdel(k+1))
+          h2ommr_col(k)   = q_mixed
+          h2ommr_col(k+1) = q_mixed
+          adjusted  = .true.
+        end if
+      end do
+
+      if (.not. adjusted) exit
+    end do
+
+    call compute_tint_interp(tmid, pint, nv, tint)
+
+  end subroutine convadj_surface
 
   ! -----------------------------------------------------------------------
   ! Scheme 1 — Moist pseudo-adiabatic adjustment
