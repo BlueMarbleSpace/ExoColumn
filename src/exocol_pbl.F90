@@ -42,6 +42,7 @@ module exocol_pbl
   private
 
   public :: pbl_diffuse
+  public :: pbl_reset
 
   ! ---- Closure constants (Frierson et al. 2006, Table 1) ----
   real(r8), parameter :: vk    = 0.4_r8       ! von Karman constant
@@ -50,7 +51,52 @@ module exocol_pbl
   real(r8), parameter :: eps_v = 0.608_r8     ! virtual-temperature coefficient
   real(r8), parameter :: u_min = 1.0_r8       ! floor on wind speed in Ri [m/s]
 
+  ! ---- Prognostic, fixed-depth-anchored BL depth (resolution-independence fix) ----
+  ! The bulk-Richardson BL depth has no stable fixed point at the physical
+  ! (~500 m) depth in single-column RCE.  Re-diagnosed fresh every step it is
+  ! caught between two runaways with no self-limiting mechanism (a GCM's resolved
+  ! variability + horizontal averaging supply that; a single column has neither):
+  !   * DEEP runaway (raw bulk-Ri / no cap): once the sub-cloud layer is mixed the
+  !     diagnosed top sits just above it and creeps to the tropopause; whole-column
+  !     mixing brings Θ_BL→Ts and the sensible flux collapses (SH→0).
+  !   * COLLAPSE (LCL / surface-parcel cap): a shallow BL over-moistens the bottom
+  !     layer → q_bot saturates → the LCL drops → shallower still → LE→0.
+  ! Relaxing a prognostic depth toward either target does not cure it — the
+  ! *target* itself runs away, so the prognostic depth just tracks it.
+  !
+  ! Fix (two parts):
+  !  1. ANCHOR the nominal mixing depth to a FIXED pressure depth dp_mix (~500 m,
+  !     a typical marine boundary layer), and let the bulk-Richardson height only
+  !     REDUCE it when the surface layer is statically stable:
+  !         target = max( min(bulk-Ri height, h_fixed), h_floor ).
+  !     h_fixed caps the deep runaway; h_floor prevents collapse onto the
+  !     radiatively-stiff bottom grid layer.  All three are fixed pressure
+  !     intervals → the same physical height at every vertical resolution, which
+  !     is precisely what makes the near-surface state (and hence LE/SH and the
+  !     climate) resolution-independent.
+  !  2. Carry the depth as PROGNOSTIC state and RELAX it toward that target over
+  !     tau_h rather than snapping to the jumpy instantaneous value (the lag
+  !     smooths step-to-step jitter in the bulk-Ri diagnosis).  Deepening is
+  !     additionally rate-limited by an entrainment velocity, and h is capped at a
+  !     pressure-depth guardrail.  (Frierson et al. call the GCM depth "prognostic"
+  !     = diagnosed each step; here it is genuinely prognostic — integrated state.)
+  real(r8), parameter :: tau_h   = 3._r8 * 3600._r8  ! BL-depth relaxation timescale [s]
+  real(r8), parameter :: we_max  = 0.1_r8            ! max entrainment (deepening) velocity [m/s]
+  real(r8), parameter :: dp_mix   = 6.0e3_r8         ! nominal BL pressure depth below surface [Pa] (~500 m)
+  real(r8), parameter :: dp_floor = 2.0e3_r8         ! floor: min BL pressure depth below surface [Pa] (~170 m)
+  real(r8), parameter :: dp_cap   = 3.0e4_r8         ! guardrail: max BL pressure depth below surface [Pa]
+
+  ! Prognostic boundary-layer depth [m].  < 0 = uninitialised (set to the first
+  ! diagnosed target).  Reset by pbl_reset() when the RCE loop (re-)starts so a
+  ! fresh run does not inherit the previous run's boundary-layer state.
+  real(r8), save :: h_bl_prog = -1._r8
+
 contains
+
+  subroutine pbl_reset()
+  ! Clear the prognostic BL depth so the next RCE run initialises it afresh.
+    h_bl_prog = -1._r8
+  end subroutine pbl_reset
 
   subroutine pbl_diffuse(tmid, h2ommr, pmid, pint, pdel, zint, &
                          mwdry, cpdry, wind, C_drag, surf_sh, surf_e, dt_sec, &
@@ -82,6 +128,8 @@ contains
     real(r8) :: gco(pver), Mlay(pver), s(pver), qn(pver)
     real(r8) :: z_base, sv_base, hbl, hsl, Kb_hsl
     real(r8) :: rib, z_if, rho_if, t_if, dz_mid, Kc, zz
+    real(r8) :: h_bulk, h_fixed, h_target, h_floor, h_cap
+    real(r8) :: rib_below, frac, dh
     integer  :: k, ktop
 
     Rd = SHR_CONST_RGAS / mwdry
@@ -103,20 +151,61 @@ contains
     z_base  = zmid(pver)
     sv_base = sv(pver)
 
-    ! --- BL height: bulk Richardson (base = lowest level) reaches Ri_c ---
-    ktop = pver
+    ! --- bulk-Richardson height (base = lowest level), interpolated ---
+    ! Ri = 0 at the base and increases upward; h_bulk = height where Ri first
+    ! reaches Ri_c.  This is the textbook BL top, but in single-column RCE it has
+    ! no stable fixed point (it drifts up into the weakly dry-stable moist-adiabat
+    ! region), so it is bounded below by the LCL (next block).
+    h_bulk    = zint(1)            ! no crossing → whole column (capped below)
+    rib_below = 0._r8             ! Ri at the base (z = z_base)
     do k = pver-1, 1, -1
       rib = exo_g * zmid(k) * (sv(k) - sv_base) / (sv_base * U*U)
-      if (rib >= ri_c) exit
-      ktop = k
+      if (rib >= ri_c) then
+        if (rib > rib_below) then
+          frac = (ri_c - rib_below) / (rib - rib_below)
+        else
+          frac = 0._r8
+        end if
+        h_bulk = zmid(k+1) + frac * (zmid(k) - zmid(k+1))
+        exit
+      end if
+      rib_below = rib
     end do
 
-    ! BL top from the bulk-Richardson criterion alone.  (An earlier LCL cap, added
-    ! to tame a depth runaway, is unnecessary once the local physics is sub-stepped
-    ! — SBM then restratifies between mixings so the bulk-Ri depth is stable — and
-    ! the cap itself caused a q_bot-saturation collapse.  Kept out deliberately.)
-    hbl       = zmid(ktop)
+    ! --- nominal mixing depth + floor / guardrail (fixed pressure depths) ---
+    ! Anchor the BL to a fixed physical depth dp_mix (~500 m); bulk-Ri only makes
+    ! it shallower under stable conditions.  Floor and guardrail bound it against
+    ! the collapse / deep-runaway pathologies.  All are fixed pressure intervals,
+    ! hence identical physical heights at every vertical resolution.
+    h_fixed = bl_height_at(pint(pver+1) - dp_mix,   pint, zint, pver)
+    h_floor = bl_height_at(pint(pver+1) - dp_floor, pint, zint, pver)
+    h_cap   = bl_height_at(pint(pver+1) - dp_cap,   pint, zint, pver)
+
+    h_target = min(h_bulk, h_fixed)      ! bulk-Ri can only make it shallower
+    h_target = max(h_target, h_floor)    ! never collapse onto the bottom layer
+
+    ! --- relax the prognostic depth toward the target (the stability fix) ---
+    if (h_bl_prog < 0._r8) then
+      h_bl_prog = h_target                              ! initialise on first call
+    else
+      dh = (h_target - h_bl_prog) * min(dt_sec / tau_h, 1._r8)
+      if (dh > we_max * dt_sec) dh = we_max * dt_sec    ! entrainment-limited deepening
+      h_bl_prog = h_bl_prog + dh
+    end if
+    h_bl_prog = max(h_bl_prog, h_floor)                 ! pressure-depth floor
+    h_bl_prog = min(h_bl_prog, h_cap)                   ! pressure-depth guardrail
+    hbl       = h_bl_prog
     h_diag    = hbl
+
+    ! ktop = highest (smallest-k) layer whose midpoint lies within the BL.
+    ktop = pver
+    do k = pver-1, 1, -1
+      if (zmid(k) <= hbl) then
+        ktop = k
+      else
+        exit
+      end if
+    end do
     kmax_diag = ktop
     ! NB: no early return when ktop == pver — the implicit solve below still
     ! applies the surface flux source (it degenerates to a bottom-layer deposit
@@ -167,6 +256,30 @@ contains
     end do
 
   end subroutine pbl_diffuse
+
+  ! -----------------------------------------------------------------------
+
+  pure function bl_height_at(p_target, pint, zint, nv) result(z_out)
+  ! Height [m] of the p_target pressure level, linearly interpolated in pressure
+  ! from the interface (pint, zint) arrays.  pint increases downward (index 1 =
+  ! TOA, small p); zint decreases downward (zint(nv+1) = 0 at the surface).
+  ! Clamps to the column top when p_target lies above p_top.  Used to convert the
+  ! fixed BL-depth floor/guardrail pressure depths into heights (so they are the
+  ! same physical depth at every vertical resolution).
+    integer,  intent(in) :: nv
+    real(r8), intent(in) :: p_target
+    real(r8), intent(in) :: pint(nv+1), zint(nv+1)
+    real(r8) :: z_out, f
+    integer  :: k
+    z_out = zint(1)               ! default: target at/above column top
+    do k = nv, 1, -1
+      if (pint(k) <= p_target) then
+        f = (pint(k+1) - p_target) / (pint(k+1) - pint(k))
+        z_out = zint(k+1) + f * (zint(k) - zint(k+1))
+        return
+      end if
+    end do
+  end function bl_height_at
 
   ! -----------------------------------------------------------------------
 
