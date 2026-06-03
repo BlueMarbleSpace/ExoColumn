@@ -69,7 +69,7 @@ module exocol_rce_loop
   use exocol_convadj,   only: convadj_dry, convadj_moist, convadj_manabe, &
                               convadj_zm, convadj_sbm, esat_cc, Lvap_T
   use exocol_surface,   only: compute_surface_fluxes
-  use exocol_pbl,       only: pbl_diffuse
+  use exocol_pbl,       only: pbl_diffuse, pbl_reset
 
   implicit none
   private
@@ -132,6 +132,11 @@ module exocol_rce_loop
   ! then stops.  Used to design the implicit-radiation solver.  Set .false.
   ! for production.
   logical, parameter :: diag_jacobian = .false.
+
+  ! Cold-trap toggle (default on).  apply_stratospheric_coldtrap is now
+  ! water-conservative (it sources its stratospheric water from the troposphere
+  ! rather than creating it), so it no longer leaks latent heat at TOA.
+  logical, parameter :: use_coldtrap = .true.
 
   ! Current adaptive timestep — set each step in run_rce_loop, read by
   ! condense() (which converts cond_heating to K/day for diagnostics).
@@ -282,6 +287,7 @@ contains
     pbl_h_diag       = 0._r8
     pbl_ktop_diag    = pver
     C_drag_diag      = C_D
+    call pbl_reset()                 ! clear prognostic BL depth for a fresh run
     sat_warn_count   = 0
     LE_sum           = 0._r8
     SH_sum           = 0._r8
@@ -561,7 +567,7 @@ contains
       ! so the stratosphere otherwise stays at its initialised q = 0, removing
       ! the principal stratospheric LW coolant.  Set stratospheric H2O from the
       ! cold-point freeze-drying value (see subroutine header).
-      if (prognostic) call apply_stratospheric_coldtrap()
+      if (prognostic .and. use_coldtrap) call apply_stratospheric_coldtrap()
 
       ! ---- 11. Final derived update (q + T changed in sat-adjust loop) ----
       call exocol_update_derived()
@@ -626,6 +632,16 @@ contains
             '  ΔTOA_win=', dToa_mean, &
             '  ΔTpro=', max_dT_mean, &
             '  Δq=', max_dq_mean
+          write(*,'(a,f8.3,a,f8.3,a,f8.3,a,f8.3,a,f8.3)') &
+            '         BUDGET: ⟨TOA⟩=', toa_mean, &
+            '  ⟨Fsrf_net⟩=', F_srf_rad_win - LE_win - SH_win, &
+            '  (Frad=', F_srf_rad_win, ' LE=', LE_win, ' SH=', SH_win, ')'
+          write(*,'(a,f8.4,a,f8.4,a,f8.4,a,f8.3)') &
+            '         WATER:  ⟨evap⟩=', LE_win / Lvap_T(ts) * 86400._r8, &
+            ' mm/d  ⟨precip⟩=', precip_win, &
+            ' mm/d  imbal=', LE_win / Lvap_T(ts) * 86400._r8 - precip_win, &
+            ' mm/d  → leak[W/m2]=', &
+            (precip_win - LE_win / Lvap_T(ts) * 86400._r8) / 86400._r8 * Lvap_T(ts)
           flush(6)
         end if
 
@@ -660,8 +676,9 @@ contains
           '  LE=', LE, &
           '  SH=', SH, &
           '  P[mm/d]=', precip_diag
-        write(*,'(a,f7.1,a,i4)') '            PBL: h[m]=', pbl_h_diag, &
-          '  ktop=', pbl_ktop_diag
+        if (trim(adjustl(pbl_scheme)) /= 'none') &
+          write(*,'(a,f7.1,a,i4)') '            PBL: h[m]=', pbl_h_diag, &
+            '  ktop=', pbl_ktop_diag
         flush(6)     ! live progress when stdout is redirected to a file
         t_last_print = model_time_days
       end if
@@ -900,10 +917,11 @@ contains
   ! (A pure column-wide max() floor was used previously, but its one-way ratchet
   ! stranded stale higher humidity in the warm upper stratosphere when the cold
   ! point cooled, producing an unphysical moist bump above the cold point.)
-    use exocol_mod, only: tmid, pmid, h2ommr, mwdry_col
-    use ppgrid,     only: pver
+    use exocol_mod,    only: tmid, pmid, pdel, h2ommr, mwdry_col
+    use ppgrid,        only: pver
+    use exoplanet_mod, only: exo_g
     integer  :: k, k_cp
-    real(r8) :: eps_wv, es_cp, q_cp
+    real(r8) :: eps_wv, es_cp, q_cp, q_old, q_new, dW_strat, W_trop, frac
 
     eps_wv = SHR_CONST_MWWV / mwdry_col
 
@@ -924,13 +942,44 @@ contains
     ! At and below the cold point (k >= k_cp): keep the floor.  It fills the dry
     ! gap between the convective top and the cold point at q_cp and is a no-op in
     ! the moist troposphere (q >> q_cp there).
+    !
+    ! WATER CONSERVATION (critical): the assign/floor below would otherwise CREATE
+    ! water from nothing (it raises q in dry stratospheric/gap layers without a
+    ! source).  That spurious vapour is later precipitated by the convection/
+    ! condensation machinery, releasing ~9 W/m² of latent heat from nothing — a
+    ! structural TOA energy leak (precip > evap; see the WATER diagnostic in the
+    ! RCE loop).  The leak is small in a dry-stratosphere reference column but is
+    ! amplified ~100x once the boundary layer mixes more moisture through the
+    ! column.  Fix: accumulate the NET water the cold trap adds (dW_strat) and
+    ! source it CONSERVATIVELY from the moist troposphere below — vapour is moved,
+    ! not created (no phase change, no latent heat, column water unchanged), which
+    ! is what the Brewer-Dobson circulation physically does.
+    dW_strat = 0._r8
     do k = 1, pver
+      q_old = h2ommr(k)
       if (k < k_cp) then
-        h2ommr(k) = q_cp
+        q_new = q_cp                          ! assign (conserved entry value)
       else
-        h2ommr(k) = max(h2ommr(k), q_cp)
+        q_new = max(h2ommr(k), q_cp)          ! floor the dry gap
       end if
+      dW_strat  = dW_strat + (q_new - q_old) * pdel(k) / exo_g
+      h2ommr(k) = q_new
     end do
+
+    ! Debit dW_strat from the moist troposphere (q > q_cp), weighted by each
+    ! layer's water content so the removal is a tiny uniform fraction that cannot
+    ! drive any layer negative.  dW_strat < 0 (net stratospheric drying) adds the
+    ! water back, so the redistribution is exactly water-conserving either way.
+    W_trop = 0._r8
+    do k = 1, pver
+      if (h2ommr(k) > q_cp) W_trop = W_trop + h2ommr(k) * pdel(k) / exo_g
+    end do
+    if (W_trop > dW_strat .and. W_trop > 0._r8) then
+      frac = dW_strat / W_trop
+      do k = 1, pver
+        if (h2ommr(k) > q_cp) h2ommr(k) = h2ommr(k) * (1._r8 - frac)
+      end do
+    end if
   end subroutine apply_stratospheric_coldtrap
 
   ! -----------------------------------------------------------------------
