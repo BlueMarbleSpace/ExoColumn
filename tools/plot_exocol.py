@@ -65,6 +65,80 @@ def _us_std_atm_T(p_hpa):
 nc_path      = sys.argv[1] if len(sys.argv) > 1 else "iofiles/exocol_out.nc"
 pdf_path     = sys.argv[2] if len(sys.argv) > 2 else "iofiles/exocol_out.pdf"
 konrad_path  = sys.argv[3] if len(sys.argv) > 3 else "iofiles/konrad_rce_ref.npz"
+clima_path   = sys.argv[4] if len(sys.argv) > 4 else ""
+
+# ---------------------------------------------------------------------------
+# Read CLIMA allout file (Kasting/Kopparapu)
+# ---------------------------------------------------------------------------
+def read_clima(path):
+    """Parse the last (converged) snapshot from a CLIMA allout file.
+
+    Returns a dict with arrays on the 101-level CLIMA grid:
+        p_hpa      : midpoint pressure (hPa)
+        T          : temperature (K)
+        h2o_mmr    : H2O mass mixing ratio (kg/kg)
+        o3_mmr     : O3 mass mixing ratio (kg/kg)
+        pf_hpa     : flux-level pressure (hPa)
+        lw_flxd    : LW downward flux (W/m²)
+        lw_flxu    : LW upward flux (W/m²)
+        sw_flxd    : SW downward flux (W/m²)
+        sw_flxu    : SW upward flux (W/m²)
+    """
+    with open(path) as f:
+        lines = f.readlines()
+
+    ATM_TO_HPA = 1013.25
+    ERG_TO_WM2 = 1e-3      # erg cm⁻² s⁻¹ → W m⁻²
+    MW_H2O  = 18.015
+    MW_O3   = 47.998
+    MW_AIR  = 28.97
+
+    # Find the last TIME= line, then locate profile and flux headers after it.
+    last_time_idx = max(i for i, l in enumerate(lines) if "TIME=" in l)
+
+    def find_header(keyword, start):
+        for i in range(start, len(lines)):
+            if keyword in lines[i]:
+                return i
+        raise ValueError(f"Header '{keyword}' not found after line {start}")
+
+    prof_hdr = find_header("  J     P ", last_time_idx)
+    flux_hdr = find_header("  J    PF ", prof_hdr + 1)
+
+    def parse_block(hdr_idx, ncols):
+        data = []
+        i = hdr_idx + 1
+        while i < len(lines):
+            s = lines[i].strip()
+            if not s or not s[0].isdigit():
+                break
+            vals = s.split()
+            if len(vals) >= ncols:
+                data.append([float(v) for v in vals[:ncols]])
+            i += 1
+        return np.array(data)
+
+    prof = parse_block(prof_hdr, 10)   # J P ALT T CONVEC DT TOLD FH20 FSAVE FO3
+    flux = parse_block(flux_hdr, 10)   # J PF ALT FTOTAL FTIR FDNIR FUPIR FTSOL FDNSOL FUPSOL
+
+    p_hpa   = prof[:, 1] * ATM_TO_HPA
+    T       = prof[:, 3]
+    h2o_vmr = prof[:, 7]
+    o3_vmr  = prof[:, 9]
+    h2o_mmr = h2o_vmr * (MW_H2O / MW_AIR)
+    o3_mmr  = o3_vmr  * (MW_O3  / MW_AIR)
+
+    pf_hpa  = flux[:, 1] * ATM_TO_HPA
+    lw_flxd = flux[:, 5] * ERG_TO_WM2   # FDNIR
+    lw_flxu = flux[:, 6] * ERG_TO_WM2   # FUPIR
+    sw_flxd = flux[:, 8] * ERG_TO_WM2   # FDNSOL
+    sw_flxu = flux[:, 9] * ERG_TO_WM2   # FUPSOL
+
+    return dict(p_hpa=p_hpa, T=T, h2o_mmr=h2o_mmr, o3_mmr=o3_mmr,
+                pf_hpa=pf_hpa, lw_flxd=lw_flxd, lw_flxu=lw_flxu,
+                sw_flxd=sw_flxd, sw_flxu=sw_flxu)
+
+_clima = read_clima(clima_path) if (clima_path and os.path.isfile(clima_path)) else None
 
 # ---------------------------------------------------------------------------
 # Read data
@@ -146,6 +220,8 @@ if os.path.isfile(konrad_path):
     _kT = np.concatenate([[float(_kd["Ts_K"])], _kd["T_K"]])
     _kp = np.concatenate([[float(_kd["phlev_hpa"].max())], _kd["plev_hpa"]])
     ax.plot(_kT, _kp, color="gray", lw=1.0, ls="-.")
+if _clima is not None:
+    ax.plot(_clima["T"], _clima["p_hpa"], color="seagreen", lw=1.2, ls="--")
 ax.plot(np.append(tmid, ts), np.append(pmid, ps), color="firebrick", lw=1.5)
 ax.axhline(ps, color="gray", lw=0.6, ls=":")
 
@@ -157,6 +233,8 @@ _T_lbls = [(T_ref, pmid, "US Std Atm, 1976", "dimgray", 120.0, -51, "left"),
            (tmid,  pmid, "ExoColumn", "firebrick", 20.0, -30, "left")]
 if os.path.isfile(konrad_path):
     _T_lbls.append((_kT, _kp, "konrad", "gray", 400.0, -30, "left"))
+if _clima is not None:
+    _T_lbls.append((_clima["T"], _clima["p_hpa"], "CLIMA", "seagreen", 40.0, +5, "left"))
 for T_arr, p_arr, lbl, color, p_lbl, dx, ha in _T_lbls:
     ax.text(_iT(T_arr, p_arr, p_lbl) + dx, p_lbl, lbl,
             color=color, ha=ha, va="center", fontsize=12)
@@ -190,6 +268,7 @@ for flux, lbl, color, p_lbl, dx, ha in _flx_lbls:
 _style_handles = [
     Line2D([0], [0], color="gray", lw=1.5, ls="-",  label="ExoColumn"),
     Line2D([0], [0], color="gray", lw=1.0, ls="-.", label="konrad"),
+    Line2D([0], [0], color="gray", lw=1.2, ls="--", label="CLIMA"),
 ]
 if os.path.isfile(konrad_path):
     _kf = np.load(konrad_path)
@@ -199,7 +278,19 @@ if os.path.isfile(konrad_path):
         ax.plot(_kf["lw_flxd"], _kfp, color="crimson",       lw=1.0, ls="-.")
         ax.plot(_kf["sw_flxd"], _kfp, color="steelblue",     lw=1.0, ls="-.")
         ax.plot(_kf["sw_flxu"], _kfp, color="cornflowerblue", lw=1.0, ls="-.")
-    ax.legend(handles=_style_handles, loc="center",
+if _clima is not None:
+    ax.plot(_clima["lw_flxu"], _clima["pf_hpa"], color="lightcoral",     lw=1.2, ls="--")
+    ax.plot(_clima["lw_flxd"], _clima["pf_hpa"], color="crimson",        lw=1.2, ls="--")
+    ax.plot(_clima["sw_flxd"], _clima["pf_hpa"], color="steelblue",      lw=1.2, ls="--")
+    ax.plot(_clima["sw_flxu"], _clima["pf_hpa"], color="cornflowerblue", lw=1.2, ls="--")
+if os.path.isfile(konrad_path) or _clima is not None:
+    # Trim handle list to those actually present
+    _shown = [_style_handles[0]]
+    if os.path.isfile(konrad_path):
+        _shown.append(_style_handles[1])
+    if _clima is not None:
+        _shown.append(_style_handles[2])
+    ax.legend(handles=_shown, loc="center",
               bbox_to_anchor=(0.44, 0.92), bbox_transform=ax_fl.transAxes)
 
 ax.set_xlabel("Flux (W m$^{-2}$)")
@@ -270,6 +361,9 @@ if os.path.isfile(konrad_path):
     if "o3_mmr" in _kd.files and np.any(np.isfinite(_kd["o3_mmr"])):
         ax.plot(_kd["o3_mmr"] * _ppm, _kd["plev_hpa"], color="mediumseagreen",
                 lw=1.0, ls="-.")
+if _clima is not None:
+    ax.plot(_clima["o3_mmr"] * _ppm, _clima["p_hpa"], color="mediumseagreen",
+            lw=1.2, ls="--")
 
 ax.set_xscale("log")
 # Clamp: konrad O3 underflows to ~1e-32 ppm near the surface; clamping keeps

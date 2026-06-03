@@ -1,0 +1,78 @@
+&exocol_nml
+  conv_scheme     = 'sbm'
+  tau_conv        = 3600.0
+  rh_sbm          = 0.7
+  moisture_scheme = 'prognostic'
+  o3_profile      = 'rcemip'
+  wind_speed      = 5.0
+  C_D             = 1.5e-3
+  msdist          = 1.0
+  dz_slab         = 10.0
+  ! ---- Surface turbulent flux scheme ----
+  ! 'mos' (default, recommended): Monin-Obukhov fluxes with the drag coefficient
+  !   referenced at the standard 10 m height.  Paired with the surface-coupled
+  !   mixed layer (convadj_surface) and the non-deadlocking dry-convective
+  !   fallback, this gives an Earth-like, resolution-robust climate (Ts≈288,
+  !   Bowen≈0.24) on the pure log grid — no boundary-layer scheme needed.
+  ! 'bulk': legacy fixed-C_D bulk aerodynamic (resolution-dependent); retained
+  !   for comparison/regression (reproduces the calibrated Ts=288.01).
+  surface_flux    = 'mos'
+  z0_rough        = 3.21e-5  ! surface roughness length [m] (Frierson; used by 'mos')
+  latent_heat_mode = 'phase_aware'  ! production default (L_v above 0°C, L_sub below).
+                                    ! Set 'fixed_vap' to match konrad's moist adiabat
+                                    ! (fixed L_v at all T) for apples-to-apples tests.
+/
+
+! &exocol_init — cold-start initial conditions.
+! Cold start is the default: leave input_file = '' and the column is built
+! from these parameters (moist adiabat from ts capped at t_strato above the
+! tropopause, log-spaced pressure grid from p_top to ps, h2ommr = rh_init·qsat).
+! To restart from an ExoRT-format NetCDF file instead, set
+!   input_file = 'iofiles/exocol_in.nc'
+! and the cold-start block is bypassed.
+&exocol_init
+  input_file = ''
+  ts         = 288.0
+  t_strato   = 200.0
+  p_top      = 100.0
+  rh_init    =   0.7
+  coszrs     =   0.5
+  cpdry      = 1004.0
+  ! Surface albedo calibrated to Ts = 288.00 K (modern Earth) with the
+  ! MOS surface flux (z_flux_ref=10 m), surface mixed layer (convadj_surface),
+  ! non-deadlocking dry fallback, cold-point stratospheric H2O closure active,
+  ! sbm, prognostic, o3='rcemip', coszrs=0.5, msdist=1.0, argon in dry-air
+  ! composition (mwdry 28.97, cpdry 1004), PVER=70 log-spaced grid.
+  ! Local sensitivity ~ -120 K per unit albedo near α=0.27.
+  ! (For o3='earth' the calibrated value is 0.2873 — see exocol_config.nml.earth_a2873.)
+  asdir      =   0.2736
+  asdif      =   0.2736
+  aldir      =   0.2736
+  aldif      =   0.2736
+/
+
+! &exocol_composition — dry-air composition and surface pressure (all optional).
+! When any *_vmr is supplied (mole fraction of dry air), it is broadcast as a
+! well-mixed scalar to every layer.  Unspecified gases use input-file values
+! (file mode) or built-in Earth-like defaults (cold-start mode: N2=0.78,
+! O2=0.21, CO2=4e-4, others=0).  ps is in Pa; when set, the pressure grid
+! is rescaled to preserve σ-structure (file mode) or built directly at this
+! ps (cold-start mode).
+!
+! H2O is intentionally not in this namelist — water vapor is prognostic
+! (evolved by surface evaporation, convective transport, and condensation
+! when moisture_scheme='prognostic').
+!
+! Argon (ar_vmr) is radiatively inert: it carries no ExoRT absorber and is
+! included only in the dry-air mwdry (~28.97 g/mol) and cpdry (~1004 J/kg/K),
+! matching real dry air and konrad's gas constants.  Defaults to 0.00934 in
+! cold start when unset; set to 0 to recover the old argon-free composition.
+&exocol_composition
+  ps       = 1.0e5
+  co2_vmr  = 4.0e-4
+  ch4_vmr  = 1.8e-6
+  n2_vmr   = 0.78084
+  o2_vmr   = 0.20946
+  ar_vmr   = 0.00934
+  o3_vmr   = 1.0e-7
+/
