@@ -49,7 +49,7 @@ module exocol_coldstart
                             t_strato, p_top, rh_init,             &
                             co2_vmr, ch4_vmr, c2h6_vmr,           &
                             h2_vmr,  n2_vmr,  o3_vmr, o2_vmr,     &
-                            ar_vmr,  o3_profile, variable_ps,      &
+                            ar_vmr,  o3_profile, variable_ps, ihz_profile, &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
@@ -98,6 +98,12 @@ contains
     integer  :: k_top_conv
     real(r8) :: es_tropo, q_cold_trap
     character(len=4) :: dry_name(7)
+    ! Kasting IHZ dry-adiabat variables (initialised to safe no-dry-layer defaults)
+    real(r8) :: f_vmr, Mw_mix, w_h2o, Rv, R_mix, cp_h2o_steam, cp_mix, kappa_mix
+    real(r8) :: ws_sfc    = 0._r8   ! surface saturation mixing ratio
+    real(r8) :: h2ommr_dry = 0._r8  ! constant H2O MMR in dry layer
+    integer  :: k_cond    = 0       ! condensation level index (0 = no dry layer)
+    logical  :: in_dry_layer
 
     write(*,'(/,a)') '  cold_start_init: building initial column from &exocol_init'
 
@@ -183,19 +189,117 @@ contains
       '    pmid(pver) : ', pmid(pver)/100._r8, ' hPa  (bottom midpoint ≈', &
       (ps_use - pmid(pver)) / (1.2_r8 * exo_g), ' m altitude)'
 
-    ! ---- 3. Temperature: moist adiabat from surface, capped at t_strato ----
+    ! ---- 3. Temperature: Kasting IHZ (dry + moist) or standard moist adiabat ----
     Rd     = SHR_CONST_RGAS / mwdry_new
+    Rv     = SHR_CONST_RGAS / SHR_CONST_MWWV   ! H2O gas constant [J/kg/K]
     eps_wv = SHR_CONST_MWWV / mwdry_new
 
     T_at_int(pverp) = cs_ts
 
     if (cs_ts <= t_strato) then
-      ! ts at or below stratosphere: column is isothermal at t_strato above
-      ! the surface (ts is preserved at pverp as the skin temperature).
       write(*,'(a)') &
         '  cold_start_init: ts <= t_strato — isothermal column above surface.'
       T_at_int(1:pverp-1) = t_strato
+
+    else if (ihz_profile) then
+      ! Kasting (1988) IHZ structure: dry adiabat at the base when the
+      ! surface saturation mixing ratio ws > 1 (moist-adiabat formula
+      ! is degenerate in the supercritical-steam regime).  Switch to moist
+      ! pseudoadiabat once ws drops to 1 (condensation level).
+      ! Dry-adiabat lapse rate: dT/dp = κ_mix · T/p (exact for ideal gas)
+      ! κ_mix = R_mix/cp_mix for the H2O + background mixture.
+      e_sfc  = min(esat_cc(cs_ts), 0.99_r8 * ps_use)
+      f_vmr  = e_sfc / ps_use                         ! H2O mole fraction in dry layer
+      ws_sfc = eps_wv * e_sfc / max(ps_use - e_sfc, 1._r8)
+
+      if (ws_sfc > 1.0_r8) then
+        ! Compute dry-adiabat kappa for the H2O + dry-gas mixture.
+        Mw_mix      = f_vmr * SHR_CONST_MWWV + (1._r8 - f_vmr) * mwdry_new
+        w_h2o       = f_vmr * SHR_CONST_MWWV / Mw_mix      ! H2O mass fraction
+        R_mix       = w_h2o * Rv + (1._r8 - w_h2o) * Rd
+        cp_h2o_steam = 1870._r8                              ! J/kg/K, steam ~300-700 K
+        cp_mix      = w_h2o * cp_h2o_steam + (1._r8 - w_h2o) * cpdry_new
+        kappa_mix   = R_mix / cp_mix
+        ! Constant H2O MMR in the dry layer
+        h2ommr_dry  = w_h2o
+
+        write(*,'(a,f6.2,a,f6.4,a)') &
+          '    IHZ dry layer: ws_sfc = ', ws_sfc, '  κ_mix = ', kappa_mix, &
+          ' (dry adiabat from surface)'
+
+        ! Fill interface temperatures: dry adiabat until ws ≤ 1, then moist.
+        k_cond      = 1          ! fallback: entire column is dry → moist at TOA
+        in_dry_layer = .true.
+
+        do k = pverp-1, 1, -1
+          if (.not. in_dry_layer) then
+            ! Moist adiabat from the condensation level upward
+            if (T_at_int(k+1) <= t_strato) then
+              T_at_int(k) = t_strato
+              cycle
+            end if
+            T_lev       = T_at_int(k+1)
+            p_lev       = pint(k+1)
+            dlogp_layer = log(pint(k) / pint(k+1))
+            dlogp_sub   = dlogp_layer / real(NSUB, r8)
+            do isub = 1, NSUB
+              Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+              es_sub  = min(esat_cc(T_lev), 0.99_r8 * p_lev)
+              r_sub   = eps_wv * es_sub / (p_lev - es_sub)
+              T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
+              dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+              T_lev   = T_lev + dT_sub
+              p_lev   = p_lev * exp(dlogp_sub)
+              if (T_lev <= t_strato) then; T_lev = t_strato; exit; end if
+            end do
+            T_at_int(k) = T_lev
+          else
+            ! Dry adiabat: T(p) = Ts · (p/ps)^κ_mix  (exact, no sub-stepping)
+            T_at_int(k) = cs_ts * (pint(k) / ps_use)**kappa_mix
+            if (T_at_int(k) <= t_strato) T_at_int(k) = t_strato
+            ! Check whether the next interface is at or below the condensation
+            ! level (ws ≤ 1): test ws at the MID-LEVEL above this interface.
+            es_sub = min(esat_cc(T_at_int(k)), 0.99_r8 * pint(k))
+            r_sub  = eps_wv * es_sub / max(pint(k) - es_sub, 1._r8)
+            if (r_sub <= 1.0_r8) then
+              k_cond       = k
+              in_dry_layer = .false.
+              write(*,'(a,es10.3,a,f7.2,a)') &
+                '    IHZ condensation level: p = ', pint(k)/100._r8, &
+                ' hPa  T = ', T_at_int(k), ' K  (switch to moist adiabat)'
+            end if
+          end if
+        end do
+
+      else
+        ! ws_sfc ≤ 1: no dry layer needed; standard moist adiabat
+        write(*,'(a,f5.2,a)') &
+          '    IHZ: ws_sfc = ', ws_sfc, ' ≤ 1 — moist adiabat from surface'
+        k_cond = 0
+        do k = pverp-1, 1, -1
+          if (T_at_int(k+1) <= t_strato) then
+            T_at_int(k) = t_strato; cycle
+          end if
+          T_lev       = T_at_int(k+1)
+          p_lev       = pint(k+1)
+          dlogp_layer = log(pint(k) / pint(k+1))
+          dlogp_sub   = dlogp_layer / real(NSUB, r8)
+          do isub = 1, NSUB
+            Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+            es_sub  = min(esat_cc(T_lev), 0.99_r8 * p_lev)
+            r_sub   = eps_wv * es_sub / (p_lev - es_sub)
+            T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
+            dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+            T_lev   = T_lev + dT_sub
+            p_lev   = p_lev * exp(dlogp_sub)
+            if (T_lev <= t_strato) then; T_lev = t_strato; exit; end if
+          end do
+          T_at_int(k) = T_lev
+        end do
+      end if
+
     else
+      ! Standard: moist pseudoadiabat from surface, cap at t_strato
       do k = pverp-1, 1, -1
         if (T_at_int(k+1) <= t_strato) then
           T_at_int(k) = t_strato
@@ -203,16 +307,16 @@ contains
         end if
         T_lev       = T_at_int(k+1)
         p_lev       = pint(k+1)
-        dlogp_layer = log(pint(k) / pint(k+1))    ! < 0  (going up)
+        dlogp_layer = log(pint(k) / pint(k+1))
         dlogp_sub   = dlogp_layer / real(NSUB, r8)
         do isub = 1, NSUB
           Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
           es_sub  = min(esat_cc(T_lev), 0.99_r8 * p_lev)
           r_sub   = eps_wv * es_sub / (p_lev - es_sub)
           T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
-          dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub   ! < 0
-          T_lev  = T_lev + dT_sub
-          p_lev  = p_lev * exp(dlogp_sub)
+          dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+          T_lev   = T_lev + dT_sub
+          p_lev   = p_lev * exp(dlogp_sub)
           if (T_lev <= t_strato) then
             T_lev = t_strato
             exit
@@ -251,9 +355,15 @@ contains
 
     do k = 1, pver
       if (tmid(k) > t_strato) then
-        es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
-        qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
-        h2ommr(k) = rh_init * qsat_k
+        ! In the dry layer (ihz_profile with ws_sfc>1), h2ommr is constant.
+        ! In the moist layer, h2ommr = rh_init · qsat.
+        if (ihz_profile .and. ws_sfc > 1.0_r8 .and. k >= k_cond) then
+          h2ommr(k) = h2ommr_dry
+        else
+          es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+          qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
+          h2ommr(k) = rh_init * qsat_k
+        end if
       else
         h2ommr(k) = rh_init * q_cold_trap
       end if

@@ -49,6 +49,7 @@ NML_TEMPLATE = """\
 &exocol_nml
   flux_only   = .true.
   variable_ps = .true.
+  ihz_profile = .true.
   o3_profile  = 'none'
   msdist      = 1.0
 /
