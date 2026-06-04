@@ -1,0 +1,37 @@
+&exocol_nml
+  conv_scheme     = 'sbm'
+  tau_conv        = 3600.0
+  rh_sbm          = 0.7
+  moisture_scheme = 'prognostic'
+  o3_profile      = 'none'
+  wind_speed      = 5.0
+  msdist          = 1.0
+  dz_slab         = 10.0
+  surface_flux    = 'mos'
+  z0_rough        = 3.21e-5
+  latent_heat_mode = 'phase_aware'
+/
+&exocol_init
+  input_file = ''
+  ts         = 288.0
+  t_strato   = 200.0
+  p_top      = 100.0
+  rh_init    = 0.7
+  coszrs     = 0.5
+  ! Surface albedo calibrated to Ts = 288 K (Kopparapu composition:
+  ! N2=0.78, O2=0.21, Ar=0.01, CO2=3.3e-4, no CH4, no O3).
+  ! Sensitivity ~-186 K/unit near alpha=0.251. ExoRT/MOS/SBM/PVER=70.
+  asdir      = 0.2510
+  asdif      = 0.2510
+  aldir      = 0.2510
+  aldif      = 0.2510
+/
+&exocol_composition
+  ps       = 1.0e5
+  co2_vmr  = 3.3e-4
+  ch4_vmr  = 0.0
+  n2_vmr   = 0.78
+  o2_vmr   = 0.210
+  ar_vmr   = 0.01
+  o3_vmr   = 0.0
+/
