@@ -33,7 +33,7 @@ PROGRAM exocol_driver
   use exocol_mod
   use exocol_config,         only: read_config, apply_composition_overrides, &
                                    cfg_input_file => input_file, &
-                                   latent_heat_mode
+                                   latent_heat_mode, flux_only
   use exocol_io,             only: read_initial_conditions, write_output
   use exocol_coldstart,      only: cold_start_init
   use exocol_rce_loop,       only: run_rce_loop
@@ -85,8 +85,8 @@ PROGRAM exocol_driver
   write(*,'(a)') '  ExoRT radiation initialised.'
   write(*,'(a,f7.2,a,f5.3)') '  ts = ', ts, ' K    coszrs = ', coszrs
 
-  ! ---- 5. Run RCE loop ----
-  call run_rce_loop()
+  ! ---- 5. Run RCE loop (skipped when flux_only = .true.) ----
+  if (.not. flux_only) call run_rce_loop()
 
   ! ---- 6. Retrieve final fluxes for output ----
   call exocol_rad_tend(LWHR, SWHR, LWUP, LWDN, SWUP, SWDN)

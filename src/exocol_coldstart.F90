@@ -12,10 +12,14 @@ module exocol_coldstart
 !   3. Temperature: moist adiabat integrated upward from ts using the local
 !      Γm(T,p) from exocol_convadj::malr.  Capped at t_strato above the
 !      tropopause (isothermal stratosphere).  Numerical scheme is a sub-stepped
-!      Euler in log(p):  dT/d(ln p) = Γm · R_d · T / g.
+!      Euler in log(p):  dT/d(ln p) = Γm · R_d · T_v / g,  where T_v is the
+!      virtual temperature T_v = T·(1 + r_s/ε)/(1 + r_s), r_s = saturation
+!      mixing ratio at (T,p), ε = R_d/R_v.  Using T_v (rather than T) gives the
+!      correct moist scale height when H2O is non-negligible (inner HZ / runaway).
 !   4. Moisture: h2ommr(k) = rh_init · qsat(T(k), p(k)) where T > t_strato;
 !      zero in the stratosphere.
-!   5. Heights: hydrostatic integration  zint(k) = zint(k+1) + R_d T /g · ln(p(k+1)/p(k)).
+!   5. Heights: hydrostatic integration  zint(k) = zint(k+1) + R_d·T_v/g · ln(p(k+1)/p(k))
+!      using the virtual temperature T_v = T·(1 + h2ommr/ε)/(1 + h2ommr).
 !   6. Surface scalars (ts, coszrs, albedos), msdist (from &exocol_nml),
 !      and clouds (zeroed) are written from the namelist values.
 !
@@ -83,6 +87,7 @@ contains
     real(r8) :: ar_vmr_use, ar_mmr
     real(r8) :: T_at_int(pverp)
     real(r8) :: T_lev, p_lev, dlogp_layer, dlogp_sub, dT_sub, Gm
+    real(r8) :: es_sub, r_sub, T_v_lev
     real(r8) :: es_k, qsat_k
     character(len=4) :: dry_name(7)
 
@@ -184,8 +189,11 @@ contains
         dlogp_layer = log(pint(k) / pint(k+1))    ! < 0  (going up)
         dlogp_sub   = dlogp_layer / real(NSUB, r8)
         do isub = 1, NSUB
-          Gm     = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
-          dT_sub = Gm * Rd * T_lev / exo_g * dlogp_sub   ! < 0
+          Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+          es_sub  = min(esat_cc(T_lev), 0.99_r8 * p_lev)
+          r_sub   = eps_wv * es_sub / (p_lev - es_sub)
+          T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
+          dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub   ! < 0
           T_lev  = T_lev + dT_sub
           p_lev  = p_lev * exp(dlogp_sub)
           if (T_lev <= t_strato) then
@@ -237,7 +245,9 @@ contains
     ! ---- 6. Hydrostatic heights ----
     zint(pverp) = 0._r8
     do k = pver, 1, -1
-      zint(k) = zint(k+1) + (Rd / exo_g) * tmid(k) * log(pint(k+1) / pint(k))
+      zint(k) = zint(k+1) + (Rd / exo_g) * &
+                tmid(k) * (1._r8 + h2ommr(k) / eps_wv) / (1._r8 + h2ommr(k)) * &
+                log(pint(k+1) / pint(k))
     end do
 
     ! ---- 7. Surface + scalar state ----

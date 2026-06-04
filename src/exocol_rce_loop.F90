@@ -1118,12 +1118,15 @@ contains
 
   subroutine update_zint()
   ! ifx host-association workaround: explicit USE inside the contained subroutine.
-    use exocol_mod, only: zint, tmid, pint, mwdry_col
+    use exocol_mod, only: zint, tmid, pint, h2ommr, mwdry_col
     integer  :: k
-    real(r8) :: R_gas
-    R_gas = SHR_CONST_RGAS / mwdry_col
+    real(r8) :: R_gas, eps_wv
+    R_gas  = SHR_CONST_RGAS / mwdry_col
+    eps_wv = SHR_CONST_MWWV / mwdry_col
     do k = pver, 1, -1
-      zint(k) = zint(k+1) + (R_gas / exo_g) * tmid(k) * log(pint(k+1) / pint(k))
+      zint(k) = zint(k+1) + (R_gas / exo_g) * &
+                tmid(k) * (1._r8 + h2ommr(k) / eps_wv) / (1._r8 + h2ommr(k)) * &
+                log(pint(k+1) / pint(k))
     end do
   end subroutine update_zint
 
