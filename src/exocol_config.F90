@@ -149,6 +149,12 @@ module exocol_config
   ! Applied via exocol_convadj::set_latent_heat_mode (called from the driver).
   character(len=32), public, save :: latent_heat_mode = 'phase_aware'
 
+  ! When .true.: skip the RCE loop entirely.  The driver builds the column via
+  ! cold start (or file), calls radiation once, writes output, and exits.
+  ! Intended for Kopparapu-style OLR(Ts) sweeps where a prescribed moist-adiabat
+  ! profile is needed without any time-stepping to equilibrium.
+  logical,           public, save :: flux_only        = .false.
+
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
   ! with exocol_mod state variables (ts, coszrs, asdir, ...) must be renamed
@@ -228,7 +234,8 @@ contains
                                   wind_speed, C_D, msdist, dz_slab, &
                                   tau_conv, cape_trigger, rh_sbm, &
                                   latent_heat_mode, &
-                                  surface_flux, z0_rough
+                                  surface_flux, z0_rough, &
+                                  flux_only
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -361,6 +368,8 @@ contains
       write(*,'(a)') '  Latent heat       : phase-aware (L_v / L_sub below 273.16 K)'
     end if
     write(*,'(a)') '  Vertical grid     : log-spaced'
+    if (flux_only) &
+      write(*,'(a)') '  *** flux_only = .true. — RCE loop skipped; single radiation call ***'
 
     if (len_trim(input_file) == 0) then
       write(*,'(a)')         '  Initialization    : cold start (from &exocol_init)'
