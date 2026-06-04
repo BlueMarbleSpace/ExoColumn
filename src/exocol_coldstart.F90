@@ -47,7 +47,7 @@ module exocol_coldstart
                             t_strato, p_top, rh_init,             &
                             co2_vmr, ch4_vmr, c2h6_vmr,           &
                             h2_vmr,  n2_vmr,  o3_vmr, o2_vmr,     &
-                            ar_vmr,  o3_profile,                   &
+                            ar_vmr,  o3_profile, variable_ps,      &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
@@ -92,7 +92,7 @@ contains
     real(r8) :: T_at_int(pverp)
     real(r8) :: T_lev, p_lev, dlogp_layer, dlogp_sub, dT_sub, Gm
     real(r8) :: es_sub, r_sub, T_v_lev
-    real(r8) :: es_k, qsat_k
+    real(r8) :: es_k, qsat_k, e_sfc
     character(len=4) :: dry_name(7)
 
     write(*,'(/,a)') '  cold_start_init: building initial column from &exocol_init'
@@ -155,6 +155,15 @@ contains
       ps_use = cs_ps
     else
       ps_use = DEFAULT_PS
+    end if
+
+    ! With variable_ps, ps_use is the dry background; total ps = p_dry + esat(Ts).
+    if (variable_ps) then
+      e_sfc  = esat_cc(cs_ts)
+      write(*,'(a,f9.2,a,f9.2,a,f9.2,a)') &
+        '    variable_ps: p_dry = ', ps_use/100._r8, ' hPa  + esat(Ts) = ', &
+        e_sfc/100._r8, ' hPa  →  ps = ', (ps_use + e_sfc)/100._r8, ' hPa'
+      ps_use = ps_use + e_sfc
     end if
 
     if (p_top >= ps_use) then
