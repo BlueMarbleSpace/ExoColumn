@@ -155,6 +155,14 @@ module exocol_config
   ! profile is needed without any time-stepping to equilibrium.
   logical,           public, save :: flux_only        = .false.
 
+  ! When .true. (cold start only): the &exocol_composition::ps (or the 1 bar
+  ! default) is interpreted as the DRY background partial pressure p_dry; the
+  ! total surface pressure is set to p_dry + esat(Ts).  This matches the
+  ! Kopparapu+2013 CLIMA convention where N2 stays fixed at 1 bar and water
+  ! vapour pressure is added on top, giving ps ≈ 1 bar for Ts ≈ 280 K but
+  ! rising steeply toward the runaway (ps ≈ 2 bar at Ts ≈ 370 K).
+  logical,           public, save :: variable_ps      = .false.
+
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
   ! with exocol_mod state variables (ts, coszrs, asdir, ...) must be renamed
@@ -235,7 +243,7 @@ contains
                                   tau_conv, cape_trigger, rh_sbm, &
                                   latent_heat_mode, &
                                   surface_flux, z0_rough, &
-                                  flux_only
+                                  flux_only, variable_ps
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -370,6 +378,8 @@ contains
     write(*,'(a)') '  Vertical grid     : log-spaced'
     if (flux_only) &
       write(*,'(a)') '  *** flux_only = .true. — RCE loop skipped; single radiation call ***'
+    if (variable_ps) &
+      write(*,'(a)') '  *** variable_ps = .true. — ps = p_dry + esat(Ts) (Kopparapu style) ***'
 
     if (len_trim(input_file) == 0) then
       write(*,'(a)')         '  Initialization    : cold start (from &exocol_init)'

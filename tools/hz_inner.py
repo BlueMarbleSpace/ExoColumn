@@ -47,9 +47,10 @@ PROFILE_TS = [250.0, 280.0, 310.0, 340.0]
 
 NML_TEMPLATE = """\
 &exocol_nml
-  flux_only  = .true.
-  o3_profile = 'none'
-  msdist     = 1.0
+  flux_only   = .true.
+  variable_ps = .true.
+  o3_profile  = 'none'
+  msdist      = 1.0
 /
 &exocol_init
   input_file = ''
@@ -128,6 +129,7 @@ def main():
     print("ExoColumn inner-HZ sweep  —  Figure 3 (Kopparapu+2013 style)")
     print(f"  Ts range    : {TS_VALUES[0]:.0f}–{TS_VALUES[-1]:.0f} K")
     print(f"  t_strato    : {T_STRATO:.0f} K  (isothermal, fully saturated)")
+    print(f"  variable_ps : ps = p_N2(1 bar) + esat(Ts)")
     print(f"  composition : N2 + CO2(4e-4) + H2O  [no O2/O3/CH4/Ar]")
     print()
 
