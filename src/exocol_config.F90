@@ -163,6 +163,17 @@ module exocol_config
   ! rising steeply toward the runaway (ps ≈ 2 bar at Ts ≈ 370 K).
   logical,           public, save :: variable_ps      = .false.
 
+  ! When .true. (cold start + variable_ps only): use the Kasting (1988) IHZ
+  ! temperature structure.  At high Ts the saturation mixing ratio at the
+  ! surface exceeds unity (ws > 1), making the standard moist-adiabat formula
+  ! degenerate.  This flag switches to the dry adiabat from the surface up to
+  ! the condensation level (where ws first drops to 1), then follows the moist
+  ! pseudoadiabat above.  Physically this represents the supercritical-steam
+  ! regime near the surface for hot inner-HZ planets.  Default .false. because
+  ! the dry layer only exists above ~Ts≈395 K and is irrelevant for Earth-like
+  ! RCE runs; enable explicitly in hz_inner.py sweeps.
+  logical,           public, save :: ihz_profile      = .false.
+
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
   ! with exocol_mod state variables (ts, coszrs, asdir, ...) must be renamed
@@ -243,7 +254,7 @@ contains
                                   tau_conv, cape_trigger, rh_sbm, &
                                   latent_heat_mode, &
                                   surface_flux, z0_rough, &
-                                  flux_only, variable_ps
+                                  flux_only, variable_ps, ihz_profile
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -380,6 +391,8 @@ contains
       write(*,'(a)') '  *** flux_only = .true. — RCE loop skipped; single radiation call ***'
     if (variable_ps) &
       write(*,'(a)') '  *** variable_ps = .true. — ps = p_dry + esat(Ts) (Kopparapu style) ***'
+    if (ihz_profile) &
+      write(*,'(a)') '  *** ihz_profile = .true. — Kasting (1988) IHZ T profile (dry+moist) ***'
 
     if (len_trim(input_file) == 0) then
       write(*,'(a)')         '  Initialization    : cold start (from &exocol_init)'
