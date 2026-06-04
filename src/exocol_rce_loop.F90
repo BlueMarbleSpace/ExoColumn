@@ -914,14 +914,30 @@ contains
     use ppgrid,        only: pver
     use exoplanet_mod, only: exo_g
     integer  :: k, k_cp
-    real(r8) :: eps_wv, es_cp, q_cp, q_old, q_new, dW_strat, W_trop, frac
+    real(r8) :: eps_wv, es_k, qsat_k, q_cp, q_old, q_new, dW_strat, W_trop, frac
 
     eps_wv = SHR_CONST_MWWV / mwdry_col
 
-    ! Cold-point tropopause = coldest model level → freeze-drying value.
-    k_cp  = minloc(tmid, dim=1)
-    es_cp = min(esat_cc(tmid(k_cp)), 0.99_r8 * pmid(k_cp))
-    q_cp  = eps_wv * es_cp / (pmid(k_cp) - es_cp)
+    ! Cold-point tropopause: level with minimum saturation mixing ratio qsat(T,p).
+    ! Using min(qsat) instead of min(T) preserves the invariant qsat(k) >= q_cp
+    ! for all k, guaranteeing no supersaturation is introduced.  With ozone the
+    ! T-minimum and qsat-minimum coincide at the tropopause (~120 hPa for Earth).
+    ! Without ozone the T-minimum can lie in the O2-heated upper atmosphere at
+    ! very low pressure (e.g. 2 hPa), where qsat(T_cp, p_cp) is large because p
+    ! is small — setting that value as the stratospheric floor supersaturates the
+    ! lower stratosphere where qsat(T, p) at higher pressure is smaller.
+    ! The qsat-minimum is always at the physical cold-point tropopause regardless
+    ! of whether ozone is present.
+    k_cp = 1
+    q_cp = huge(q_cp)
+    do k = 1, pver
+      es_k   = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+      qsat_k = eps_wv * es_k / (pmid(k) - es_k)
+      if (qsat_k < q_cp) then
+        q_cp = qsat_k
+        k_cp = k
+      end if
+    end do
 
     ! Above the cold point (k < k_cp): the conserved entry value is exactly q_cp,
     ! so ASSIGN it (not max).  A pure max() floor is a one-way ratchet — it can
@@ -929,8 +945,8 @@ contains
     ! stratosphere keeps a stale, higher humidity it can never shed (it is far
     ! subsaturated, so condense never removes it), producing an unphysical
     ! moist bump above the cold point.  Assigning lets the upper stratosphere
-    ! track the cold point both up AND down.  Safe: q_cp = qsat(T_cp) ≤ qsat
-    ! everywhere above (the cold point is the coldest level), so no supersaturation.
+    ! track the cold point both up AND down.  Safe: q_cp is the minimum qsat in
+    ! the column, so qsat(T_k, p_k) >= q_cp for all k — no supersaturation.
     !
     ! At and below the cold point (k >= k_cp): keep the floor.  It fills the dry
     ! gap between the convective top and the cold point at q_cp and is a no-op in
