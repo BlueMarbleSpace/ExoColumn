@@ -16,8 +16,12 @@ module exocol_coldstart
 !      virtual temperature T_v = T·(1 + r_s/ε)/(1 + r_s), r_s = saturation
 !      mixing ratio at (T,p), ε = R_d/R_v.  Using T_v (rather than T) gives the
 !      correct moist scale height when H2O is non-negligible (inner HZ / runaway).
-!   4. Moisture: h2ommr(k) = rh_init · qsat(T(k), p(k)) where T > t_strato;
-!      zero in the stratosphere.
+!   4. Moisture: h2ommr(k) = rh_init · qsat(T(k), p(k)) for every layer,
+!      including the stratosphere (where T = t_strato).  This gives 100 % RH
+!      everywhere, matching the Kopparapu+2013 CLIMA convention and maximising
+!      the greenhouse effect of water vapour.  For cold stratospheres (200 K) the
+!      saturation mixing ratio is tiny (~10⁻⁴ kg/kg), so the radiative impact
+!      is small but physically correct.
 !   5. Heights: hydrostatic integration  zint(k) = zint(k+1) + R_d·T_v/g · ln(p(k+1)/p(k))
 !      using the virtual temperature T_v = T·(1 + h2ommr/ε)/(1 + h2ommr).
 !   6. Surface scalars (ts, coszrs, albedos), msdist (from &exocol_nml),
@@ -213,15 +217,11 @@ contains
     write(*,'(a,f6.1,a,f6.1,a)') &
       '    T profile  : ts = ', cs_ts, ' K  →  TOA tint(1) = ', tint(1), ' K'
 
-    ! ---- 4. Moisture (rh_init · qsat in troposphere, dry stratosphere) ----
+    ! ---- 4. Moisture (rh_init · qsat, all layers including stratosphere) ----
     do k = 1, pver
-      if (tmid(k) > t_strato) then
-        es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
-        qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
-        h2ommr(k) = rh_init * qsat_k
-      else
-        h2ommr(k) = 0._r8
-      end if
+      es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+      qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
+      h2ommr(k) = rh_init * qsat_k
     end do
 
     ! ---- 5. Dry-gas MMR profiles (well-mixed, except O3 per o3_profile) ----

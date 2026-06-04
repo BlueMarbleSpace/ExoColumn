@@ -1,31 +1,19 @@
 #!/usr/bin/env python3
 """
-hz_inner.py  —  Inner habitable zone OLR/Seff sweep (Kopparapu+2013 approach).
+hz_inner.py  —  ExoColumn version of Kopparapu+2013 Figure 3 (inner HZ, G2V star).
 
 For each prescribed surface temperature Ts, ExoColumn builds a moist-adiabat
-column (cold start: saturated troposphere, isothermal stratosphere at t_strato),
-calls ExoRT radiation once (flux_only mode), and reads the fluxes.
+column (cold start: fully saturated at all levels including stratosphere,
+isothermal stratosphere at t_strato = 200 K), calls ExoRT radiation once
+(flux_only mode), and reads the output profiles and fluxes.
 
-Diagnostics
------------
-OLR  = LWUP[0]          (TOA upwelling LW, W/m²)
-ASR  = SWDN[0]-SWUP[0]  (absorbed stellar radiation, W/m²)
-Seff = OLR / ASR        (effective stellar flux relative to reference, dimensionless)
+Four-panel figure matching Kopparapu+2013 Fig. 3:
+  (a) OLR and absorbed SW vs Ts
+  (b) Planetary albedo vs Ts
+  (c) Effective stellar flux Seff = OLR / ASR vs Ts
+  (d) H2O VMR vertical profiles for selected Ts values
 
-Seff > 1 means the column emits more than it absorbs at this Ts under the
-reference stellar flux (msdist=1); the star must be brighter / closer.
-The runaway greenhouse limit is where Seff(Ts) reaches its maximum.
-
-Kopparapu+2013 Table 1 (G2V, T_eff=5780 K, 1 M_Earth):
-  Moist greenhouse : Seff = 1.0129   (H2O stratospheric VMR > 3e-3)
-  Runaway GH       : Seff = 1.0140   (OLR saturates, Simpson-Nakajima ~282 W/m²)
-
-Usage
------
-  cd /hugespace/models/ExoColumn
-  source /opt/intel/oneapi/setvars.sh
-  cd build && make && cd ..
-  python tools/hz_inner.py
+Composition: N2 + CO2 (4e-4) + H2O only (Kopparapu style; no O2/O3/CH4/Ar).
 """
 
 import os
@@ -35,32 +23,28 @@ import netCDF4 as nc
 import matplotlib.pyplot as plt
 
 # ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
 ROOT     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXE      = os.path.join(ROOT, 'run', 'exocol.exe')
 OUT_NC   = os.path.join(ROOT, 'iofiles', 'exocol_out.nc')
 NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
 
 # ---------------------------------------------------------------------------
-# Sweep settings
-# ---------------------------------------------------------------------------
-TS_VALUES = np.arange(200, 425, 5, dtype=float)   # K; 200 to 420 inclusive
+TS_VALUES = np.arange(200, 425, 5, dtype=float)   # K
 
-# Surface albedo: matches ExoColumn Earth reference case
-ALBEDO = 0.2736
+ALBEDO   = 0.2736    # surface albedo (ExoColumn Earth reference)
+T_STRATO = 200.0     # isothermal stratosphere cap [K]
 
-# Stratospheric temperature cap (Kopparapu-style isothermal stratosphere)
-T_STRATO = 200.0   # K
+MW_H2O   = 18.015    # g/mol
 
-# Kopparapu+2013 Table 1 inner-edge Seff (G2V star, 1 M_Earth) — approximate
+# Kopparapu+2013 Table 1 inner-edge Seff (G2V, 1 M_Earth)
 KOPP_RUNAWAY = 1.0140
 KOPP_MOIST   = 1.0129
-SN_LIMIT     = 282.0   # W/m²  Simpson-Nakajima OLR saturation limit
+SN_LIMIT     = 282.0    # W/m²  Simpson-Nakajima OLR limit
+MOIST_GH_VMR = 3.0e-3   # moist greenhouse stratospheric H2O VMR threshold
 
-# ---------------------------------------------------------------------------
-# Namelist template
-# ---------------------------------------------------------------------------
+# Ts values at which to save the full H2O vertical profile for panel (d)
+PROFILE_TS = [250.0, 280.0, 310.0, 340.0]
+
 NML_TEMPLATE = """\
 &exocol_nml
   flux_only  = .true.
@@ -91,40 +75,44 @@ NML_TEMPLATE = """\
 
 def run_one(ts):
     """
-    Run ExoColumn in flux_only mode at surface temperature ts.
-    Returns (olr, asr, alpha_p) in W/m², or None on failure.
+    Run ExoColumn flux_only at surface temperature ts.
+    Returns dict with scalar diagnostics and profiles, or None on failure.
     """
     nml = NML_TEMPLATE.format(ts=ts, t_strato=T_STRATO, albedo=ALBEDO)
-
-    # Save original nml (restored in finally block)
     orig = None
     if os.path.exists(NML_PATH):
         with open(NML_PATH) as f:
             orig = f.read()
-
     try:
         with open(NML_PATH, 'w') as f:
             f.write(nml)
-
-        result = subprocess.run(
-            [EXE], cwd=ROOT,
-            capture_output=True, text=True, timeout=180
-        )
+        result = subprocess.run([EXE], cwd=ROOT, capture_output=True,
+                                text=True, timeout=180)
         if result.returncode != 0:
-            print(f"  FAIL Ts={ts:.0f}K  returncode={result.returncode}")
-            print(result.stderr[-400:] if result.stderr else "(no stderr)")
+            print(f"  FAIL Ts={ts:.0f} K  rc={result.returncode}")
+            print(result.stderr[-300:] if result.stderr else '')
             return None
 
         with nc.Dataset(OUT_NC) as ds:
-            lwup = ds['LWUP'][:]   # pverp; index 0 = TOA (Fortran index 1)
-            swup = ds['SWUP'][:]
-            swdn = ds['SWDN'][:]
+            lwup   = ds['LWUP'][:]
+            swup   = ds['SWUP'][:]
+            swdn   = ds['SWDN'][:]
+            tmid   = ds['tmid'][:]
+            pmid   = ds['pmid'][:]
+            h2ommr = ds['h2ommr'][:]
+            mwdry  = float(ds['mw'][:])
 
         olr   = float(lwup[0])
         asr   = float(swdn[0] - swup[0])
         alpha = float(swup[0] / swdn[0]) if swdn[0] > 0 else 0.0
-        return olr, asr, alpha
+        seff  = olr / asr if asr > 1e-6 else np.nan
 
+        # H2O volume mixing ratio profile: VMR ≈ h2ommr × mwdry / MW_H2O
+        h2o_vmr = h2ommr * mwdry / MW_H2O
+
+        return dict(olr=olr, asr=asr, alpha=alpha, seff=seff,
+                    h2o_vmr=h2o_vmr, pmid=np.array(pmid),
+                    tmid=np.array(tmid))
     finally:
         if orig is not None:
             with open(NML_PATH, 'w') as f:
@@ -135,90 +123,97 @@ def run_one(ts):
 
 def main():
     if not os.path.isfile(EXE):
-        raise FileNotFoundError(f"ExoColumn executable not found: {EXE}\n"
-                                "Run 'make' in the build/ directory first.")
+        raise FileNotFoundError(f"Executable not found: {EXE}")
 
-    print("ExoColumn inner-HZ OLR sweep")
-    print(f"  Ts range  : {TS_VALUES[0]:.0f}–{TS_VALUES[-1]:.0f} K  ({len(TS_VALUES)} points)")
-    print(f"  t_strato  : {T_STRATO:.0f} K  (isothermal stratosphere)")
-    print(f"  rh_init   : 1.0  (saturated troposphere)")
-    print(f"  albedo    : {ALBEDO}")
-    print(f"  mode      : flux_only (single radiation call per point)")
-    print(f"  composition: N2 + CO2 (4e-4) + H2O only  [O2=O3=CH4=Ar=0, Kopparapu-style]")
+    print("ExoColumn inner-HZ sweep  —  Figure 3 (Kopparapu+2013 style)")
+    print(f"  Ts range    : {TS_VALUES[0]:.0f}–{TS_VALUES[-1]:.0f} K")
+    print(f"  t_strato    : {T_STRATO:.0f} K  (isothermal, fully saturated)")
+    print(f"  composition : N2 + CO2(4e-4) + H2O  [no O2/O3/CH4/Ar]")
     print()
 
-    ts_list   = []
-    olr_list  = []
-    asr_list  = []
-    seff_list = []
-    alpha_list = []
-
+    rows = []
+    profiles = {}   # ts → (pmid, h2o_vmr) for selected Ts
     for ts in TS_VALUES:
         r = run_one(ts)
         if r is None:
-            print(f"  Ts={ts:5.1f} K  →  skipped (run failed)")
+            print(f"  Ts={ts:5.1f} K  SKIPPED")
             continue
-        olr, asr, alpha = r
-        seff = olr / asr if asr > 1e-6 else np.nan
-        print(f"  Ts={ts:5.1f} K  OLR={olr:7.2f}  ASR={asr:7.2f}  α={alpha:.3f}  Seff={seff:.4f}")
-        ts_list.append(ts)
-        olr_list.append(olr)
-        asr_list.append(asr)
-        seff_list.append(seff)
-        alpha_list.append(alpha)
+        print(f"  Ts={ts:5.1f} K  OLR={r['olr']:7.2f}  ASR={r['asr']:7.2f}"
+              f"  α={r['alpha']:.3f}  Seff={r['seff']:.4f}")
+        rows.append((ts, r['olr'], r['asr'], r['alpha'], r['seff']))
+        if any(abs(ts - ts_p) < 0.5 for ts_p in PROFILE_TS):
+            profiles[ts] = (r['pmid'], r['h2o_vmr'])
 
-    if not ts_list:
-        print("No successful runs — nothing to plot.")
+    if not rows:
+        print("No successful runs.")
         return
 
-    ts_arr    = np.array(ts_list)
-    olr_arr   = np.array(olr_list)
-    asr_arr   = np.array(asr_list)
-    seff_arr  = np.array(seff_list)
-    alpha_arr = np.array(alpha_list)
+    arr  = np.array(rows)
+    ts_a, olr_a, asr_a, alp_a, seff_a = arr.T
 
-    _plot(ts_arr, olr_arr, asr_arr, seff_arr, alpha_arr)
+    _plot(ts_a, olr_a, asr_a, alp_a, seff_a, profiles)
 
 
-def _plot(ts, olr, asr, seff, alpha):
-    fig, axes = plt.subplots(1, 3, figsize=(10.5, 4.0), dpi=300)
+def _plot(ts, olr, asr, alpha, seff, profiles):
+    fig, axes = plt.subplots(2, 2, figsize=(7.0, 6.0), dpi=300)
     fig.patch.set_facecolor('white')
+    (ax_a, ax_b), (ax_c, ax_d) = axes
 
-    # --- Panel 1: OLR and ASR vs Ts ---
-    ax = axes[0]
-    ax.plot(ts, olr, color='C3', lw=1.5, label='OLR')
-    ax.plot(ts, asr, color='C0', lw=1.5, label='ASR (msdist=1)')
-    ax.axhline(SN_LIMIT, color='k', lw=0.8, ls='--', label=f'S-N limit ({SN_LIMIT:.0f} W m⁻²)')
-    ax.set_xlabel('$T_s$ (K)')
-    ax.set_ylabel('Flux (W m⁻²)')
-    ax.set_title('OLR and absorbed SW')
-    ax.set_xlim(ts[0], ts[-1])
-    ax.legend(fontsize=8, framealpha=0.9)
-    ax.set_facecolor('white')
+    kw = dict(xlim=(ts[0], ts[-1]))
 
-    # --- Panel 2: Seff vs Ts ---
-    ax = axes[1]
-    ax.plot(ts, seff, color='C1', lw=1.5, label='ExoColumn')
-    ax.axhline(KOPP_RUNAWAY, color='C3', lw=0.9, ls='--',
-               label=f'Kopparapu runaway ({KOPP_RUNAWAY:.4f})')
-    ax.axhline(KOPP_MOIST, color='C0', lw=0.9, ls=':',
-               label=f'Kopparapu moist GH ({KOPP_MOIST:.4f})')
-    ax.axhline(1.0, color='gray', lw=0.6, ls='-', alpha=0.4)
-    ax.set_xlabel('$T_s$ (K)')
-    ax.set_ylabel('$S_{\\rm eff}$ (relative to modern solar)')
-    ax.set_title('Effective stellar flux')
-    ax.set_xlim(ts[0], ts[-1])
-    ax.legend(fontsize=8, framealpha=0.9)
-    ax.set_facecolor('white')
+    # --- (a) OLR and ASR vs Ts ---
+    ax_a.plot(ts, olr, color='C3', lw=1.5, label='OLR')
+    ax_a.plot(ts, asr, color='C0', lw=1.5, label='Absorbed SW')
+    ax_a.axhline(SN_LIMIT, color='k', lw=0.8, ls='--',
+                 label=f'S-N limit ({SN_LIMIT:.0f} W m⁻²)')
+    ax_a.set_ylabel('Flux (W m⁻²)')
+    ax_a.set_xlabel('$T_s$ (K)')
+    ax_a.legend(fontsize=7, framealpha=0.9)
+    ax_a.set(**kw)
+    ax_a.set_facecolor('white')
+    ax_a.text(0.04, 0.96, '(a)', transform=ax_a.transAxes,
+              va='top', fontsize=9, fontweight='bold')
 
-    # --- Panel 3: Planetary albedo vs Ts ---
-    ax = axes[2]
-    ax.plot(ts, alpha, color='C2', lw=1.5)
-    ax.set_xlabel('$T_s$ (K)')
-    ax.set_ylabel('Planetary albedo $\\alpha_p$')
-    ax.set_title('Planetary albedo')
-    ax.set_xlim(ts[0], ts[-1])
-    ax.set_facecolor('white')
+    # --- (b) Planetary albedo vs Ts ---
+    ax_b.plot(ts, alpha, color='C2', lw=1.5)
+    ax_b.set_ylabel('Planetary albedo $\\alpha_p$')
+    ax_b.set_xlabel('$T_s$ (K)')
+    ax_b.set(**kw)
+    ax_b.set_facecolor('white')
+    ax_b.text(0.04, 0.96, '(b)', transform=ax_b.transAxes,
+              va='top', fontsize=9, fontweight='bold')
+
+    # --- (c) Seff vs Ts ---
+    ax_c.plot(ts, seff, color='C1', lw=1.5, label='ExoColumn (G2V)')
+    ax_c.axhline(KOPP_RUNAWAY, color='C3', lw=0.9, ls='--',
+                 label=f'Kopparapu runaway ({KOPP_RUNAWAY:.4f})')
+    ax_c.axhline(KOPP_MOIST, color='C0', lw=0.9, ls=':',
+                 label=f'Kopparapu moist GH ({KOPP_MOIST:.4f})')
+    ax_c.axhline(1.0, color='gray', lw=0.5, alpha=0.5)
+    ax_c.set_ylabel('$S_{\\rm eff}$')
+    ax_c.set_xlabel('$T_s$ (K)')
+    ax_c.legend(fontsize=7, framealpha=0.9)
+    ax_c.set(**kw)
+    ax_c.set_facecolor('white')
+    ax_c.text(0.04, 0.96, '(c)', transform=ax_c.transAxes,
+              va='top', fontsize=9, fontweight='bold')
+
+    # --- (d) H2O VMR vertical profiles for selected Ts values ---
+    colors_d = ['C0', 'C2', 'C1', 'C3']
+    for (ts_p, (pmid, vmr)), col in zip(sorted(profiles.items()), colors_d):
+        # Mask out any unphysically large VMR near p_top (TOA, p < 10 Pa)
+        mask = pmid > 5.0
+        ax_d.loglog(vmr[mask], pmid[mask] / 100., color=col, lw=1.5,
+                    label=f'$T_s$ = {ts_p:.0f} K')
+    ax_d.axvline(MOIST_GH_VMR, color='k', lw=0.8, ls='--',
+                 label=f'Moist GH threshold')
+    ax_d.invert_yaxis()
+    ax_d.set_xlabel('H₂O VMR')
+    ax_d.set_ylabel('Pressure (hPa)')
+    ax_d.legend(fontsize=7, framealpha=0.9)
+    ax_d.set_facecolor('white')
+    ax_d.text(0.04, 0.04, '(d)', transform=ax_d.transAxes,
+              va='bottom', fontsize=9, fontweight='bold')
 
     fig.tight_layout()
     out_dir = os.path.dirname(os.path.abspath(__file__))
