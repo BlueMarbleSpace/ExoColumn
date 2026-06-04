@@ -18,13 +18,12 @@
   p_top      = 100.0
   rh_init    = 0.7
   coszrs     = 0.5
-  ! Surface albedo calibrated to Ts = 288 K (Kopparapu composition:
-  ! N2=0.78, O2=0.21, Ar=0.01, CO2=3.3e-4, no CH4, no O3).
-  ! Sensitivity ~-186 K/unit near alpha=0.251. ExoRT/MOS/SBM/PVER=70.
-  asdir      = 0.2510
-  asdif      = 0.2510
-  aldir      = 0.2510
-  aldif      = 0.2510
+  ! Calibrated with fixed cold-trap (min-qsat convention). Kopparapu composition
+  ! (N2=0.78, O2=0.21, Ar=0.01, CO2=3.3e-4, no O3). ExoRT/MOS/SBM/PVER=70.
+  asdir      = 0.24229
+  asdif      = 0.24229
+  aldir      = 0.24229
+  aldif      = 0.24229
 /
 &exocol_composition
   ps       = 1.0e5
