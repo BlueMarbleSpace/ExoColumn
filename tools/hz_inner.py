@@ -13,7 +13,7 @@ Four-panel figure matching Kopparapu+2013 Fig. 3:
   (c) Effective stellar flux Seff = OLR / ASR vs Ts
   (d) H2O VMR vertical profiles for selected Ts values
 
-Composition: N2 + CO2 (4e-4) + H2O only (Kopparapu style; no O2/O3/CH4/Ar).
+Composition: N2=0.78 + O2=0.21 + Ar=0.01 + CO2=3.3e-4 + H2O (Kopparapu 2013 Earth tuning; no O3/CH4).
 """
 
 import os
@@ -31,7 +31,7 @@ NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
 # ---------------------------------------------------------------------------
 TS_VALUES = np.arange(200, 425, 5, dtype=float)   # K
 
-ALBEDO   = 0.2736    # surface albedo (ExoColumn Earth reference)
+ALBEDO   = 0.24229   # surface albedo calibrated to Ts=288 K (Kopparapu composition, fixed cold-trap)
 T_STRATO = 200.0     # isothermal stratosphere cap [K]
 
 MW_H2O   = 18.015    # g/mol
@@ -65,10 +65,12 @@ NML_TEMPLATE = """\
   aldif      = {albedo:.4f}
 /
 &exocol_composition
-  n2_vmr  = 0.9996
-  o2_vmr  = 0.0
-  ch4_vmr = 0.0
-  ar_vmr  = 0.0
+  n2_vmr   = 0.78
+  o2_vmr   = 0.210
+  ar_vmr   = 0.01
+  co2_vmr  = 3.3e-4
+  ch4_vmr  = 0.0
+  o3_vmr   = 0.0
 /
 """
 
@@ -130,7 +132,7 @@ def main():
     print(f"  Ts range    : {TS_VALUES[0]:.0f}–{TS_VALUES[-1]:.0f} K")
     print(f"  t_strato    : {T_STRATO:.0f} K  (isothermal, fully saturated)")
     print(f"  variable_ps : ps = p_N2(1 bar) + esat(Ts)")
-    print(f"  composition : N2 + CO2(4e-4) + H2O  [no O2/O3/CH4/Ar]")
+    print(f"  composition : N2=0.78 + O2=0.21 + Ar=0.01 + CO2=3.3e-4 + H2O  [no O3/CH4]")
     print()
 
     rows = []
