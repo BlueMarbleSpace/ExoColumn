@@ -29,7 +29,7 @@ OUT_NC   = os.path.join(ROOT, 'iofiles', 'exocol_out.nc')
 NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
 
 # ---------------------------------------------------------------------------
-TS_VALUES = np.arange(200, 505, 5, dtype=float)   # K  (opacity tables optimised to 400 K; extrapolation above accepted)
+TS_VALUES = np.arange(200, 2205, 5, dtype=float)   # K  (opacity tables optimised to 400 K; extrapolation above accepted per Kopparapu+Wolf)
 
 ALBEDO   = 0.24229   # surface albedo calibrated to Ts=288 K (Kopparapu composition, fixed cold-trap)
 T_STRATO = 200.0     # isothermal stratosphere cap [K]
