@@ -16,3 +16,10 @@ run/
 
 # Runtime I/O files (NetCDF inputs/outputs)
 iofiles/
+
+# Python artefacts
+__pycache__/
+*.pyc
+
+# Editor/backup files
+*.bak
