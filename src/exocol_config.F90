@@ -164,15 +164,26 @@ module exocol_config
   logical,           public, save :: variable_ps      = .false.
 
   ! When .true. (cold start + variable_ps only): use the Kasting (1988) IHZ
-  ! temperature structure.  At high Ts the saturation mixing ratio at the
-  ! surface exceeds unity (ws > 1), making the standard moist-adiabat formula
-  ! degenerate.  This flag switches to the dry adiabat from the surface up to
-  ! the condensation level (where ws first drops to 1), then follows the moist
-  ! pseudoadiabat above.  Physically this represents the supercritical-steam
-  ! regime near the surface for hot inner-HZ planets.  Default .false. because
-  ! the dry layer only exists above ~Ts≈395 K and is irrelevant for Earth-like
-  ! RCE runs; enable explicitly in hz_inner.py sweeps.
+  ! temperature structure, following his actual procedure (p.476, Figs 1,4,6):
+  !   - Surface water partial pressure pH2O = min(esat(Ts), water inventory).
+  !   - If the surface is SATURATED (esat(Ts) <= inventory; ocean still present):
+  !     moist pseudoadiabat all the way from the surface — the moist-greenhouse
+  !     branch (Fig 1a).  No dry layer.
+  !   - If the surface is SUBSATURATED (esat(Ts) > inventory; ocean fully
+  !     evaporated, Ts above the critical-point/desiccation temperature): a DRY
+  !     adiabat at the base with H2O mixing ratio fixed by the inventory, joining
+  !     a moist pseudoadiabat aloft where the rising parcel first reaches
+  !     saturation (Fig 1b, the runaway branch).
+  ! The switch is governed by the finite water inventory (h2o_inventory_bar), NOT
+  ! by the dilute-formula 'ws>1' heuristic used previously.  Default .false.
+  ! (the dry layer is irrelevant for Earth-like RCE runs); enable in hz_inner.py.
   logical,           public, save :: ihz_profile      = .false.
+
+  ! Total surface water inventory [bar of H2O vapour if fully evaporated], used by
+  ! variable_ps to cap pH2O = min(esat(Ts), h2o_inventory_bar) (Kasting 1988 Eq. 2)
+  ! and by ihz_profile to decide surface saturation.  Default 270 bar = one Earth
+  ! ocean (Kasting 1988: 1.4e24 g).  Set very large to recover unbounded pH2O.
+  real(r8),          public, save :: h2o_inventory_bar = 270.0_r8
 
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
@@ -254,7 +265,8 @@ contains
                                   tau_conv, cape_trigger, rh_sbm, &
                                   latent_heat_mode, &
                                   surface_flux, z0_rough, &
-                                  flux_only, variable_ps, ihz_profile
+                                  flux_only, variable_ps, ihz_profile, &
+                                  h2o_inventory_bar
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -392,7 +404,9 @@ contains
     if (variable_ps) &
       write(*,'(a)') '  *** variable_ps = .true. — ps = p_dry + esat(Ts) (Kopparapu style) ***'
     if (ihz_profile) &
-      write(*,'(a)') '  *** ihz_profile = .true. — Kasting (1988) IHZ T profile (dry+moist) ***'
+      write(*,'(a)') '  *** ihz_profile = .true. — Kasting (1988) IHZ T profile (inventory-based dry/moist switch) ***'
+    if (variable_ps) &
+      write(*,'(a,f9.2,a)') '      H2O inventory = ', h2o_inventory_bar, ' bar (pH2O cap; surface-saturation switch)'
 
     if (len_trim(input_file) == 0) then
       write(*,'(a)')         '  Initialization    : cold start (from &exocol_init)'

@@ -50,6 +50,7 @@ module exocol_coldstart
                             co2_vmr, ch4_vmr, c2h6_vmr,           &
                             h2_vmr,  n2_vmr,  o3_vmr, o2_vmr,     &
                             ar_vmr,  o3_profile, variable_ps, ihz_profile, &
+                            h2o_inventory_bar,                    &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
@@ -96,14 +97,16 @@ contains
     real(r8) :: es_sub, r_sub, T_v_lev
     real(r8) :: es_k, qsat_k, e_sfc
     integer  :: k_top_conv
-    real(r8) :: es_tropo, q_cold_trap
+    real(r8) :: es_tropo, q_cold_trap, p_coldpoint, p_tropo_use
+    real(r8) :: T_prev_sub, p_prev_sub
     character(len=4) :: dry_name(7)
     ! Kasting IHZ dry-adiabat variables (initialised to safe no-dry-layer defaults)
     real(r8) :: f_vmr, Mw_mix, w_h2o, Rv, R_mix, cp_h2o_steam, cp_mix, kappa_mix
-    real(r8) :: ws_sfc    = 0._r8   ! surface saturation mixing ratio
+    real(r8) :: e_sat_sfc, p_h2o_inv, f_vmr_surf
     real(r8) :: h2ommr_dry = 0._r8  ! constant H2O MMR in dry layer
     integer  :: k_cond    = 0       ! condensation level index (0 = no dry layer)
     logical  :: in_dry_layer
+    logical  :: surface_saturated   ! .true. if esat(Ts) <= water inventory (ocean present)
 
     write(*,'(/,a)') '  cold_start_init: building initial column from &exocol_init'
 
@@ -167,14 +170,31 @@ contains
       ps_use = DEFAULT_PS
     end if
 
-    ! With variable_ps, ps_use is the dry background; total ps = p_dry + esat(Ts).
+    ! With variable_ps, ps_use is the dry background; total ps = p_dry + pH2O,
+    ! where the surface water partial pressure is CAPPED at the finite ocean
+    ! inventory (Kasting 1988 Eq. 2): pH2O = min(esat(Ts), inventory).  The
+    ! surface is saturated only while esat(Ts) <= inventory (ocean present);
+    ! above that the ocean is fully evaporated and the surface is subsaturated.
+    e_sat_sfc        = esat_cc(cs_ts)
+    p_h2o_inv        = h2o_inventory_bar * 1.0e5_r8   ! inventory pressure [Pa]
+    surface_saturated = .true.
     if (variable_ps) then
-      e_sfc  = esat_cc(cs_ts)
+      e_sfc             = min(e_sat_sfc, p_h2o_inv)
+      surface_saturated = (e_sat_sfc <= p_h2o_inv)
       write(*,'(a,f9.2,a,f9.2,a,f9.2,a)') &
-        '    variable_ps: p_dry = ', ps_use/100._r8, ' hPa  + esat(Ts) = ', &
+        '    variable_ps: p_dry = ', ps_use/100._r8, ' hPa  + pH2O = ', &
         e_sfc/100._r8, ' hPa  →  ps = ', (ps_use + e_sfc)/100._r8, ' hPa'
+      if (.not. surface_saturated) &
+        write(*,'(a,f9.2,a,f9.2,a)') &
+          '      surface SUBSATURATED: esat(Ts) = ', e_sat_sfc/1.0e5_r8, &
+          ' bar > inventory ', h2o_inventory_bar, ' bar (ocean evaporated → dry base)'
       ps_use = ps_use + e_sfc
+    else
+      ! Fixed-ps mode: surface water cannot exceed the column; saturated if it fits.
+      e_sfc             = min(e_sat_sfc, 0.99_r8 * ps_use)
+      surface_saturated = (e_sat_sfc <= 0.99_r8 * ps_use)
     end if
+    f_vmr_surf = e_sfc / ps_use                       ! surface H2O mole fraction
 
     if (p_top >= ps_use) then
       write(*,'(a)') '  cold_start_init: p_top >= ps. Aborting.'
@@ -195,6 +215,7 @@ contains
     eps_wv = SHR_CONST_MWWV / mwdry_new
 
     T_at_int(pverp) = cs_ts
+    p_coldpoint     = -1._r8   ! true cold-point pressure; interpolated below
 
     if (cs_ts <= t_strato) then
       write(*,'(a)') &
@@ -202,17 +223,18 @@ contains
       T_at_int(1:pverp-1) = t_strato
 
     else if (ihz_profile) then
-      ! Kasting (1988) IHZ structure: dry adiabat at the base when the
-      ! surface saturation mixing ratio ws > 1 (moist-adiabat formula
-      ! is degenerate in the supercritical-steam regime).  Switch to moist
-      ! pseudoadiabat once ws drops to 1 (condensation level).
-      ! Dry-adiabat lapse rate: dT/dp = κ_mix · T/p (exact for ideal gas)
-      ! κ_mix = R_mix/cp_mix for the H2O + background mixture.
-      e_sfc  = min(esat_cc(cs_ts), 0.99_r8 * ps_use)
-      f_vmr  = e_sfc / ps_use                         ! H2O mole fraction in dry layer
-      ws_sfc = eps_wv * e_sfc / max(ps_use - e_sfc, 1._r8)
+      ! Kasting (1988) IHZ structure (p.476, Figs 1,4,6), inventory-based switch:
+      !   surface SATURATED  (esat(Ts) <= inventory; ocean present) → moist
+      !       pseudoadiabat from the surface (moist-greenhouse branch, Fig 1a);
+      !   surface SUBSATURATED (ocean fully evaporated) → DRY adiabat at the base
+      !       with H2O mixing ratio fixed by the inventory, joining a moist
+      !       pseudoadiabat aloft where the rising parcel first reaches saturation
+      !       (runaway branch, Fig 1b).
+      ! Dry-adiabat lapse rate: dT/dp = κ_mix · T/p (exact for ideal gas),
+      ! κ_mix = R_mix/cp_mix for the H2O + background mixture at the surface VMR.
+      f_vmr = f_vmr_surf      ! constant H2O mole fraction in the dry region
 
-      if (ws_sfc > 1.0_r8) then
+      if (.not. surface_saturated) then
         ! Compute dry-adiabat kappa for the H2O + dry-gas mixture.
         Mw_mix      = f_vmr * SHR_CONST_MWWV + (1._r8 - f_vmr) * mwdry_new
         w_h2o       = f_vmr * SHR_CONST_MWWV / Mw_mix      ! H2O mass fraction
@@ -223,9 +245,9 @@ contains
         ! Constant H2O MMR in the dry layer
         h2ommr_dry  = w_h2o
 
-        write(*,'(a,f6.2,a,f6.4,a)') &
-          '    IHZ dry layer: ws_sfc = ', ws_sfc, '  κ_mix = ', kappa_mix, &
-          ' (dry adiabat from surface)'
+        write(*,'(a,f7.4,a,f6.4,a)') &
+          '    IHZ runaway: subsaturated surface, dry base  f_vmr = ', f_vmr, &
+          '  κ_mix = ', kappa_mix, ' (dry adiabat from surface)'
 
         ! Fill interface temperatures: dry adiabat until ws ≤ 1, then moist.
         k_cond      = 1          ! fallback: entire column is dry → moist at TOA
@@ -248,20 +270,26 @@ contains
               r_sub   = eps_wv * es_sub / (p_lev - es_sub)
               T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
               dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+              T_prev_sub = T_lev;  p_prev_sub = p_lev
               T_lev   = T_lev + dT_sub
               p_lev   = p_lev * exp(dlogp_sub)
-              if (T_lev <= t_strato) then; T_lev = t_strato; exit; end if
+              if (T_lev <= t_strato) then
+                if (p_coldpoint < 0._r8) p_coldpoint = &
+                  interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, t_strato)
+                T_lev = t_strato; exit
+              end if
             end do
             T_at_int(k) = T_lev
           else
             ! Dry adiabat: T(p) = Ts · (p/ps)^κ_mix  (exact, no sub-stepping)
             T_at_int(k) = cs_ts * (pint(k) / ps_use)**kappa_mix
             if (T_at_int(k) <= t_strato) T_at_int(k) = t_strato
-            ! Check whether the next interface is at or below the condensation
-            ! level (ws ≤ 1): test ws at the MID-LEVEL above this interface.
-            es_sub = min(esat_cc(T_at_int(k)), 0.99_r8 * pint(k))
-            r_sub  = eps_wv * es_sub / max(pint(k) - es_sub, 1._r8)
-            if (r_sub <= 1.0_r8) then
+            ! Top of the dry region = where the constant-mixing-ratio parcel first
+            ! reaches saturation (Kasting 1988): its vapour partial pressure
+            ! pH2O(level) = f_vmr·p  meets/exceeds esat(T).  Because the dry adiabat
+            ! is steeper than the SVP curve, this happens at some height above the
+            ! (subsaturated) surface and marks the switch to the moist adiabat.
+            if (f_vmr * pint(k) >= esat_cc(T_at_int(k))) then
               k_cond       = k
               in_dry_layer = .false.
               write(*,'(a,es10.3,a,f7.2,a)') &
@@ -272,9 +300,10 @@ contains
         end do
 
       else
-        ! ws_sfc ≤ 1: no dry layer needed; standard moist adiabat
-        write(*,'(a,f5.2,a)') &
-          '    IHZ: ws_sfc = ', ws_sfc, ' ≤ 1 — moist adiabat from surface'
+        ! Surface saturated (esat(Ts) ≤ inventory): moist pseudoadiabat from the
+        ! surface — the moist-greenhouse branch (Kasting 1988, Fig 1a).  No dry base.
+        write(*,'(a)') &
+          '    IHZ: surface saturated — moist pseudoadiabat from the surface'
         k_cond = 0
         do k = pverp-1, 1, -1
           if (T_at_int(k+1) <= t_strato) then
@@ -290,9 +319,14 @@ contains
             r_sub   = eps_wv * es_sub / (p_lev - es_sub)
             T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
             dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+            T_prev_sub = T_lev;  p_prev_sub = p_lev
             T_lev   = T_lev + dT_sub
             p_lev   = p_lev * exp(dlogp_sub)
-            if (T_lev <= t_strato) then; T_lev = t_strato; exit; end if
+            if (T_lev <= t_strato) then
+              if (p_coldpoint < 0._r8) p_coldpoint = &
+                interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, t_strato)
+              T_lev = t_strato; exit
+            end if
           end do
           T_at_int(k) = T_lev
         end do
@@ -315,9 +349,12 @@ contains
           r_sub   = eps_wv * es_sub / (p_lev - es_sub)
           T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
           dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+          T_prev_sub = T_lev;  p_prev_sub = p_lev
           T_lev   = T_lev + dT_sub
           p_lev   = p_lev * exp(dlogp_sub)
           if (T_lev <= t_strato) then
+            if (p_coldpoint < 0._r8) p_coldpoint = &
+              interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, t_strato)
             T_lev = t_strato
             exit
           end if
@@ -344,20 +381,33 @@ contains
       end if
     end do
 
-    ! Stratospheric H2O: qsat(t_strato, p_tropo), where p_tropo is the upper
-    ! interface of the topmost tropospheric layer.  Uniform in stratosphere.
+    ! Stratospheric H2O: qsat(t_strato, p_tropo), uniform in the stratosphere.
+    ! p_tropo is the TRUE cold-point pressure where the continuous adiabat crosses
+    ! t_strato (interpolated within the integration substep, p_coldpoint), NOT the
+    ! snapped interface pint(k_top_conv).  Using the snapped interface made the
+    ! cold-trap mixing ratio jump discontinuously each time the integer tropopause
+    ! index stepped between layers as Ts swept — the source of the staircase in the
+    ! inner-HZ OLR/albedo/Seff sweeps.  Fall back to the snapped interface only if
+    ! the cold point was never reached (e.g. cold adiabat captured in the dry layer).
     if (k_top_conv > 0) then
       es_tropo    = esat_cc(t_strato)
-      q_cold_trap = eps_wv * es_tropo / (pint(k_top_conv) - es_tropo)
+      if (p_coldpoint > 0._r8) then
+        p_tropo_use = p_coldpoint
+      else
+        p_tropo_use = pint(k_top_conv)
+      end if
+      q_cold_trap = eps_wv * es_tropo / (p_tropo_use - es_tropo)
+      write(*,'(a,f9.2,a)') &
+        '    cold-point p (interp) : ', p_tropo_use/100._r8, ' hPa'
     else
       q_cold_trap = 0._r8   ! isothermal column: no stratospheric H2O
     end if
 
     do k = 1, pver
       if (tmid(k) > t_strato) then
-        ! In the dry layer (ihz_profile with ws_sfc>1), h2ommr is constant.
-        ! In the moist layer, h2ommr = rh_init · qsat.
-        if (ihz_profile .and. ws_sfc > 1.0_r8 .and. k >= k_cond) then
+        ! In the dry layer (subsaturated-surface runaway branch), h2ommr is held
+        ! constant at the inventory-set value.  In the moist layer, h2ommr = rh·qsat.
+        if (ihz_profile .and. (.not. surface_saturated) .and. k >= k_cond) then
           h2ommr(k) = h2ommr_dry
         else
           es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
@@ -444,5 +494,18 @@ contains
     end do
 
   end subroutine build_pressure_grid
+
+  ! -----------------------------------------------------------------------
+
+  pure function interp_logp(T1, p1, T2, p2, Tx) result(px)
+  ! Log-pressure interpolation: the pressure at which temperature = Tx along the
+  ! segment (T1,p1) -> (T2,p2).  Used to locate the true cold-point pressure
+  ! (where the continuous adiabat crosses t_strato) so the cold-trap water is a
+  ! smooth function of Ts instead of snapping to a discrete grid interface.
+    real(r8), intent(in) :: T1, p1, T2, p2, Tx
+    real(r8) :: px, f
+    f  = (T1 - Tx) / (T1 - T2)
+    px = exp(log(p1) + f * (log(p2) - log(p1)))
+  end function interp_logp
 
 end module exocol_coldstart
