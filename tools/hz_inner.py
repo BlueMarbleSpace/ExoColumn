@@ -14,6 +14,18 @@ Four-panel figure matching Kopparapu+2013 Fig. 3:
   (d) H2O VMR vertical profiles for selected Ts values
 
 Composition: N2=0.78 + O2=0.21 + Ar=0.01 + CO2=3.3e-4 + H2O (Kopparapu 2013 Earth tuning; no O3/CH4).
+
+NOTE on the residual sawtooth in panels (a)-(c): this is a vertical-resolution
+discretization artifact, not a physics error.  In the runaway regime OLR/ASR are set by
+the emission/absorption level near the tropopause kink (moist adiabat meeting the
+isothermal t_strato cap).  As Ts rises, ps grows (variable_ps) and the tropopause
+migrates across the fixed log-spaced layers; each layer-boundary crossing re-samples that
+kink and steps OLR/ASR by one tooth.  Confirmed by PVER doubling: 70->140 doubles the
+number of teeth and roughly halves their amplitude (~1/N convergence).  The teeth track
+the tropopause-layer index (k_top_conv) at 92%, and are NOT the cold-trap water (~5e-6,
+radiatively negligible) nor the 10-bar k-table crossing.  See tools/diag_staircase*.py.
+Independent caveat (see hz_roadmap): the ExoRT k-tables end at 500 K, so the high-Ts
+(>~500 K) branch is extrapolated and should not be over-interpreted.
 """
 
 import os
