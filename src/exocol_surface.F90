@@ -37,7 +37,7 @@ module exocol_surface
   use shr_kind_mod,  only: r8 => shr_kind_r8
   use shr_const_mod, only: SHR_CONST_RGAS, SHR_CONST_MWWV
   use exoplanet_mod, only: exo_g
-  use exocol_convadj, only: esat_cc, Lvap_T
+  use exocol_convadj, only: esat, Lvap_T
 
   implicit none
   private
@@ -94,7 +94,7 @@ contains
       ! ---- legacy fixed-C_D bulk aerodynamic (actual temperature) ----
       ! qsat referenced to the bottom-midpoint pressure p_bot (matches the
       ! calibrated Ts=288.01 reference).
-      es_surf   = min(esat_cc(ts), 0.99_r8 * p_bot)
+      es_surf   = min(esat(ts), 0.99_r8 * p_bot)
       qsat_surf = eps_wv * es_surf / (p_bot - es_surf)
       C  = C_D
       LE = rho_a * L_surf * C * wind_speed * (qsat_surf - q_bot)
@@ -102,7 +102,7 @@ contains
     else
       ! ---- simplified Monin-Obukhov similarity (Frierson 2006) ----
       ! qsat at the true surface pressure p0.
-      es_surf   = min(esat_cc(ts), 0.99_r8 * p0)
+      es_surf   = min(esat(ts), 0.99_r8 * p0)
       qsat_surf = eps_wv * es_surf / (p0 - es_surf)
       ! Potential temperatures (surface reference pressure p0): Θ_s = Ts.
       theta_s = ts

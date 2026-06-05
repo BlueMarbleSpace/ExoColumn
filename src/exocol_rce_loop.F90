@@ -68,7 +68,7 @@ module exocol_rce_loop
                               rh_sbm, surface_flux, z0_rough
   use exocol_convadj,   only: convadj_dry, convadj_surface, convadj_moist, &
                               convadj_manabe, convadj_zm, convadj_sbm, &
-                              esat_cc, Lvap_T
+                              esat, Lvap_T
   use exocol_surface,   only: compute_surface_fluxes
 
   implicit none
@@ -852,7 +852,7 @@ contains
     precip_mass_flux = 0._r8
 
     do k = 1, pver
-      es_k   = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+      es_k   = min(esat(tmid(k)), 0.99_r8 * pmid(k))
       qsat_k = eps_wv * es_k / (pmid(k) - es_k)
       if (h2ommr(k) > qsat_k) then
         dqsat_dT  = qsat_k * (1._r8 + qsat_k / eps_wv) &
@@ -931,7 +931,7 @@ contains
     k_cp = 1
     q_cp = huge(q_cp)
     do k = 1, pver
-      es_k   = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+      es_k   = min(esat(tmid(k)), 0.99_r8 * pmid(k))
       qsat_k = eps_wv * es_k / (pmid(k) - es_k)
       if (qsat_k < q_cp) then
         q_cp = qsat_k
@@ -1097,7 +1097,7 @@ contains
     real(r8) :: eps_wv, es_k, qsat_k
     eps_wv = SHR_CONST_MWWV / mwdry_col
     do k = 1, pver
-      es_k       = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+      es_k       = min(esat(tmid(k)), 0.99_r8 * pmid(k))
       qsat_k     = eps_wv * es_k / (pmid(k) - es_k)
       rh_init(k) = min(h2ommr(k) / max(qsat_k, 1.0e-20_r8), 1.0_r8)
     end do
@@ -1112,7 +1112,7 @@ contains
     eps_wv = SHR_CONST_MWWV / mwdry_col
     alpha  = min(dt_days / tau_relax, 1.0_r8)
     do k = 1, pver
-      es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+      es_k      = min(esat(tmid(k)), 0.99_r8 * pmid(k))
       qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
       h2ommr(k) = h2ommr(k) + alpha * (rh_init(k) * qsat_k - h2ommr(k))
       h2ommr(k) = max(h2ommr(k), 0.0_r8)

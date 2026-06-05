@@ -185,6 +185,25 @@ module exocol_config
   ! ocean (Kasting 1988: 1.4e24 g).  Set very large to recover unbounded pH2O.
   real(r8),          public, save :: h2o_inventory_bar = 270.0_r8
 
+  ! Saturation-vapour-pressure formula (general toggle; see exocol_convadj::esat).
+  !   'cc'    (default) → fixed-L Clausius-Clapeyron (esat_cc); preserves every
+  !                       validated calibration bit-for-bit.
+  !   'steam'           → Wagner & Pruss (2002) steam saturation pressure,
+  !                       accurate to the 647 K critical point.  Recommended for
+  !                       any column reaching well above 100 C (inner HZ), where
+  !                       the fixed-L extrapolation overestimates Psat (>2x near Tc).
+  character(len=32), public, save :: esat_formula     = 'cc'
+
+  ! Water-vapour equation of state for the cold-start moist pseudoadiabat
+  ! (toggleable for non-ideal science experiments; see exocol_steam / exocol_iapws95).
+  !   'ideal'    (default) → dilute ideal-gas moist adiabat (malr).
+  !   'nonideal'           → Kasting (1988) Appendix-A general non-ideal moist
+  !                          pseudoadiabat (A4/A5 saturated, A11/A12 unsaturated)
+  !                          with beta, real-gas entropies and cp from the native
+  !                          IAPWS-95 EOS.  Forces esat_formula='steam' internally
+  !                          for thermodynamic consistency.
+  character(len=32), public, save :: h2o_eos          = 'ideal'
+
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
   ! with exocol_mod state variables (ts, coszrs, asdir, ...) must be renamed
@@ -266,7 +285,7 @@ contains
                                   latent_heat_mode, &
                                   surface_flux, z0_rough, &
                                   flux_only, variable_ps, ihz_profile, &
-                                  h2o_inventory_bar
+                                  h2o_inventory_bar, esat_formula, h2o_eos
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -353,6 +372,24 @@ contains
       dz_slab = 50.0_r8
     end if
 
+    ! Validate esat_formula / h2o_eos and enforce consistency: the non-ideal
+    ! EOS pseudoadiabat requires the steam saturation curve, so 'nonideal'
+    ! forces 'steam'.
+    if (trim(esat_formula) /= 'cc' .and. trim(esat_formula) /= 'steam') then
+      write(*,'(3a)') "  WARNING: unknown esat_formula='", trim(esat_formula), &
+        "' — defaulting to 'cc'"
+      esat_formula = 'cc'
+    end if
+    if (trim(h2o_eos) /= 'ideal' .and. trim(h2o_eos) /= 'nonideal') then
+      write(*,'(3a)') "  WARNING: unknown h2o_eos='", trim(h2o_eos), &
+        "' — defaulting to 'ideal'"
+      h2o_eos = 'ideal'
+    end if
+    if (trim(h2o_eos) == 'nonideal' .and. trim(esat_formula) /= 'steam') then
+      esat_formula = 'steam'
+      write(*,'(a)') "  NOTE: h2o_eos='nonideal' forces esat_formula='steam'."
+    end if
+
     call announce()
 
   end subroutine read_config
@@ -407,6 +444,13 @@ contains
       write(*,'(a)') '  *** ihz_profile = .true. — Kasting (1988) IHZ T profile (inventory-based dry/moist switch) ***'
     if (variable_ps) &
       write(*,'(a,f9.2,a)') '      H2O inventory = ', h2o_inventory_bar, ' bar (pH2O cap; surface-saturation switch)'
+    if (trim(esat_formula) == 'steam') then
+      write(*,'(a)') '  Saturation vapour : Wagner-Pruss steam (accurate to 647 K critical point)'
+    else
+      write(*,'(a)') '  Saturation vapour : fixed-L Clausius-Clapeyron (esat_cc)'
+    end if
+    if (trim(h2o_eos) == 'nonideal') &
+      write(*,'(a)') '  *** h2o_eos = nonideal — Kasting (1988) Appendix-A pseudoadiabat (IAPWS-95 beta) ***'
 
     if (len_trim(input_file) == 0) then
       write(*,'(a)')         '  Initialization    : cold start (from &exocol_init)'
