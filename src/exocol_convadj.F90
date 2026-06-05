@@ -25,6 +25,7 @@ module exocol_convadj
                             SHR_CONST_TKFRZ, SHR_CONST_RWV, &
                             SHR_CONST_MWWV
   use ppgrid,        only: pver, pverp
+  use exocol_iapws95, only: iapws95_psat_aux
 
   implicit none
   private
@@ -36,6 +37,8 @@ module exocol_convadj
   public :: convadj_zm
   public :: convadj_sbm
   public :: esat_cc
+  public :: esat
+  public :: set_esat_mode
   public :: Lvap_T
   public :: malr
   public :: compute_tint_interp
@@ -57,6 +60,23 @@ module exocol_convadj
   !                     left phase-aware in BOTH modes — this mirrors konrad, which
   !                     pairs a fixed L with a mixed-phase saturation pressure.
   logical, save :: lh_fixed_vap = .false.
+
+  ! Saturation-vapour-pressure formula selector (set once at init via
+  ! set_esat_mode from &exocol_nml::esat_formula / h2o_eos).
+  ! .false. (default) → esat() = esat_cc (fixed-L Clausius-Clapeyron, the
+  !                     historical behaviour; every validated calibration uses
+  !                     this so the default is bit-for-bit unchanged).
+  ! .true.            → esat() = iapws95_psat_aux (Wagner & Pruss 2002 steam
+  !                     saturation pressure, accurate to the 647 K critical
+  !                     point).  Required for steam-dominated (inner-HZ) columns,
+  !                     where the fixed-L extrapolation overestimates Psat by
+  !                     >2x near the critical point.
+  ! NOTE: the pure functions esat_cc and malr are deliberately NOT routed
+  ! through this dispatcher (they stay pure); malr's lapse rate therefore keeps
+  ! the CC saturation pressure even when use_steam_esat is .true.  The non-ideal
+  ! inner-HZ pseudoadiabat does not use malr (it uses exocol_steam, which carries
+  ! the full IAPWS-95 SVP), so this affects only the legacy ideal-malr path.
+  logical, save :: use_steam_esat = .false.
 
 contains
 
@@ -355,7 +375,7 @@ contains
         gamma_m = malr(T_mean, p_mean, Rd, g, cp)
 
         q_pair    = 0.5_r8 * (h2ommr_col(k) + h2ommr_col(k+1))
-        es_pair   = min(esat_cc(T_mean), 0.99_r8 * p_mean)
+        es_pair   = min(esat(T_mean), 0.99_r8 * p_mean)
         qsat_pair = eps_wv * es_pair / (p_mean - es_pair)
         rh_pair   = min(q_pair / max(qsat_pair, 1.0e-20_r8), 1.0_r8)
         gamma_eff = rh_pair * gamma_m + (1.0_r8 - rh_pair) * gamma_d
@@ -536,7 +556,7 @@ contains
       gamma_m = malr(T_mean, p_mean, Rd, g, cp)
 
       q_pair    = 0.5_r8 * (h2ommr_col(k) + h2ommr_col(k+1))
-      es_pair   = min(esat_cc(T_mean), 0.99_r8 * p_mean)
+      es_pair   = min(esat(T_mean), 0.99_r8 * p_mean)
       qsat_pair = eps_wv * es_pair / (p_mean - es_pair)
       rh_pair   = min(q_pair / max(qsat_pair, 1.0e-20_r8), 1.0_r8)
       gamma_eff = rh_pair * gamma_m + (1.0_r8 - rh_pair) * gamma_d
@@ -670,7 +690,7 @@ contains
     ! 3. Reference humidity over the convecting column.
     do k = k_top, nv
       pmid_k  = 0.5_r8 * (pint(k) + pint(k+1))
-      es      = min(esat_cc(Tref(k)), 0.99_r8 * pmid_k)
+      es      = min(esat(Tref(k)), 0.99_r8 * pmid_k)
       qref(k) = rh_ref * eps_wv * es / (pmid_k - es)
     end do
 
@@ -755,7 +775,7 @@ contains
     k_lcl = -1
     do k = nv, 1, -1
       T_parcel_dry = T_parcel * (pmid_col(k) / pmid_col(nv))**kappa
-      es_dry       = min(esat_cc(T_parcel_dry), 0.99_r8 * pmid_col(k))
+      es_dry       = min(esat(T_parcel_dry), 0.99_r8 * pmid_col(k))
       qsat_dry     = eps_wv * es_dry / (pmid_col(k) - es_dry)
       if (q_parcel >= qsat_dry) then
         k_lcl = k
@@ -774,7 +794,7 @@ contains
 
       T_par = T_par - malr(T_par, pint_col(k+1), Rd, g_planet, cp) * dz
 
-      es_par = min(esat_cc(T_par), 0.99_r8 * pmid_col(k))
+      es_par = min(esat(T_par), 0.99_r8 * pmid_col(k))
       q_par  = eps_wv * es_par / (pmid_col(k) - es_par)
 
       Tv_par = T_par        * (eps_wv + q_par           * (1.0_r8 - eps_wv)) / eps_wv
@@ -827,6 +847,30 @@ contains
   ! -----------------------------------------------------------------------
   ! Private helpers for moist adiabatic lapse rate
   ! -----------------------------------------------------------------------
+
+  subroutine set_esat_mode(steam)
+  ! Select the saturation-vapour-pressure formula used by esat() (the
+  ! dispatcher called by condense, the convective schemes, the surface flux
+  ! ledger, and the cold-start profile builder).  Called once at init from the
+  ! driver based on &exocol_nml::esat_formula (or forced on by h2o_eos='nonideal').
+    logical, intent(in) :: steam
+    use_steam_esat = steam
+  end subroutine set_esat_mode
+
+  function esat(T) result(es)
+  ! Saturation vapour pressure [Pa], dispatched by use_steam_esat:
+  !   .false. → esat_cc(T)          (fixed-L Clausius-Clapeyron; default)
+  !   .true.  → iapws95_psat_aux(T) (Wagner-Pruss steam SVP, accurate to Tc)
+  ! Not pure (reads the module-saved selector).  esat_cc remains available and
+  ! pure for the lapse-rate code that must stay pure.
+    real(r8), intent(in) :: T
+    real(r8) :: es
+    if (use_steam_esat) then
+      es = iapws95_psat_aux(T)
+    else
+      es = esat_cc(T)
+    end if
+  end function esat
 
   pure function esat_cc(T) result(es)
   ! Clausius-Clapeyron saturation vapour pressure [Pa].

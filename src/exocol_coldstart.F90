@@ -50,12 +50,14 @@ module exocol_coldstart
                             co2_vmr, ch4_vmr, c2h6_vmr,           &
                             h2_vmr,  n2_vmr,  o3_vmr, o2_vmr,     &
                             ar_vmr,  o3_profile, variable_ps, ihz_profile, &
-                            h2o_inventory_bar,                    &
+                            h2o_inventory_bar, h2o_eos,            &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
                             CP_N2,  CP_O3,  CP_O2,  CP_AR
-  use exocol_convadj, only: esat_cc, malr
+  use exocol_convadj, only: esat, malr
+  use exocol_steam,   only: steam_dlnTdlnP_sat, steam_dlnTdlnP_dry
+  use exocol_iapws95, only: IAPWS_TT   ! water triple-point T (L-V saturation floor)
   use exocol_ozone,   only: set_earth_o3_profile, set_rcemip_o3_profile
 
   implicit none
@@ -107,6 +109,10 @@ contains
     integer  :: k_cond    = 0       ! condensation level index (0 = no dry layer)
     logical  :: in_dry_layer
     logical  :: surface_saturated   ! .true. if esat(Ts) <= water inventory (ocean present)
+    ! Non-ideal (Kasting 1988 Appendix-A) moist pseudoadiabat selector + the
+    ! fixed mass mixing ratio alpha_v = rho_v/rho_n carried through the dry layer.
+    logical  :: use_nonideal_adiabat
+    real(r8) :: alfav_dry = 0._r8
 
     write(*,'(/,a)') '  cold_start_init: building initial column from &exocol_init'
 
@@ -175,7 +181,7 @@ contains
     ! inventory (Kasting 1988 Eq. 2): pH2O = min(esat(Ts), inventory).  The
     ! surface is saturated only while esat(Ts) <= inventory (ocean present);
     ! above that the ocean is fully evaporated and the surface is subsaturated.
-    e_sat_sfc        = esat_cc(cs_ts)
+    e_sat_sfc        = esat(cs_ts)
     p_h2o_inv        = h2o_inventory_bar * 1.0e5_r8   ! inventory pressure [Pa]
     surface_saturated = .true.
     if (variable_ps) then
@@ -214,6 +220,10 @@ contains
     Rv     = SHR_CONST_RGAS / SHR_CONST_MWWV   ! H2O gas constant [J/kg/K]
     eps_wv = SHR_CONST_MWWV / mwdry_new
 
+    ! Kasting (1988) Appendix-A general non-ideal moist pseudoadiabat (IAPWS-95
+    ! EOS) when h2o_eos='nonideal'; otherwise the dilute ideal-gas malr.
+    use_nonideal_adiabat = (trim(h2o_eos) == 'nonideal')
+
     T_at_int(pverp) = cs_ts
     p_coldpoint     = -1._r8   ! true cold-point pressure; interpolated below
 
@@ -244,6 +254,9 @@ contains
         kappa_mix   = R_mix / cp_mix
         ! Constant H2O MMR in the dry layer
         h2ommr_dry  = w_h2o
+        ! Fixed mass ratio alpha_v = rho_v/rho_n carried through the dry layer
+        ! (Kasting A3), used by the non-ideal A11/A12 unsaturated lapse rate.
+        alfav_dry   = w_h2o / (1._r8 - w_h2o)
 
         write(*,'(a,f7.4,a,f6.4,a)') &
           '    IHZ runaway: subsaturated surface, dry base  f_vmr = ', f_vmr, &
@@ -265,11 +278,18 @@ contains
             dlogp_layer = log(pint(k) / pint(k+1))
             dlogp_sub   = dlogp_layer / real(NSUB, r8)
             do isub = 1, NSUB
-              Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
-              es_sub  = min(esat_cc(T_lev), 0.99_r8 * p_lev)
-              r_sub   = eps_wv * es_sub / (p_lev - es_sub)
-              T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
-              dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+              if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT) then
+                ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
+                ! vapour SVP; below the triple point fall back to the ideal malr)
+                dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
+                         * dlogp_sub
+              else
+                Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+                es_sub  = min(esat(T_lev), 0.99_r8 * p_lev)
+                r_sub   = eps_wv * es_sub / (p_lev - es_sub)
+                T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
+                dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+              end if
               T_prev_sub = T_lev;  p_prev_sub = p_lev
               T_lev   = T_lev + dT_sub
               p_lev   = p_lev * exp(dlogp_sub)
@@ -281,15 +301,23 @@ contains
             end do
             T_at_int(k) = T_lev
           else
-            ! Dry adiabat: T(p) = Ts · (p/ps)^κ_mix  (exact, no sub-stepping)
-            T_at_int(k) = cs_ts * (pint(k) / ps_use)**kappa_mix
+            if (use_nonideal_adiabat) then
+              ! Non-ideal unsaturated (constant-composition) adiabat, Kasting
+              ! A11/A12: integrate one log-pressure layer up from the level below.
+              T_at_int(k) = T_at_int(k+1) + T_at_int(k+1) * &
+                steam_dlnTdlnP_dry(T_at_int(k+1), pint(k+1), alfav_dry, Rd, cpdry_new) * &
+                log(pint(k) / pint(k+1))
+            else
+              ! Dry adiabat: T(p) = Ts · (p/ps)^κ_mix  (exact for ideal gas)
+              T_at_int(k) = cs_ts * (pint(k) / ps_use)**kappa_mix
+            end if
             if (T_at_int(k) <= t_strato) T_at_int(k) = t_strato
             ! Top of the dry region = where the constant-mixing-ratio parcel first
             ! reaches saturation (Kasting 1988): its vapour partial pressure
             ! pH2O(level) = f_vmr·p  meets/exceeds esat(T).  Because the dry adiabat
             ! is steeper than the SVP curve, this happens at some height above the
             ! (subsaturated) surface and marks the switch to the moist adiabat.
-            if (f_vmr * pint(k) >= esat_cc(T_at_int(k))) then
+            if (f_vmr * pint(k) >= esat(T_at_int(k))) then
               k_cond       = k
               in_dry_layer = .false.
               write(*,'(a,es10.3,a,f7.2,a)') &
@@ -314,11 +342,18 @@ contains
           dlogp_layer = log(pint(k) / pint(k+1))
           dlogp_sub   = dlogp_layer / real(NSUB, r8)
           do isub = 1, NSUB
-            Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
-            es_sub  = min(esat_cc(T_lev), 0.99_r8 * p_lev)
-            r_sub   = eps_wv * es_sub / (p_lev - es_sub)
-            T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
-            dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+            if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT) then
+              ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
+              ! vapour SVP; below the triple point fall back to the ideal malr)
+              dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
+                       * dlogp_sub
+            else
+              Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+              es_sub  = min(esat(T_lev), 0.99_r8 * p_lev)
+              r_sub   = eps_wv * es_sub / (p_lev - es_sub)
+              T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
+              dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+            end if
             T_prev_sub = T_lev;  p_prev_sub = p_lev
             T_lev   = T_lev + dT_sub
             p_lev   = p_lev * exp(dlogp_sub)
@@ -344,11 +379,18 @@ contains
         dlogp_layer = log(pint(k) / pint(k+1))
         dlogp_sub   = dlogp_layer / real(NSUB, r8)
         do isub = 1, NSUB
-          Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
-          es_sub  = min(esat_cc(T_lev), 0.99_r8 * p_lev)
-          r_sub   = eps_wv * es_sub / (p_lev - es_sub)
-          T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
-          dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+          if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT) then
+            ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
+            ! vapour SVP; below the triple point fall back to the ideal malr)
+            dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
+                     * dlogp_sub
+          else
+            Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+            es_sub  = min(esat(T_lev), 0.99_r8 * p_lev)
+            r_sub   = eps_wv * es_sub / (p_lev - es_sub)
+            T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
+            dT_sub  = Gm * Rd * T_v_lev / exo_g * dlogp_sub
+          end if
           T_prev_sub = T_lev;  p_prev_sub = p_lev
           T_lev   = T_lev + dT_sub
           p_lev   = p_lev * exp(dlogp_sub)
@@ -390,7 +432,7 @@ contains
     ! inner-HZ OLR/albedo/Seff sweeps.  Fall back to the snapped interface only if
     ! the cold point was never reached (e.g. cold adiabat captured in the dry layer).
     if (k_top_conv > 0) then
-      es_tropo    = esat_cc(t_strato)
+      es_tropo    = esat(t_strato)
       if (p_coldpoint > 0._r8) then
         p_tropo_use = p_coldpoint
       else
@@ -410,7 +452,7 @@ contains
         if (ihz_profile .and. (.not. surface_saturated) .and. k >= k_cond) then
           h2ommr(k) = h2ommr_dry
         else
-          es_k      = min(esat_cc(tmid(k)), 0.99_r8 * pmid(k))
+          es_k      = min(esat(tmid(k)), 0.99_r8 * pmid(k))
           qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
           h2ommr(k) = rh_init * qsat_k
         end if
