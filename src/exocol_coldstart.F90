@@ -57,7 +57,7 @@ module exocol_coldstart
                             CP_N2,  CP_O3,  CP_O2,  CP_AR
   use exocol_convadj, only: esat, malr
   use exocol_steam,   only: steam_dlnTdlnP_sat, steam_dlnTdlnP_dry
-  use exocol_iapws95, only: IAPWS_TT   ! water triple-point T (L-V saturation floor)
+  use exocol_iapws95, only: IAPWS_TT, IAPWS_TC   ! triple-point + critical-point T (L-V saturation bounds)
   use exocol_ozone,   only: set_earth_o3_profile, set_rcemip_o3_profile
 
   implicit none
@@ -278,7 +278,7 @@ contains
             dlogp_layer = log(pint(k) / pint(k+1))
             dlogp_sub   = dlogp_layer / real(NSUB, r8)
             do isub = 1, NSUB
-              if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT) then
+              if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT .and. T_lev < IAPWS_TC) then
                 ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
                 ! vapour SVP; below the triple point fall back to the ideal malr)
                 dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
@@ -342,7 +342,7 @@ contains
           dlogp_layer = log(pint(k) / pint(k+1))
           dlogp_sub   = dlogp_layer / real(NSUB, r8)
           do isub = 1, NSUB
-            if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT) then
+            if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT .and. T_lev < IAPWS_TC) then
               ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
               ! vapour SVP; below the triple point fall back to the ideal malr)
               dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
@@ -379,7 +379,7 @@ contains
         dlogp_layer = log(pint(k) / pint(k+1))
         dlogp_sub   = dlogp_layer / real(NSUB, r8)
         do isub = 1, NSUB
-          if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT) then
+          if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT .and. T_lev < IAPWS_TC) then
             ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
             ! vapour SVP; below the triple point fall back to the ideal malr)
             dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &

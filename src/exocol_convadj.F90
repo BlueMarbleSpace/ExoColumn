@@ -25,7 +25,7 @@ module exocol_convadj
                             SHR_CONST_TKFRZ, SHR_CONST_RWV, &
                             SHR_CONST_MWWV
   use ppgrid,        only: pver, pverp
-  use exocol_iapws95, only: iapws95_psat_aux
+  use exocol_iapws95, only: iapws95_psat_aux, IAPWS_TT
 
   implicit none
   private
@@ -865,7 +865,12 @@ contains
   ! pure for the lapse-rate code that must stay pure.
     real(r8), intent(in) :: T
     real(r8) :: es
-    if (use_steam_esat) then
+    ! Steam mode uses the Wagner-Pruss liquid-vapour curve only ABOVE the triple
+    ! point; below it there is no liquid-vapour equilibrium, so extrapolating the
+    ! WP curve overshoots the true (ice/sublimation) saturation (~2x at 200 K)
+    ! and would flood the cold-trap stratosphere.  Fall back to esat_cc, which is
+    ! phase-aware (ice/L_sub below freezing).  Continuous at the triple point.
+    if (use_steam_esat .and. T >= IAPWS_TT) then
       es = iapws95_psat_aux(T)
     else
       es = esat_cc(T)

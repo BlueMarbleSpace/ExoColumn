@@ -41,7 +41,21 @@ OUT_NC   = os.path.join(ROOT, 'iofiles', 'exocol_out.nc')
 NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
 
 # ---------------------------------------------------------------------------
-TS_VALUES = np.arange(200, 2205, 5, dtype=float)   # K  (opacity tables optimised to 400 K; extrapolation above accepted per Kopparapu+Wolf)
+# Ts grid (env-overridable for quick tests: HZ_TS_MIN/HZ_TS_MAX/HZ_TS_STEP).
+TS_MIN  = float(os.environ.get('HZ_TS_MIN',  '200'))
+TS_MAX  = float(os.environ.get('HZ_TS_MAX',  '2200'))
+TS_STEP = float(os.environ.get('HZ_TS_STEP', '5'))
+TS_VALUES = np.arange(TS_MIN, TS_MAX + TS_STEP, TS_STEP, dtype=float)   # K  (opacity tables optimised to 400 K; extrapolation above accepted per Kopparapu+Wolf)
+
+# Water-vapour equation of state for the moist pseudoadiabat:
+#   'ideal'    — dilute ideal-gas moist adiabat (malr); the historical default.
+#   'nonideal' — Kasting (1988) Appendix-A general non-ideal pseudoadiabat with
+#                the native IAPWS-95 EOS (beta, real-gas entropies/cp).  Forces
+#                the Wagner-Pruss steam saturation pressure.
+# Override with HZ_H2O_EOS=nonideal.  Outputs are tagged so the two modes do not
+# overwrite each other (hz_inner.pdf vs hz_inner_nonideal.pdf).
+H2O_EOS = os.environ.get('HZ_H2O_EOS', 'ideal')
+TAG     = '' if H2O_EOS == 'ideal' else '_' + H2O_EOS
 
 ALBEDO   = 0.24229   # surface albedo calibrated to Ts=288 K (Kopparapu composition, fixed cold-trap)
 T_STRATO = 200.0     # isothermal stratosphere cap [K]
@@ -64,6 +78,7 @@ NML_TEMPLATE = """\
   ihz_profile = .true.
   o3_profile  = 'none'
   msdist      = 1.0
+  h2o_eos     = '{h2o_eos}'
 /
 &exocol_init
   input_file = ''
@@ -94,7 +109,8 @@ def run_one(ts):
     Run ExoColumn flux_only at surface temperature ts.
     Returns dict with scalar diagnostics and profiles, or None on failure.
     """
-    nml = NML_TEMPLATE.format(ts=ts, t_strato=T_STRATO, albedo=ALBEDO)
+    nml = NML_TEMPLATE.format(ts=ts, t_strato=T_STRATO, albedo=ALBEDO,
+                              h2o_eos=H2O_EOS)
     orig = None
     if os.path.exists(NML_PATH):
         with open(NML_PATH) as f:
@@ -142,6 +158,8 @@ def main():
         raise FileNotFoundError(f"Executable not found: {EXE}")
 
     print("ExoColumn inner-HZ sweep  —  Figure 3 (Kopparapu+2013 style)")
+    print(f"  H2O EOS     : {H2O_EOS}" +
+          ("  (Kasting 1988 Appendix-A, IAPWS-95)" if H2O_EOS == 'nonideal' else ""))
     print(f"  Ts range    : {TS_VALUES[0]:.0f}–{TS_VALUES[-1]:.0f} K")
     print(f"  t_strato    : {T_STRATO:.0f} K  (isothermal, fully saturated)")
     print(f"  variable_ps : ps = p_N2(1 bar) + esat(Ts)")
@@ -235,7 +253,7 @@ def _plot(ts, olr, asr, alpha, seff, profiles):
     fig.tight_layout()
     out_dir = os.path.dirname(os.path.abspath(__file__))
     for ext, dpi in [('pdf', 300), ('png', 150)]:
-        path = os.path.join(out_dir, f'hz_inner.{ext}')
+        path = os.path.join(out_dir, f'hz_inner{TAG}.{ext}')
         fig.savefig(path, dpi=dpi, facecolor='white')
         print(f"Saved: {path}")
     plt.close(fig)
