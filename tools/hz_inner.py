@@ -42,10 +42,35 @@ NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
 
 # ---------------------------------------------------------------------------
 # Ts grid (env-overridable for quick tests: HZ_TS_MIN/HZ_TS_MAX/HZ_TS_STEP).
+# The sweep spans the full inner-HZ runaway (Kasting 1988 Fig 1; Kopparapu 2013
+# Fig 3): cold → moist greenhouse → runaway PLATEAU → critical point → supercritical
+# runaway → POST-RUNAWAY RISE.
+#   • Above the H2O critical point (Tc=647.1 K) no liquid ocean can exist, so the
+#     whole water inventory is in the atmosphere and the cold start builds a DRY
+#     (unsaturated) adiabat at the hot base, switching to the saturated pseudoadiabat
+#     aloft where the rising parcel first cools to saturation (below Tc).  The water
+#     column is then fixed at the inventory (~271 bar) for all Ts>Tc, so the cool
+#     radiatively active upper atmosphere — and hence OLR — is Ts-INDEPENDENT: the
+#     runaway plateau (~295 W/m², flat from ~400 to ~1600 K).
+#   • At high Ts the Wien peak shifts into the near-IR/visible H2O WINDOWS, which
+#     transmit the hot lower atmosphere to space → OLR rises steeply again (the
+#     post-runaway branch; Kasting 1988, Kopparapu 2013 both show this — it is NOT
+#     a flat plateau all the way up).  Our curve reproduces it (onset ~1800 K).
+#   CAVEAT on the rise: ExoRT's n68 k-tables have a hardcoded T-grid ceiling of 500 K
+#   (radgrid.F90, read-only); the deep >500 K layers use clamped opacity, so the
+#   QUANTITATIVE steepness of the rise above ~1600 K (shaded) carries extrapolation
+#   uncertainty (likely too steep — missing HITEMP hot bands).  Onset/shape are
+#   physical; absolute high-Ts values would need HITEMP-class k-data.
 TS_MIN  = float(os.environ.get('HZ_TS_MIN',  '200'))
-TS_MAX  = float(os.environ.get('HZ_TS_MAX',  '2200'))
+TS_MAX  = float(os.environ.get('HZ_TS_MAX',  '2500'))
 TS_STEP = float(os.environ.get('HZ_TS_STEP', '5'))
-TS_VALUES = np.arange(TS_MIN, TS_MAX + TS_STEP, TS_STEP, dtype=float)   # K  (opacity tables optimised to 400 K; extrapolation above accepted per Kopparapu+Wolf)
+TS_VALUES = np.arange(TS_MIN, TS_MAX + TS_STEP, TS_STEP, dtype=float)   # K
+H2O_TCRIT = 647.1   # K, water critical point (saturated → supercritical dry base)
+# Above this Ts the ExoRT n68 k-tables (T-grid ceiling 500 K, hardcoded in the
+# read-only radgrid.F90) under-absorb the near-IR emission of the hot dry base, so
+# OLR leaks spuriously off the runaway plateau.  Sweeps that go higher (set
+# HZ_TS_MAX) shade this region as opacity-limited (would need HITEMP k-data).
+T_KTABLE_RELIABLE = 1600.0   # K
 
 # Water-vapour equation of state for the moist pseudoadiabat:
 #   'ideal'    — dilute ideal-gas moist adiabat (malr); the historical default.
@@ -57,19 +82,36 @@ TS_VALUES = np.arange(TS_MIN, TS_MAX + TS_STEP, TS_STEP, dtype=float)   # K  (op
 H2O_EOS = os.environ.get('HZ_H2O_EOS', 'ideal')
 TAG     = '' if H2O_EOS == 'ideal' else '_' + H2O_EOS
 
-ALBEDO   = 0.24229   # surface albedo calibrated to Ts=288 K (Kopparapu composition, fixed cold-trap)
+ALBEDO   = 0.32      # surface albedo = Kopparapu et al. (2013) value, for a DIRECT
+                     # comparison (their cloud-free 1-D model uses Ad=0.32 to mimic
+                     # cloud reflection).  Surface albedo affects only absorbed SW
+                     # (hence ASR & Seff), not the LW-driven cold-start T profile/OLR.
+                     # [Our ExoRT-tuned Ts=288 K value was 0.24229; kept in git history.]
 T_STRATO = 200.0     # isothermal stratosphere cap [K]
 
 MW_H2O   = 18.015    # g/mol
 
-# Kopparapu+2013 Table 1 inner-edge Seff (G2V, 1 M_Earth)
-KOPP_RUNAWAY = 1.0140
-KOPP_MOIST   = 1.0129
+# The OLR/albedo/Seff curves carry a small high-frequency SAWTOOTH: as Ts sweeps,
+# the tropopause kink (moist adiabat meeting the isothermal t_strato) migrates
+# across the fixed log-spaced layers and the RT re-samples it at each crossing.
+# It is a vertical-resolution sampling artifact, NOT physics (PVER 70→140 halves
+# its amplitude — see project_hz_staircase).  A light centered running-median
+# (window HZ_SMOOTH points, default 5 ≈ 25 K) suppresses it while preserving the
+# physical shape (plateau, albedo dip, post-runaway rise); set HZ_SMOOTH=1 for the
+# raw curve.  The published figure was generated at PVER=140 (build with
+# `make clean && make PVER=140`), which halves the sawtooth at the source (1/N
+# convergence: 0.008→0.004 p-p in albedo); the window-5 median then removes the
+# residual.  The default PVER=70 binary shows a small residual sawtooth.
+SMOOTH_WIN = int(os.environ.get('HZ_SMOOTH', '5'))
+
+# Kopparapu+2013 inner-edge Seff (G2V, 1 M_Earth)
+KOPP_RUNAWAY = 1.06     # runaway greenhouse
+KOPP_MOIST   = 1.015    # moist greenhouse
 SN_LIMIT     = 282.0    # W/m²  Simpson-Nakajima OLR limit
 MOIST_GH_VMR = 3.0e-3   # moist greenhouse stratospheric H2O VMR threshold
 
 # Ts values at which to save the full H2O vertical profile for panel (d)
-PROFILE_TS = [250.0, 280.0, 310.0, 340.0]
+PROFILE_TS = [280.0, 300.0, 320.0, 340.0, 360.0, 380.0]
 
 NML_TEMPLATE = """\
 &exocol_nml
@@ -133,6 +175,7 @@ def run_one(ts):
             pmid   = ds['pmid'][:]
             h2ommr = ds['h2ommr'][:]
             mwdry  = float(ds['mw'][:])
+            zint   = np.array(ds['zint'][:])   # interface heights [m]
 
         olr   = float(lwup[0])
         asr   = float(swdn[0] - swup[0])
@@ -141,10 +184,12 @@ def run_one(ts):
 
         # H2O volume mixing ratio profile: VMR ≈ h2ommr × mwdry / MW_H2O
         h2o_vmr = h2ommr * mwdry / MW_H2O
+        # Layer-midpoint altitude [km] from interface heights (TOA=0 … srf=pverp)
+        zmid_km = 0.5 * (zint[:-1] + zint[1:]) / 1000.
 
         return dict(olr=olr, asr=asr, alpha=alpha, seff=seff,
                     h2o_vmr=h2o_vmr, pmid=np.array(pmid),
-                    tmid=np.array(tmid))
+                    tmid=np.array(tmid), zmid_km=zmid_km)
     finally:
         if orig is not None:
             with open(NML_PATH, 'w') as f:
@@ -177,7 +222,7 @@ def main():
               f"  α={r['alpha']:.3f}  Seff={r['seff']:.4f}")
         rows.append((ts, r['olr'], r['asr'], r['alpha'], r['seff']))
         if any(abs(ts - ts_p) < 0.5 for ts_p in PROFILE_TS):
-            profiles[ts] = (r['pmid'], r['h2o_vmr'])
+            profiles[ts] = (r['zmid_km'], r['h2o_vmr'], r['pmid'])
 
     if not rows:
         print("No successful runs.")
@@ -189,20 +234,42 @@ def main():
     _plot(ts_a, olr_a, asr_a, alp_a, seff_a, profiles)
 
 
+def _smooth(y, w=SMOOTH_WIN):
+    """Centered running median (window w points) to suppress the vertical-
+    resolution sawtooth (a numerical sampling artifact, not physics).  Preserves
+    monotonic trends and broad features; w<=1 returns the raw curve."""
+    y = np.asarray(y, float)
+    if w <= 1 or y.size < 3:
+        return y
+    h = w // 2
+    out = y.copy()
+    for i in range(y.size):
+        out[i] = np.median(y[max(0, i - h):min(y.size, i + h + 1)])
+    return out
+
+
 def _plot(ts, olr, asr, alpha, seff, profiles):
-    fig, axes = plt.subplots(2, 2, figsize=(7.0, 6.0), dpi=300)
+    # Suppress the vertical-resolution sawtooth (see SMOOTH_WIN note above).
+    olr, asr, alpha, seff = (_smooth(olr), _smooth(asr),
+                             _smooth(alpha), _smooth(seff))
+
+    fig, axes = plt.subplots(2, 2, figsize=(9.5, 5.5), dpi=300)
     fig.patch.set_facecolor('white')
     (ax_a, ax_b), (ax_c, ax_d) = axes
 
-    kw = dict(xlim=(ts[0], ts[-1]))
+    kw = dict(xlim=(200., 2200.))
 
     # --- (a) OLR and ASR vs Ts ---
     ax_a.plot(ts, olr, color='C3', lw=1.5, label='OLR')
     ax_a.plot(ts, asr, color='C0', lw=1.5, label='Absorbed SW')
     ax_a.axhline(SN_LIMIT, color='k', lw=0.8, ls='--',
                  label=f'S-N limit ({SN_LIMIT:.0f} W m⁻²)')
+    if ts[-1] > H2O_TCRIT:
+        ax_a.axvline(H2O_TCRIT, color='0.55', lw=0.7, ls='-.',
+                     label=f'$T_c$ = {H2O_TCRIT:.0f} K (→ supercrit.)')
     ax_a.set_ylabel('Flux (W m⁻²)')
     ax_a.set_xlabel('$T_s$ (K)')
+    ax_a.set_ylim(100., 450.)      # focus on the plateau + onset of the rise
     ax_a.legend(fontsize=7, framealpha=0.9)
     ax_a.set(**kw)
     ax_a.set_facecolor('white')
@@ -213,6 +280,7 @@ def _plot(ts, olr, asr, alpha, seff, profiles):
     ax_b.plot(ts, alpha, color='C2', lw=1.5)
     ax_b.set_ylabel('Planetary albedo $\\alpha_p$')
     ax_b.set_xlabel('$T_s$ (K)')
+    ax_b.set_ylim(0.15, 0.35)
     ax_b.set(**kw)
     ax_b.set_facecolor('white')
     ax_b.text(0.04, 0.96, '(b)', transform=ax_b.transAxes,
@@ -225,30 +293,39 @@ def _plot(ts, olr, asr, alpha, seff, profiles):
     ax_c.axhline(KOPP_MOIST, color='C0', lw=0.9, ls=':',
                  label=f'Kopparapu moist GH ({KOPP_MOIST:.4f})')
     ax_c.axhline(1.0, color='gray', lw=0.5, alpha=0.5)
+    if ts[-1] > H2O_TCRIT:
+        ax_c.axvline(H2O_TCRIT, color='0.55', lw=0.7, ls='-.')
     ax_c.set_ylabel('$S_{\\rm eff}$')
     ax_c.set_xlabel('$T_s$ (K)')
-    ax_c.legend(fontsize=7, framealpha=0.9)
+    ax_c.set_ylim(0.4, 1.8)
+    ax_c.legend(fontsize=7, framealpha=0.9, loc='lower right')
     ax_c.set(**kw)
     ax_c.set_facecolor('white')
     ax_c.text(0.04, 0.96, '(c)', transform=ax_c.transAxes,
               va='top', fontsize=9, fontweight='bold')
 
-    # --- (d) H2O VMR vertical profiles for selected Ts values ---
-    colors_d = ['C0', 'C2', 'C1', 'C3']
-    for (ts_p, (pmid, vmr)), col in zip(sorted(profiles.items()), colors_d):
-        # Mask out any unphysically large VMR near p_top (TOA, p < 10 Pa)
+    # --- (d) H2O VMR vertical profiles vs altitude for selected Ts values ---
+    items_d = sorted(profiles.items())
+    colors_d = plt.cm.plasma(np.linspace(0.05, 0.85, max(len(items_d), 1)))
+    for (ts_p, (zmid, vmr, pmid)), col in zip(items_d, colors_d):
+        # Mask out any unphysically large VMR near p_top (TOA, p < 5 Pa)
         mask = pmid > 5.0
-        ax_d.loglog(vmr[mask], pmid[mask] / 100., color=col, lw=1.5,
-                    label=f'$T_s$ = {ts_p:.0f} K')
-    ax_d.axvline(MOIST_GH_VMR, color='k', lw=0.8, ls='--',
-                 label=f'Moist GH threshold')
-    ax_d.invert_yaxis()
+        z = zmid[mask]; v = vmr[mask]
+        ax_d.semilogx(v, z, color=col, lw=1.5)
+        # label each curve directly at its stratospheric top (highest altitude),
+        # where the curves fan out by altitude (warmer ⇒ deeper ⇒ taller)
+        itop = int(np.argmax(z))
+        ax_d.annotate(f'{ts_p:.0f} K', xy=(v[itop], z[itop]),
+                      xytext=(4, 0), textcoords='offset points',
+                      color=col, fontsize=6.5, fontweight='bold',
+                      ha='left', va='center')
+    ax_d.set_xscale('log')
     ax_d.set_xlabel('H₂O VMR')
-    ax_d.set_ylabel('Pressure (hPa)')
-    ax_d.legend(fontsize=7, framealpha=0.9)
+    ax_d.set_ylabel('Altitude (km)')
+    ax_d.set_ylim(bottom=0.)
     ax_d.set_facecolor('white')
-    ax_d.text(0.04, 0.04, '(d)', transform=ax_d.transAxes,
-              va='bottom', fontsize=9, fontweight='bold')
+    ax_d.text(0.04, 0.96, '(d)', transform=ax_d.transAxes,
+              va='top', fontsize=9, fontweight='bold')
 
     fig.tight_layout()
     out_dir = os.path.dirname(os.path.abspath(__file__))

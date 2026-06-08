@@ -12,6 +12,7 @@ module exocol_io
   use netcdf
   use shr_kind_mod, only: r8 => shr_kind_r8
   use ppgrid,       only: pver, pverp
+  use radgrid,      only: ntot_wavlnrng, wavenum_edge
   use exocol_mod
   use exocol_config, only: cfg_msdist => msdist
 
@@ -167,6 +168,7 @@ contains
 
     integer :: ncid
     integer :: pver_dim, pverp_dim, one_dim
+    integer :: nbnd_dim, nbndp_dim
     integer :: lwup_id, lwdn_id, swup_id, swdn_id
     integer :: lwhr_id, swhr_id
     integer :: ts_id,  ps_id
@@ -175,6 +177,7 @@ contains
     integer :: o2_id,  o3_id,  n2_id,  h2_id
     integer :: mw_id,  cp_id
     integer :: le_id,  sh_id,  precip_id, condhr_id
+    integer :: bolr_id, bswup_id, bswdn_id, wnedge_id
 
     write(*,'(2a)') 'exocol_io: writing ', trim(filename)
     call nc_check(nf90_create(filename, nf90_clobber, ncid), 'create:'//filename)
@@ -183,6 +186,8 @@ contains
     call nc_check(nf90_def_dim(ncid, 'pver',  pver,  pver_dim),  'def_dim:pver')
     call nc_check(nf90_def_dim(ncid, 'pverp', pverp, pverp_dim), 'def_dim:pverp')
     call nc_check(nf90_def_dim(ncid, 'ONE',   1,     one_dim),   'def_dim:ONE')
+    call nc_check(nf90_def_dim(ncid, 'nbnd',  ntot_wavlnrng,   nbnd_dim),  'def_dim:nbnd')
+    call nc_check(nf90_def_dim(ncid, 'nbndp', ntot_wavlnrng+1, nbndp_dim), 'def_dim:nbndp')
 
     ! ---- Flux variables (pverp) ----
     call nc_check(nf90_def_var(ncid,'LWUP',nf90_double,[pverp_dim],lwup_id),'def_var:LWUP')
@@ -299,6 +304,23 @@ contains
     call nc_check(nf90_put_att(ncid,condhr_id,'long_name','latent heat release from condensation (last step)'),'att')
     call nc_check(nf90_put_att(ncid,condhr_id,'units','K/day'),'att')
 
+    ! ---- Band-resolved TOA fluxes (n68equiv grid) ----
+    call nc_check(nf90_def_var(ncid,'wavenum_edge',nf90_double,[nbndp_dim],wnedge_id),'def_var:wavenum_edge')
+    call nc_check(nf90_put_att(ncid,wnedge_id,'long_name','wavenumber band edges'),'att')
+    call nc_check(nf90_put_att(ncid,wnedge_id,'units','cm-1'),'att')
+
+    call nc_check(nf90_def_var(ncid,'band_lwup_toa',nf90_double,[nbnd_dim],bolr_id),'def_var:band_lwup_toa')
+    call nc_check(nf90_put_att(ncid,bolr_id,'long_name','TOA LW upwelling flux (OLR) per band'),'att')
+    call nc_check(nf90_put_att(ncid,bolr_id,'units','W/m2'),'att')
+
+    call nc_check(nf90_def_var(ncid,'band_swup_toa',nf90_double,[nbnd_dim],bswup_id),'def_var:band_swup_toa')
+    call nc_check(nf90_put_att(ncid,bswup_id,'long_name','TOA SW upwelling flux per band'),'att')
+    call nc_check(nf90_put_att(ncid,bswup_id,'units','W/m2'),'att')
+
+    call nc_check(nf90_def_var(ncid,'band_swdn_toa',nf90_double,[nbnd_dim],bswdn_id),'def_var:band_swdn_toa')
+    call nc_check(nf90_put_att(ncid,bswdn_id,'long_name','TOA SW downwelling flux per band'),'att')
+    call nc_check(nf90_put_att(ncid,bswdn_id,'units','W/m2'),'att')
+
     call nc_check(nf90_enddef(ncid), 'enddef')
 
     ! ---- Write data ----
@@ -334,6 +356,11 @@ contains
     call put_scalar(ncid, sh_id,     SH_diag,     'put:SH')
     call put_scalar(ncid, precip_id, precip_diag, 'put:precip')
     call put_1d    (ncid, condhr_id, cond_heating,'put:cond_heating')
+
+    call put_1d(ncid, wnedge_id, wavenum_edge,  'put:wavenum_edge')
+    call put_1d(ncid, bolr_id,   band_lwup_toa, 'put:band_lwup_toa')
+    call put_1d(ncid, bswup_id,  band_swup_toa, 'put:band_swup_toa')
+    call put_1d(ncid, bswdn_id,  band_swdn_toa, 'put:band_swdn_toa')
 
     call nc_check(nf90_close(ncid), 'close:'//filename)
     write(*,'(2a)') 'exocol_io: wrote ', trim(filename)

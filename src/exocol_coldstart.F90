@@ -97,7 +97,7 @@ contains
     real(r8) :: T_at_int(pverp)
     real(r8) :: T_lev, p_lev, dlogp_layer, dlogp_sub, dT_sub, Gm
     real(r8) :: es_sub, r_sub, T_v_lev
-    real(r8) :: es_k, qsat_k, e_sfc
+    real(r8) :: es_k, qsat_k, e_sfc, w_k
     integer  :: k_top_conv
     real(r8) :: es_tropo, q_cold_trap, p_coldpoint, p_tropo_use
     real(r8) :: T_prev_sub, p_prev_sub
@@ -185,15 +185,35 @@ contains
     p_h2o_inv        = h2o_inventory_bar * 1.0e5_r8   ! inventory pressure [Pa]
     surface_saturated = .true.
     if (variable_ps) then
-      e_sfc             = min(e_sat_sfc, p_h2o_inv)
-      surface_saturated = (e_sat_sfc <= p_h2o_inv)
+      ! Above the H2O critical point (Tc=647.1 K) there is no liquid–vapour phase
+      ! boundary: a liquid ocean cannot exist, so the *entire* water inventory is
+      ! in the atmosphere as a supercritical fluid and the surface is subsaturated.
+      ! pH2O is then the full inventory and the Kasting (1988) runaway dry base
+      ! engages (Fig 1b/4/6).  Below Tc the ocean buffers pH2O = SVP(Ts), capped at
+      ! the inventory (esat clamps at Pc < inventory, so with a 270-bar inventory the
+      ! surface stays saturated right up to Tc — the dry base appears only above Tc).
+      if (cs_ts >= IAPWS_TC) then
+        e_sfc             = p_h2o_inv
+        surface_saturated = .false.
+      else
+        e_sfc             = min(e_sat_sfc, p_h2o_inv)
+        surface_saturated = (e_sat_sfc <= p_h2o_inv)
+      end if
       write(*,'(a,f9.2,a,f9.2,a,f9.2,a)') &
         '    variable_ps: p_dry = ', ps_use/100._r8, ' hPa  + pH2O = ', &
         e_sfc/100._r8, ' hPa  →  ps = ', (ps_use + e_sfc)/100._r8, ' hPa'
-      if (.not. surface_saturated) &
-        write(*,'(a,f9.2,a,f9.2,a)') &
-          '      surface SUBSATURATED: esat(Ts) = ', e_sat_sfc/1.0e5_r8, &
-          ' bar > inventory ', h2o_inventory_bar, ' bar (ocean evaporated → dry base)'
+      if (.not. surface_saturated) then
+        if (cs_ts >= IAPWS_TC) then
+          write(*,'(a,f7.1,a,f9.2,a)') &
+            '      SUPERCRITICAL surface: Ts = ', cs_ts, &
+            ' K > Tc → all H2O in atmosphere, pH2O = inventory ', &
+            h2o_inventory_bar, ' bar (dry base)'
+        else
+          write(*,'(a,f9.2,a,f9.2,a)') &
+            '      surface SUBSATURATED: esat(Ts) = ', e_sat_sfc/1.0e5_r8, &
+            ' bar > inventory ', h2o_inventory_bar, ' bar (ocean evaporated → dry base)'
+        end if
+      end if
       ps_use = ps_use + e_sfc
     else
       ! Fixed-ps mode: surface water cannot exceed the column; saturated if it fits.
@@ -317,7 +337,12 @@ contains
             ! pH2O(level) = f_vmr·p  meets/exceeds esat(T).  Because the dry adiabat
             ! is steeper than the SVP curve, this happens at some height above the
             ! (subsaturated) surface and marks the switch to the moist adiabat.
-            if (f_vmr * pint(k) >= esat(T_at_int(k))) then
+            ! Saturation is only defined BELOW the critical point: above Tc esat is
+            ! clamped at Pc (< f_vmr·p), so without this guard a supercritical base
+            ! (Ts > Tc) would switch to "moist" in the very first layer and stall.
+            ! The parcel cooling below Tc at high pressure (pH2O ≫ Pc) condenses at
+            ! once, so the moist adiabat correctly anchors near (Tc, ~pH2O).
+            if (T_at_int(k) < IAPWS_TC .and. f_vmr * pint(k) >= esat(T_at_int(k))) then
               k_cond       = k
               in_dry_layer = .false.
               write(*,'(a,es10.3,a,f7.2,a)') &
@@ -445,6 +470,14 @@ contains
       q_cold_trap = 0._r8   ! isothermal column: no stratospheric H2O
     end if
 
+    ! h2ommr is the MOIST specific humidity q = m_H2O/m_moist ∈ [0,1] — the
+    ! convention ExoRT's calc_opd assumes (it forms w = q/(1-q) internally).
+    ! eps_wv·es/(p-es) is the *dry* mass mixing ratio w = m_H2O/m_dry, which
+    ! diverges as es→p (steam regime); convert with q = w/(1+w).  In the dilute
+    ! Earth limit (w≪1) q≈w so this is a ~1e-4 change to the initial condition;
+    ! in the inner-HZ steam regime it is essential (without it q≫1 is handed to
+    ! ExoRT and the water-vapour opacity path produces garbage).  The dry-base
+    ! branch already stores a mass fraction (h2ommr_dry = w_h2o), i.e. moist q.
     do k = 1, pver
       if (tmid(k) > t_strato) then
         ! In the dry layer (subsaturated-surface runaway branch), h2ommr is held
@@ -453,11 +486,13 @@ contains
           h2ommr(k) = h2ommr_dry
         else
           es_k      = min(esat(tmid(k)), 0.99_r8 * pmid(k))
-          qsat_k    = eps_wv * es_k / (pmid(k) - es_k)
-          h2ommr(k) = rh_init * qsat_k
+          qsat_k    = eps_wv * es_k / (pmid(k) - es_k)     ! dry mass mixing ratio
+          w_k       = rh_init * qsat_k
+          h2ommr(k) = w_k / (1._r8 + w_k)                  ! → moist specific humidity
         end if
       else
-        h2ommr(k) = rh_init * q_cold_trap
+        w_k       = rh_init * q_cold_trap                  ! dry mass mixing ratio
+        h2ommr(k) = w_k / (1._r8 + w_k)                    ! → moist specific humidity
       end if
     end do
 

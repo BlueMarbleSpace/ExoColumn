@@ -23,3 +23,6 @@ __pycache__/
 
 # Editor/backup files
 *.bak
+
+# Claude Code local agent directory
+.claude/

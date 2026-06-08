@@ -99,6 +99,14 @@ contains
     SWHR(:) = sw_dTdt(:) * SHR_CONST_CSEC
     LWHR(:) = lw_dTdt(:) * SHR_CONST_CSEC
 
+    ! Capture band-resolved TOA fluxes (interface index 1 = TOA, since
+    ! camtop = 1 in the n68equiv 1-D path).  band_lwup_toa is the spectrally
+    ! resolved OLR; the SW pair gives per-band planetary albedo.  These feed
+    ! the inner-HZ continuum/window-leak diagnostics.
+    band_lwup_toa(:) = lw_upflux_spec(1, :)
+    band_swup_toa(:) = sw_upflux_spec(1, :)
+    band_swdn_toa(:) = sw_dnflux_spec(1, :)
+
   end subroutine exocol_rad_tend
 
 end module exocol_radiation
