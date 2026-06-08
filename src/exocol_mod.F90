@@ -11,6 +11,7 @@ module exocol_mod
 
   use shr_kind_mod, only: r8 => shr_kind_r8
   use ppgrid,       only: pver, pverp
+  use radgrid,      only: ntot_wavlnrng
 
   implicit none
   private
@@ -81,6 +82,16 @@ module exocol_mod
   real(r8),              public :: precip_diag = 0._r8  ! column precip rate [mm/day]
   real(r8), allocatable, public :: cond_heating(:)      ! latent heating per layer [K/day]
 
+  ! -----------------------------------------------------------------------
+  ! Band-resolved TOA fluxes (filled by exocol_radiation::exocol_rad_tend on
+  ! the final/flux_only call).  Size ntot_wavlnrng = 68 (n68equiv grid).
+  ! band_lwup_toa is the spectrally resolved OLR; the SW pair gives per-band
+  ! albedo.  Used by the inner-HZ continuum/window-leak diagnostics.
+  ! -----------------------------------------------------------------------
+  real(r8), allocatable, public :: band_lwup_toa(:)     ! TOA LW up  per band [W/m²]
+  real(r8), allocatable, public :: band_swup_toa(:)     ! TOA SW up  per band [W/m²]
+  real(r8), allocatable, public :: band_swdn_toa(:)     ! TOA SW dn  per band [W/m²]
+
 contains
 
   ! -----------------------------------------------------------------------
@@ -120,6 +131,9 @@ contains
 
     ! --- diagnostics ---
     allocate(cond_heating(pver), stat=ierr); if (ierr /= 0) stop 'exocol_init: cond_heating'
+    allocate(band_lwup_toa(ntot_wavlnrng), stat=ierr); if (ierr /= 0) stop 'exocol_init: band_lwup_toa'
+    allocate(band_swup_toa(ntot_wavlnrng), stat=ierr); if (ierr /= 0) stop 'exocol_init: band_swup_toa'
+    allocate(band_swdn_toa(ntot_wavlnrng), stat=ierr); if (ierr /= 0) stop 'exocol_init: band_swdn_toa'
 
     ! --- zero-initialise everything ---
     tmid    = 0._r8;  pmid    = 0._r8;  pdel    = 0._r8;  pdeldry  = 0._r8
@@ -129,6 +143,7 @@ contains
     rei     = 0._r8;  rel     = 0._r8
     tint    = 0._r8;  pint    = 0._r8;  pintdry = 0._r8;   zint    = 0._r8
     cond_heating = 0._r8
+    band_lwup_toa = 0._r8; band_swup_toa = 0._r8; band_swdn_toa = 0._r8
     LE_diag = 0._r8; SH_diag = 0._r8; precip_diag = 0._r8
 
     ts        = 0._r8
@@ -172,6 +187,9 @@ contains
     if (allocated(zint))    deallocate(zint)
 
     if (allocated(cond_heating)) deallocate(cond_heating)
+    if (allocated(band_lwup_toa)) deallocate(band_lwup_toa)
+    if (allocated(band_swup_toa)) deallocate(band_swup_toa)
+    if (allocated(band_swdn_toa)) deallocate(band_swdn_toa)
 
   end subroutine exocol_finalize
 
