@@ -15,6 +15,20 @@ Four-panel figure matching Kopparapu+2013 Fig. 3:
 
 Composition: N2=0.78 + O2=0.21 + Ar=0.01 + CO2=3.3e-4 + H2O (Kopparapu 2013 Earth tuning; no O3/CH4).
 
+Shortwave solar zenith angle: 6-point Gauss-Legendre HEMISPHERIC quadrature
+(sw_zenith_quad=.true., sw_nquad=6), matching Kopparapu+2013's 6-angle averaging,
+rather than a single 60deg.  A single 60deg overweights grazing incidence and
+biases the planetary albedo (panel b) HIGH by ~0.006-0.010; the hemispheric Bond
+average removes that bias (see tools/diag_zenith_albedo.py).  The residual offset
+vs Kopparapu (~0.015-0.02) is near-IR H2O shortwave absorption (ExoRT n68 vs their
+HITEMP-2010 + BPS continuum) — a spectral-data difference, not a methodology one.
+
+Model top: p_top = 0.01 Pa (extended 2 decades below the former 1 Pa) so the H2O
+profiles in panel (d) reach ~100-130 km as in Kopparapu Fig 3d.  The shortwave is
+converged wrt the top (mass above 0.01 Pa is ~1e-7 of the column; see
+tools/diag_ptop_sensitivity.py).  Build at PVER>=200 so the larger log-pressure
+span does not coarsen the troposphere (preserves the panel a-c sawtooth behaviour).
+
 NOTE on the residual sawtooth in panels (a)-(c): this is a vertical-resolution
 discretization artifact, not a physics error.  In the runaway regime OLR/ASR are set by
 the emission/absorption level near the tropopause kink (moist adiabat meeting the
@@ -98,10 +112,12 @@ MW_H2O   = 18.015    # g/mol
 # its amplitude — see project_hz_staircase).  A light centered running-median
 # (window HZ_SMOOTH points, default 5 ≈ 25 K) suppresses it while preserving the
 # physical shape (plateau, albedo dip, post-runaway rise); set HZ_SMOOTH=1 for the
-# raw curve.  The published figure was generated at PVER=140 (build with
-# `make clean && make PVER=140`), which halves the sawtooth at the source (1/N
-# convergence: 0.008→0.004 p-p in albedo); the window-5 median then removes the
-# residual.  The default PVER=70 binary shows a small residual sawtooth.
+# raw curve.  Higher PVER halves the sawtooth at the source (1/N convergence:
+# 0.008→0.004 p-p in albedo); the window-5 median then removes the residual.
+# The published figure is generated at PVER>=200 (build with `make clean &&
+# make PVER=200`): the extended p_top=0.01 Pa top spreads the log-pressure grid
+# over ~2 more decades, so PVER must rise from the former 140 to ~200 to keep the
+# tropospheric resolution (hence the sawtooth amplitude) unchanged.
 SMOOTH_WIN = int(os.environ.get('HZ_SMOOTH', '5'))
 
 # Kopparapu+2013 inner-edge Seff (G2V, 1 M_Earth)
@@ -115,18 +131,20 @@ PROFILE_TS = [280.0, 300.0, 320.0, 340.0, 360.0, 380.0]
 
 NML_TEMPLATE = """\
 &exocol_nml
-  flux_only   = .true.
-  variable_ps = .true.
-  ihz_profile = .true.
-  o3_profile  = 'none'
-  msdist      = 1.0
-  h2o_eos     = '{h2o_eos}'
+  flux_only      = .true.
+  variable_ps    = .true.
+  ihz_profile    = .true.
+  o3_profile     = 'none'
+  msdist         = 1.0
+  h2o_eos        = '{h2o_eos}'
+  sw_zenith_quad = .true.
+  sw_nquad       = 6
 /
 &exocol_init
   input_file = ''
   ts         = {ts:.2f}
   t_strato   = {t_strato:.1f}
-  p_top      = 1.0
+  p_top      = 0.01
   rh_init    = 1.0
   coszrs     = 0.5
   asdir      = {albedo:.4f}
@@ -308,8 +326,11 @@ def _plot(ts, olr, asr, alpha, seff, profiles):
     items_d = sorted(profiles.items())
     colors_d = plt.cm.plasma(np.linspace(0.05, 0.85, max(len(items_d), 1)))
     for (ts_p, (zmid, vmr, pmid)), col in zip(items_d, colors_d):
-        # Mask out any unphysically large VMR near p_top (TOA, p < 5 Pa)
-        mask = pmid > 5.0
+        # Trim only the topmost layer(s) where the saturated cold-start hits the
+        # es = 0.99*p steam cap (q -> ~0.98); the rest of the stratosphere is the
+        # well-behaved uniform cold-trap value.  With p_top = 0.01 Pa this shows
+        # the H2O profile up to ~100-130 km (cf. Kopparapu Fig 3d).
+        mask = pmid > 0.03
         z = zmid[mask]; v = vmr[mask]
         ax_d.semilogx(v, z, color=col, lw=1.5)
         # label each curve directly at its stratospheric top (highest altitude),

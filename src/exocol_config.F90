@@ -149,6 +149,22 @@ module exocol_config
   ! Applied via exocol_convadj::set_latent_heat_mode (called from the driver).
   character(len=32), public, save :: latent_heat_mode = 'phase_aware'
 
+  ! Shortwave solar-zenith-angle treatment (general; see exocol_radiation).
+  !   sw_zenith_quad = .false. (default): single zenith angle = &exocol_init::coszrs.
+  !     Legacy/calibrated behaviour; the validated Earth RCE stays BIT-IDENTICAL.
+  !   sw_zenith_quad = .true.: replace the single angle with an sw_nquad-point
+  !     Gauss-Legendre quadrature over the illuminated hemisphere (Kopparapu 2013
+  !     style), yielding the true diurnal/global-mean (Bond) shortwave.  The single
+  !     coszrs is then IGNORED; the TOA insolation is the global mean S0/4 / msdist^2
+  !     — which EQUALS the coszrs=0.5 single-angle insolation, so enabling the
+  !     quadrature changes only the angular distribution (planetary albedo, ASR
+  !     shape), not the net incident flux.  Cost: sw_nquad radiation calls per step.
+  !   sw_nquad: number of Gauss points; allowed 2,3,4,6,8 (default 4).  Kopparapu
+  !     used 6.  Convergence is fast — 4 points reproduce the hemispheric Bond
+  !     albedo to <0.001.
+  logical,           public, save :: sw_zenith_quad   = .false.
+  integer,           public, save :: sw_nquad         = 4
+
   ! When .true.: skip the RCE loop entirely.  The driver builds the column via
   ! cold start (or file), calls radiation once, writes output, and exits.
   ! Intended for Kopparapu-style OLR(Ts) sweeps where a prescribed moist-adiabat
@@ -284,6 +300,7 @@ contains
                                   tau_conv, cape_trigger, rh_sbm, &
                                   latent_heat_mode, &
                                   surface_flux, z0_rough, &
+                                  sw_zenith_quad, sw_nquad, &
                                   flux_only, variable_ps, ihz_profile, &
                                   h2o_inventory_bar, esat_formula, h2o_eos
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
@@ -334,6 +351,18 @@ contains
       write(*,'(a,f8.4,a)') &
         '  WARNING: rh_sbm must be in (0,1] (got ', rh_sbm, ') — defaulting to 0.7'
       rh_sbm = 0.7_r8
+    end if
+
+    ! Validate sw_nquad (Gauss-Legendre order; only tabulated orders supported)
+    if (sw_zenith_quad) then
+      select case (sw_nquad)
+      case (2,3,4,6,8)
+        ! ok
+      case default
+        write(*,'(a,i0,a)') &
+          '  WARNING: sw_nquad=', sw_nquad, ' not supported (use 2,3,4,6,8) — defaulting to 4'
+        sw_nquad = 4
+      end select
     end if
 
     ! Validate moisture_scheme
@@ -430,6 +459,12 @@ contains
     end select
     write(*,'(a,f6.3,a)') '  Star distance     : msdist = ', msdist, ' AU'
     write(*,'(a,f6.2,a)') '  Slab thickness    : dz_slab = ', dz_slab, ' m'
+    if (sw_zenith_quad) then
+      write(*,'(a,i0,a)') '  Solar zenith      : ', sw_nquad, &
+        '-pt Gauss hemispheric avg (coszrs ignored; global-mean S0/4)'
+    else
+      write(*,'(a)') '  Solar zenith      : single angle (coszrs)'
+    end if
     if (trim(latent_heat_mode) == 'fixed_vap') then
       write(*,'(a)') '  Latent heat       : fixed L_v (konrad-match; no sublimation)'
     else
