@@ -23,11 +23,16 @@ average removes that bias (see tools/diag_zenith_albedo.py).  The residual offse
 vs Kopparapu (~0.015-0.02) is near-IR H2O shortwave absorption (ExoRT n68 vs their
 HITEMP-2010 + BPS continuum) — a spectral-data difference, not a methodology one.
 
-Model top: p_top = 0.01 Pa (extended 2 decades below the former 1 Pa) so the H2O
-profiles in panel (d) reach ~100-130 km as in Kopparapu Fig 3d.  The shortwave is
-converged wrt the top (mass above 0.01 Pa is ~1e-7 of the column; see
-tools/diag_ptop_sensitivity.py).  Build at PVER>=200 so the larger log-pressure
-span does not coarsen the troposphere (preserves the panel a-c sawtooth behaviour).
+Model top: p_top = 0.002 Pa (lowered below the former 0.01 Pa) so that even the
+COLDEST profiled column (280 K) reaches >=100 km — at 0.01 Pa it topped out at only
+~96 km (the warm columns already reached ~110-150 km).  Panel (d) then clips at 100 km
+(PANEL_ZTOP_KM) so every H2O profile spans the full altitude axis, as in Kopparapu
+Fig 3d.  The shortwave is converged wrt the top (mass above 0.002 Pa is ~1e-8 of the
+column; see tools/diag_ptop_sensitivity.py).  Build at PVER>=200 so the larger
+log-pressure span does not coarsen the troposphere (preserves the panel a-c sawtooth
+behaviour); the extra ~0.7 decade of (isothermal, radiatively quiet) stratosphere
+above the cold point only marginally raises the sawtooth, which the median smoother
+removes.
 
 NOTE on the residual sawtooth in panels (a)-(c): this is a vertical-resolution
 discretization artifact, not a physics error.  In the runaway regime OLR/ASR are set by
@@ -129,6 +134,15 @@ MOIST_GH_VMR = 3.0e-3   # moist greenhouse stratospheric H2O VMR threshold
 # Ts values at which to save the full H2O vertical profile for panel (d)
 PROFILE_TS = [280.0, 300.0, 320.0, 340.0, 360.0, 380.0]
 
+# Altitude clip for panel (d) [km].  p_top=0.002 Pa guarantees every profiled column
+# reaches this; the panel is capped here so the warm (taller) columns do not stretch
+# the axis and every curve fills it (cf. Kopparapu Fig 3d).
+PANEL_ZTOP_KM = 100.0
+
+# Results cache so the figure can be re-plotted (label tweaks, clip, styling) without
+# re-running the ~14-min sweep.  Set HZ_REPLOT=1 to load this and skip the runs.
+CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'hz_inner{TAG}.npz')
+
 NML_TEMPLATE = """\
 &exocol_nml
   flux_only      = .true.
@@ -144,7 +158,7 @@ NML_TEMPLATE = """\
   input_file = ''
   ts         = {ts:.2f}
   t_strato   = {t_strato:.1f}
-  p_top      = 0.01
+  p_top      = 0.002
   rh_init    = 1.0
   coszrs     = 0.5
   asdir      = {albedo:.4f}
@@ -220,7 +234,36 @@ def run_one(ts):
             os.remove(NML_PATH)
 
 
+def _save_cache(arr, profiles):
+    """Persist sweep results so the figure can be re-plotted without re-running."""
+    ks = sorted(profiles)
+    np.savez(CACHE, rows=arr,
+             prof_ts=np.array(ks, dtype=float),
+             prof_z=np.array([profiles[k][0] for k in ks]),
+             prof_v=np.array([profiles[k][1] for k in ks]),
+             prof_p=np.array([profiles[k][2] for k in ks]))
+    print(f"Cached: {CACHE}")
+
+
+def _load_cache():
+    d = np.load(CACHE)
+    arr = d['rows']
+    profiles = {float(t): (z, v, p) for t, z, v, p in
+                zip(d['prof_ts'], d['prof_z'], d['prof_v'], d['prof_p'])}
+    return arr, profiles
+
+
 def main():
+    # Re-plot from the cached sweep (instant; for label/clip/styling tweaks).
+    if os.environ.get('HZ_REPLOT'):
+        if not os.path.exists(CACHE):
+            raise FileNotFoundError(f"No cache to re-plot: {CACHE} (run the sweep first)")
+        print(f"HZ_REPLOT: re-plotting from {CACHE}")
+        arr, profiles = _load_cache()
+        ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a = arr.T
+        _plot(ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a, profiles)
+        return
+
     if not os.path.isfile(EXE):
         raise FileNotFoundError(f"Executable not found: {EXE}")
 
@@ -234,7 +277,7 @@ def main():
     print()
 
     rows = []
-    profiles = {}   # ts → (pmid, h2o_vmr) for selected Ts
+    profiles = {}   # ts → (zmid_km, h2o_vmr, pmid) for selected Ts
     for ts in TS_VALUES:
         r = run_one(ts)
         if r is None:
@@ -251,6 +294,7 @@ def main():
         return
 
     arr  = np.array(rows)
+    _save_cache(arr, profiles)
     ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a = arr.T
 
     _plot(ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a, profiles)
@@ -311,8 +355,6 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     ax_a.legend(fontsize=7, framealpha=0.9)
     ax_a.set(**kw)
     ax_a.set_facecolor('white')
-    ax_a.text(0.04, 0.96, '(a)', transform=ax_a.transAxes,
-              va='top', fontsize=9, fontweight='bold')
 
     # --- (b) Planetary albedo vs Ts ---
     ax_b.plot(ts, alpha, color='C2', lw=1.5)
@@ -321,8 +363,6 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     ax_b.set_ylim(0.15, 0.35)
     ax_b.set(**kw)
     ax_b.set_facecolor('white')
-    ax_b.text(0.04, 0.96, '(b)', transform=ax_b.transAxes,
-              va='top', fontsize=9, fontweight='bold')
 
     # --- (c) Seff vs Ts ---
     ax_c.plot(ts, seff, color='C1', lw=1.5, label='ExoColumn (G2V)')
@@ -346,34 +386,49 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     ax_c.legend(fontsize=7, framealpha=0.9, loc='lower right')
     ax_c.set(**kw)
     ax_c.set_facecolor('white')
-    ax_c.text(0.04, 0.96, '(c)', transform=ax_c.transAxes,
-              va='top', fontsize=9, fontweight='bold')
 
     # --- (d) H2O VMR vertical profiles vs altitude for selected Ts values ---
     items_d = sorted(profiles.items())
     colors_d = plt.cm.plasma(np.linspace(0.05, 0.85, max(len(items_d), 1)))
+    lab = []   # (ts_p, x_anchor, color) for de-collided labelling below
     for (ts_p, (zmid, vmr, pmid)), col in zip(items_d, colors_d):
-        # Trim only the topmost layer(s) where the saturated cold-start hits the
-        # es = 0.99*p steam cap (q -> ~0.98); the rest of the stratosphere is the
-        # well-behaved uniform cold-trap value.  With p_top = 0.01 Pa this shows
-        # the H2O profile up to ~100-130 km (cf. Kopparapu Fig 3d).
-        mask = pmid > 0.03
+        # Drop only genuine steam-cap layers (vmr -> ~1 where es = 0.99*p); the
+        # cold-trap stratosphere is a well-behaved CONSTANT vmr that we keep all the
+        # way to the model top.  (The old pmid>0.03 Pa cut chopped ~15 km of good
+        # constant-vmr strat off the cold columns, stopping them ~90 km short of the
+        # clip.)  With p_top = 0.002 Pa every column tops out >100 km, so the 100 km
+        # axis clip frames all curves and hides any cap layer above it (cf. Kopp 3d).
+        mask = vmr < 0.99
         z = zmid[mask]; v = vmr[mask]
         ax_d.semilogx(v, z, color=col, lw=1.5)
-        # label each curve directly at its stratospheric top (highest altitude),
-        # where the curves fan out by altitude (warmer ⇒ deeper ⇒ taller)
-        itop = int(np.argmax(z))
-        ax_d.annotate(f'{ts_p:.0f} K', xy=(v[itop], z[itop]),
-                      xytext=(4, 0), textcoords='offset points',
-                      color=col, fontsize=6.5, fontweight='bold',
-                      ha='left', va='center')
+        # Anchor the label on the curve's (vertical, constant-vmr) stratospheric
+        # segment, at the highest point still inside the clip.
+        vis = np.where(z <= PANEL_ZTOP_KM)[0]
+        ilbl = vis[np.argmax(z[vis])] if vis.size else int(np.argmax(z))
+        lab.append((ts_p, v[ilbl], col))
+
+    # Place labels just below the top edge; nudge any pair too close in VMR (the
+    # 280/300 K cold-trap values are only ~2x apart) down in altitude so they read.
+    order = sorted(range(len(lab)), key=lambda j: lab[j][1])
+    ylab = {}
+    last_x = last_y = None
+    for j in order:
+        x = lab[j][1]
+        y = PANEL_ZTOP_KM - 1.0
+        if last_x is not None and abs(np.log10(x / last_x)) < 0.45 and abs(y - last_y) < 7.0:
+            y = last_y - 9.0
+        ylab[j] = y
+        last_x, last_y = x, y
+    for j, (ts_p, x, col) in enumerate(lab):
+        ax_d.annotate(f'{ts_p:.0f} K', xy=(x, ylab[j]), xytext=(3, 0),
+                      textcoords='offset points', color=col, fontsize=6.5,
+                      fontweight='bold', ha='left', va='top')
+
     ax_d.set_xscale('log')
     ax_d.set_xlabel('H₂O VMR')
     ax_d.set_ylabel('Altitude (km)')
-    ax_d.set_ylim(bottom=0.)
+    ax_d.set_ylim(0., PANEL_ZTOP_KM)
     ax_d.set_facecolor('white')
-    ax_d.text(0.04, 0.96, '(d)', transform=ax_d.transAxes,
-              va='top', fontsize=9, fontweight='bold')
 
     fig.tight_layout()
     out_dir = os.path.dirname(os.path.abspath(__file__))
