@@ -79,11 +79,12 @@ NML_CASE = """\
 
 
 def planck_wn(wn_cm, T):
-    """Planck spectral radiance per wavenumber -> hemispheric flux density [W/m2/cm-1]."""
-    h = 6.62607015e-34; c = 2.99792458e10; kB = 1.380649e-23   # cgs-ish (c in cm/s)
-    nu = wn_cm
-    B = (2*h*c**2*nu**3) / (np.exp(h*c*nu/(kB*T)) - 1.0)        # erg/s/cm2/sr/cm-1
-    return np.pi * B * 1e-3                                     # -> W/m2/cm-1
+    """Planck hemispheric flux density [W m-2 / cm-1] for wavenumber wn_cm [cm-1].
+    F = pi*B, B = c1L*nu^3/(exp(c2*nu/T)-1), c1L=1.191042e-5 mW/(m2 sr cm-1)."""
+    c1L = 1.1910429e-5   # mW m-2 sr-1 (cm-1)-4
+    c2  = 1.4387769      # cm K
+    B = c1L * wn_cm**3 / np.expm1(c2 * wn_cm / T)   # mW/(m2 sr cm-1)
+    return np.pi * B * 1e-3                          # -> W/(m2 cm-1)
 
 
 def main():
@@ -107,27 +108,43 @@ def main():
     olr_density = bolr / dwn                          # W/m2/cm-1
     win1 = (wm >= 800) & (wm <= 1200)
     win2 = (wm >= 300) & (wm <= 600)
+    win = win1 | win2
 
-    fig, ax = plt.subplots(figsize=(7.4, 4.6), dpi=300)
+    # Illustrative BPS: Kopparapu's BPS continuum absorbs ~12 W/m2 MORE than CKD in
+    # the H2O windows (Sec 2.2.2: SMART/CKD 297 -> their/BPS 285).  We have NO BPS
+    # spectral data, so apply that window suppression to OUR OLR to show the EFFECT
+    # (illustrative, not a computed BPS spectrum).
+    dOLR_BPS = SMART_CKD - KOPP_BPS                   # 12 W/m2
+    w_sum = bolr[win].sum()
+    bolr_bps = bolr.copy()
+    bolr_bps[win] *= (w_sum - dOLR_BPS) / w_sum
+    bps_density = bolr_bps / dwn
+
+    bb = planck_wn(wm, 400.)
+    ymax = 1.05 * np.nanmax(bb)
+
+    fig, ax = plt.subplots(figsize=(7.6, 4.8), dpi=300)
     fig.patch.set_facecolor('white'); ax.set_facecolor('white')
 
     # continuum-sensitive windows (Kopparapu Sec 2.2.2)
     for lo, hi in [(800, 1200), (300, 600)]:
         ax.axvspan(lo, hi, color='C1', alpha=0.15, lw=0)
-    ax.text(1000, 0.015, 'H$_2$O window', ha='center', va='bottom',
+    ax.text(1000, 0.03*ymax, 'H$_2$O window', ha='center', va='bottom',
             fontsize=7.5, color='C1', fontweight='bold')
-    ax.text(450, 0.015, 'rot. window', ha='center', va='bottom',
+    ax.text(450, 0.03*ymax, 'rot. window', ha='center', va='bottom',
             fontsize=7.5, color='C1', fontweight='bold')
 
-    # 400 K blackbody reference
-    wn_fine = np.linspace(max(we.min(), 1), 2000, 800)
-    ax.plot(wn_fine, planck_wn(wn_fine, 400.), color='0.6', lw=0.9, ls='--',
-            label='400 K blackbody')
-    # ExoColumn spectral OLR
-    ax.plot(wm, olr_density, drawstyle='steps-mid', color='C0', lw=1.5,
+    # 400 K surface blackbody (now correctly scaled)
+    wn_fine = np.linspace(max(we.min(), 1), 2000, 1000)
+    ax.plot(wn_fine, planck_wn(wn_fine, 400.), color='k', lw=1.3,
+            label='400 K blackbody (surface)')
+    # ExoColumn spectral OLR (MT_CKD) and the illustrative BPS variant
+    ax.plot(wm, olr_density, drawstyle='steps-mid', color='C0', lw=1.6,
             label='ExoColumn OLR (MT_CKD 3.3)')
+    ax.plot(wm, bps_density, drawstyle='steps-mid', color='C3', lw=1.4, ls='--',
+            label='+ BPS-like window continuum (illustrative, $-$12 W m$^{-2}$)')
 
-    ax.set_xlim(0, 2000); ax.set_ylim(0, 0.33)
+    ax.set_xlim(0, 2000); ax.set_ylim(0, ymax)
     ax.set_xlabel('Wavenumber (cm$^{-1}$)')
     ax.set_ylabel('Spectral OLR (W m$^{-2}$ / cm$^{-1}$)')
     ax.set_title('Dense-H$_2$O atmosphere (Kopparapu+2013 Fig. 2 case): '
