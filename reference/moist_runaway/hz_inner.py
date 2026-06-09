@@ -2,6 +2,18 @@
 """
 hz_inner.py  —  ExoColumn version of Kopparapu+2013 Figure 3 (inner HZ, G2V star).
 
+REFERENCE CASE: moist-/runaway-greenhouse inner HZ, NON-IDEAL water EOS.
+=========================================================================
+This is the self-contained generator for the reference/moist_runaway case.
+It uses the Kasting (1988) Appendix-A non-ideal moist pseudoadiabat with the
+native IAPWS-95 EOS (h2o_eos='nonideal', which forces the Wagner-Pruss steam
+saturation pressure).  The ideal-gas variant has been retired — this case is
+the result we validate against.
+
+To re-sweep (full ~14 min) or re-plot (instant), see README.md in this directory.
+The full per-run configuration is embedded in NML_TEMPLATE below, so the sweep is
+reproducible given an ExoColumn binary built at PVER>=200.
+
 For each prescribed surface temperature Ts, ExoColumn builds a moist-adiabat
 column (cold start: fully saturated at all levels including stratosphere,
 isothermal stratosphere at t_strato = 200 K), calls ExoRT radiation once
@@ -54,7 +66,11 @@ import netCDF4 as nc
 import matplotlib.pyplot as plt
 
 # ---------------------------------------------------------------------------
-ROOT     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# This script lives in reference/moist_runaway/, two levels below the project
+# root (which holds run/, iofiles/, exocol_config.nml).  Outputs (figure + cache)
+# are written next to this script.
+HERE     = os.path.dirname(os.path.abspath(__file__))
+ROOT     = os.path.abspath(os.path.join(HERE, '..', '..'))
 EXE      = os.path.join(ROOT, 'run', 'exocol.exe')
 OUT_NC   = os.path.join(ROOT, 'iofiles', 'exocol_out.nc')
 NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
@@ -91,15 +107,13 @@ H2O_TCRIT = 647.1   # K, water critical point (saturated → supercritical dry b
 # HZ_TS_MAX) shade this region as opacity-limited (would need HITEMP k-data).
 T_KTABLE_RELIABLE = 1600.0   # K
 
-# Water-vapour equation of state for the moist pseudoadiabat:
-#   'ideal'    — dilute ideal-gas moist adiabat (malr); the historical default.
-#   'nonideal' — Kasting (1988) Appendix-A general non-ideal pseudoadiabat with
-#                the native IAPWS-95 EOS (beta, real-gas entropies/cp).  Forces
-#                the Wagner-Pruss steam saturation pressure.
-# Override with HZ_H2O_EOS=nonideal.  Outputs are tagged so the two modes do not
-# overwrite each other (hz_inner.pdf vs hz_inner_nonideal.pdf).
-H2O_EOS = os.environ.get('HZ_H2O_EOS', 'ideal')
-TAG     = '' if H2O_EOS == 'ideal' else '_' + H2O_EOS
+# Water-vapour equation of state for the moist pseudoadiabat (FIXED for this
+# reference case): Kasting (1988) Appendix-A general non-ideal pseudoadiabat with
+# the native IAPWS-95 EOS (beta, real-gas entropies/cp), which forces the
+# Wagner-Pruss steam saturation pressure.  The retired ideal-gas variant produced
+# hz_inner.{pdf,png}; this case is hz_inner_nonideal.* (TAG kept for that lineage).
+H2O_EOS = 'nonideal'
+TAG     = '_nonideal'
 
 ALBEDO   = 0.32      # surface albedo = Kopparapu et al. (2013) value, for a DIRECT
                      # comparison (their cloud-free 1-D model uses Ad=0.32 to mimic
