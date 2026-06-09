@@ -101,11 +101,10 @@ TS_MAX  = float(os.environ.get('HZ_TS_MAX',  '2500'))
 TS_STEP = float(os.environ.get('HZ_TS_STEP', '5'))
 TS_VALUES = np.arange(TS_MIN, TS_MAX + TS_STEP, TS_STEP, dtype=float)   # K
 H2O_TCRIT = 647.1   # K, water critical point (saturated → supercritical dry base)
-# Above this Ts the ExoRT n68 k-tables (T-grid ceiling 500 K, hardcoded in the
-# read-only radgrid.F90) under-absorb the near-IR emission of the hot dry base, so
-# OLR leaks spuriously off the runaway plateau.  Sweeps that go higher (set
-# HZ_TS_MAX) shade this region as opacity-limited (would need HITEMP k-data).
-T_KTABLE_RELIABLE = 1600.0   # K
+# CAVEAT: the ExoRT n68 k-tables have a hardcoded T-grid ceiling of 500 K
+# (read-only radgrid.F90); above ~1600 K the deep layers use clamped opacity, so
+# the post-runaway OLR rise is qualitatively right but quantitatively extrapolated
+# (would need HITEMP-class k-data).
 
 # Water-vapour equation of state for the moist pseudoadiabat (FIXED for this
 # reference case): Kasting (1988) Appendix-A general non-ideal pseudoadiabat with
@@ -139,14 +138,17 @@ MW_H2O   = 18.015    # g/mol
 # tropospheric resolution (hence the sawtooth amplitude) unchanged.
 SMOOTH_WIN = int(os.environ.get('HZ_SMOOTH', '5'))
 
-# Kopparapu+2013 inner-edge Seff (G2V, 1 M_Earth)
-KOPP_RUNAWAY = 1.06     # runaway greenhouse
-KOPP_MOIST   = 1.015    # moist greenhouse
-SN_LIMIT     = 282.0    # W/m²  Simpson-Nakajima OLR limit
-MOIST_GH_VMR = 3.0e-3   # moist greenhouse stratospheric H2O VMR threshold
+MOIST_GH_VMR = 3.0e-3   # moist-greenhouse stratospheric H2O VMR threshold (Kopparapu Sec 3.1)
 
 # Ts values at which to save the full H2O vertical profile for panel (d)
 PROFILE_TS = [280.0, 300.0, 320.0, 340.0, 360.0, 380.0]
+
+# Of the profiled curves, only these get an on-curve label in panel (d); the
+# others follow the same monotonic ordering and are left unlabelled to reduce
+# clutter.  LABEL_TS_PREFIX gets the explicit "Ts = " prefix so the reader knows
+# the numbers are surface temperatures (the rest are bare "NNN K").
+LABEL_TS = [320.0, 340.0, 360.0]
+LABEL_TS_PREFIX = 340.0
 
 # Altitude clip for panel (d) [km].  p_top=0.002 Pa guarantees every profiled column
 # reaches this; the panel is capped here so the warm (taller) columns do not stretch
@@ -336,68 +338,83 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     # ExoColumn's own moist-greenhouse (water-loss) and runaway-greenhouse Seff:
     #   moist GH = Seff at the first Ts where the stratospheric H2O VMR reaches
     #             MOIST_GH_VMR (3e-3, the water-loss threshold; Kopparapu Sec 3.1).
-    #   runaway  = the Seff plateau (limiting value over 600 K..T_KTABLE_RELIABLE,
-    #             below the post-runaway rise).
+    #   runaway  = Seff at the H2O critical temperature Tc = 647.1 K — above Tc no
+    #             liquid ocean can survive, so this is the canonical runaway point
+    #             (the plateau is flat through here, ~the runaway-greenhouse limit).
     svmr = _smooth(strat_vmr)
-    exo_moist = exo_runaway = moist_ts = np.nan
+    exo_moist = exo_runaway = moist_ts = runaway_ts = np.nan
     _wet = np.where(svmr >= MOIST_GH_VMR)[0]
     if _wet.size:
         exo_moist = float(seff[_wet[0]]); moist_ts = float(ts[_wet[0]])
-    _plat = (ts >= 600.) & (ts <= T_KTABLE_RELIABLE)
-    if np.any(_plat):
-        exo_runaway = float(np.nanmax(seff[_plat]))
+    if ts[0] <= H2O_TCRIT <= ts[-1]:
+        runaway_ts  = H2O_TCRIT
+        exo_runaway = float(np.interp(H2O_TCRIT, ts, seff))
     print(f"  ExoColumn moist-GH Seff = {exo_moist:.3f} (Ts={moist_ts:.0f} K)"
-          f" ;  runaway Seff = {exo_runaway:.3f}")
+          f" ;  runaway Seff = {exo_runaway:.3f} (Tc={runaway_ts:.0f} K)")
 
-    fig, axes = plt.subplots(2, 2, figsize=(9.5, 5.5), dpi=300)
+    fig, axes = plt.subplots(2, 2, figsize=(9.5, 7.0), dpi=300)
     fig.patch.set_facecolor('white')
     (ax_a, ax_b), (ax_c, ax_d) = axes
 
     kw = dict(xlim=(200., 2200.))
 
     # --- (a) OLR and ASR vs Ts ---
-    ax_a.plot(ts, olr, color='C3', lw=1.5, label='OLR')
-    ax_a.plot(ts, asr, color='C0', lw=1.5, label='Absorbed SW')
-    ax_a.axhline(SN_LIMIT, color='k', lw=0.8, ls='--',
-                 label=f'S-N limit ({SN_LIMIT:.0f} W m⁻²)')
-    if ts[-1] > H2O_TCRIT:
-        ax_a.axvline(H2O_TCRIT, color='0.55', lw=0.7, ls='-.',
-                     label=f'$T_c$ = {H2O_TCRIT:.0f} K (→ supercrit.)')
+    ax_a.plot(ts, olr, color='C3', lw=1.5)
+    ax_a.plot(ts, asr, color='C0', lw=1.5)
     ax_a.set_ylabel('Flux (W m⁻²)')
-    ax_a.set_xlabel('$T_s$ (K)')
+    ax_a.set_xlabel('Surface temperature (K)')
     ax_a.set_ylim(100., 450.)      # focus on the plateau + onset of the rise
-    ax_a.legend(fontsize=7, framealpha=0.9)
+    # Label the curves directly (no legend): F_IR = outgoing longwave (OLR),
+    # F_SOL = absorbed shortwave.  Anchored on the runaway plateau.
+    ax_a.text(800., 315., '$F_\\mathrm{IR}$', color='C3', fontsize=11,
+              fontweight='bold', ha='center', va='bottom')
+    ax_a.text(800., 248., '$F_\\mathrm{SOL}$', color='C0', fontsize=11,
+              fontweight='bold', ha='center', va='top')
     ax_a.set(**kw)
     ax_a.set_facecolor('white')
 
     # --- (b) Planetary albedo vs Ts ---
     ax_b.plot(ts, alpha, color='C2', lw=1.5)
+    ax_b.axhline(ALBEDO, color='0.3', lw=0.9, ls='--')
     ax_b.set_ylabel('Planetary albedo $\\alpha_p$')
-    ax_b.set_xlabel('$T_s$ (K)')
+    ax_b.set_xlabel('Surface temperature (K)')
     ax_b.set_ylim(0.15, 0.35)
+    # Label the curve and the reference line directly (no legend).
+    ax_b.text(1400., ALBEDO - 0.006, f'Surface albedo = {ALBEDO:.2f}',
+              color='0.3', fontsize=8, ha='center', va='top')
     ax_b.set(**kw)
     ax_b.set_facecolor('white')
 
     # --- (c) Seff vs Ts ---
-    ax_c.plot(ts, seff, color='C1', lw=1.5, label='ExoColumn (G2V)')
-    ax_c.axhline(KOPP_RUNAWAY, color='C3', lw=0.9, ls='--',
-                 label=f'Kopparapu runaway ({KOPP_RUNAWAY:.4f})')
-    ax_c.axhline(KOPP_MOIST, color='C0', lw=0.9, ls=':',
-                 label=f'Kopparapu moist GH ({KOPP_MOIST:.4f})')
-    if np.isfinite(exo_runaway):
-        ax_c.axhline(exo_runaway, color='C1', lw=1.1, ls='--',
-                     label=f'ExoColumn runaway ({exo_runaway:.3f})')
+    ax_c.plot(ts, seff, color='C1', lw=1.5)
+    # Markers on the curve at the two greenhouse limits: moist-GH (water-loss; the
+    # Ts where stratospheric H2O VMR first reaches 3e-3) and runaway-GH (at the
+    # H2O critical temperature Tc).
     if np.isfinite(exo_moist):
-        ax_c.axhline(exo_moist, color='C4', lw=1.1, ls=':',
-                     label=f'ExoColumn moist GH ({exo_moist:.3f})')
-        ax_c.plot(moist_ts, exo_moist, 'o', color='C4', ms=4, zorder=5)
-    ax_c.axhline(1.0, color='gray', lw=0.5, alpha=0.5)
-    if ts[-1] > H2O_TCRIT:
-        ax_c.axvline(H2O_TCRIT, color='0.55', lw=0.7, ls='-.')
+        ax_c.plot(moist_ts, exo_moist, 'o', color='0.3', ms=3,
+                  markeredgecolor='0.3', markeredgewidth=0.5, zorder=6)
+    if np.isfinite(exo_runaway):
+        ax_c.plot(runaway_ts, exo_runaway, 'o', color='0.3', ms=3,
+                  markeredgecolor='0.3', markeredgewidth=0.5, zorder=6)
     ax_c.set_ylabel('$S_{\\rm eff}$')
-    ax_c.set_xlabel('$T_s$ (K)')
+    ax_c.set_xlabel('Surface temperature (K)')
     ax_c.set_ylim(0.4, 1.8)
-    ax_c.legend(fontsize=7, framealpha=0.9, loc='lower right')
+    # Label each limit next to its own marker (two lines to stay compact), with
+    # the implied IHZ orbital distance d = 1/sqrt(Seff) [AU] in parentheses.  The
+    # two markers are close in Ts (~350 vs ~647 K), so moist sits below its marker
+    # and runaway (at Tc) above its marker to keep them clear of each other.
+    if np.isfinite(exo_moist):
+        ax_c.annotate(f'Moist greenhouse\n$S_\\mathrm{{eff}}$ = {exo_moist:.3f}'
+                      f' ({1.0 / np.sqrt(exo_moist):.3f} AU)',
+                      xy=(moist_ts, exo_moist), xytext=(2, -16),
+                      textcoords='offset points', color='0.3', fontsize=8,
+                      ha='left', va='top')
+    if np.isfinite(exo_runaway):
+        ax_c.annotate(f'Runaway greenhouse\n$S_\\mathrm{{eff}}$ = {exo_runaway:.3f}'
+                      f' ({1.0 / np.sqrt(exo_runaway):.3f} AU)',
+                      xy=(runaway_ts, exo_runaway), xytext=(2, 8),
+                      textcoords='offset points', color='0.3', fontsize=8,
+                      ha='left', va='bottom')
     ax_c.set(**kw)
     ax_c.set_facecolor('white')
 
@@ -415,31 +432,36 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
         mask = vmr < 0.99
         z = zmid[mask]; v = vmr[mask]
         ax_d.semilogx(v, z, color=col, lw=1.5)
+        # Label only the selected curves (the rest follow the same pattern).
+        if not any(abs(ts_p - t) < 0.5 for t in LABEL_TS):
+            continue
         # Anchor the label on the curve's (vertical, constant-vmr) stratospheric
         # segment, at the highest point still inside the clip.
         vis = np.where(z <= PANEL_ZTOP_KM)[0]
         ilbl = vis[np.argmax(z[vis])] if vis.size else int(np.argmax(z))
         lab.append((ts_p, v[ilbl], col))
 
-    # Place labels just below the top edge; nudge any pair too close in VMR (the
-    # 280/300 K cold-trap values are only ~2x apart) down in altitude so they read.
+    # Place labels just below the top edge; nudge any pair too close in VMR down
+    # in altitude so they read (the selected 320/340/360 K are well separated).
     order = sorted(range(len(lab)), key=lambda j: lab[j][1])
     ylab = {}
     last_x = last_y = None
     for j in order:
         x = lab[j][1]
-        y = PANEL_ZTOP_KM - 1.0
-        if last_x is not None and abs(np.log10(x / last_x)) < 0.45 and abs(y - last_y) < 7.0:
-            y = last_y - 9.0
+        y = PANEL_ZTOP_KM - 2.0
+        if last_x is not None and abs(np.log10(x / last_x)) < 0.45 and abs(y - last_y) < 9.0:
+            y = last_y - 11.0
         ylab[j] = y
         last_x, last_y = x, y
     for j, (ts_p, x, col) in enumerate(lab):
-        ax_d.annotate(f'{ts_p:.0f} K', xy=(x, ylab[j]), xytext=(3, 0),
-                      textcoords='offset points', color=col, fontsize=6.5,
+        txt = (f'$T_s$ = {ts_p:.0f} K' if abs(ts_p - LABEL_TS_PREFIX) < 0.5
+               else f'{ts_p:.0f} K')
+        ax_d.annotate(txt, xy=(x, ylab[j]), xytext=(3, -10),
+                      textcoords='offset points', color=col, fontsize=10,
                       fontweight='bold', ha='left', va='top')
 
     ax_d.set_xscale('log')
-    ax_d.set_xlabel('H₂O VMR')
+    ax_d.set_xlabel('H₂O volume mixing ratio')
     ax_d.set_ylabel('Altitude (km)')
     ax_d.set_ylim(0., PANEL_ZTOP_KM)
     ax_d.set_facecolor('white')
