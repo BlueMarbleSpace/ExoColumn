@@ -202,10 +202,14 @@ def run_one(ts):
 
         # H2O volume mixing ratio profile: VMR ≈ h2ommr × mwdry / MW_H2O
         h2o_vmr = h2ommr * mwdry / MW_H2O
+        # Stratospheric H2O VMR = the cold-trap minimum (driest point in the
+        # column); used to locate the moist-greenhouse / water-loss limit
+        # (the Ts where this reaches MOIST_GH_VMR = 3e-3; Kopparapu Sec 3.1).
+        strat_vmr = float(np.nanmin(h2o_vmr)) if np.any(np.isfinite(h2o_vmr)) else np.nan
         # Layer-midpoint altitude [km] from interface heights (TOA=0 … srf=pverp)
         zmid_km = 0.5 * (zint[:-1] + zint[1:]) / 1000.
 
-        return dict(olr=olr, asr=asr, alpha=alpha, seff=seff,
+        return dict(olr=olr, asr=asr, alpha=alpha, seff=seff, strat_vmr=strat_vmr,
                     h2o_vmr=h2o_vmr, pmid=np.array(pmid),
                     tmid=np.array(tmid), zmid_km=zmid_km)
     finally:
@@ -238,7 +242,7 @@ def main():
             continue
         print(f"  Ts={ts:5.1f} K  OLR={r['olr']:7.2f}  ASR={r['asr']:7.2f}"
               f"  α={r['alpha']:.3f}  Seff={r['seff']:.4f}")
-        rows.append((ts, r['olr'], r['asr'], r['alpha'], r['seff']))
+        rows.append((ts, r['olr'], r['asr'], r['alpha'], r['seff'], r['strat_vmr']))
         if any(abs(ts - ts_p) < 0.5 for ts_p in PROFILE_TS):
             profiles[ts] = (r['zmid_km'], r['h2o_vmr'], r['pmid'])
 
@@ -247,9 +251,9 @@ def main():
         return
 
     arr  = np.array(rows)
-    ts_a, olr_a, asr_a, alp_a, seff_a = arr.T
+    ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a = arr.T
 
-    _plot(ts_a, olr_a, asr_a, alp_a, seff_a, profiles)
+    _plot(ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a, profiles)
 
 
 def _smooth(y, w=SMOOTH_WIN):
@@ -266,10 +270,26 @@ def _smooth(y, w=SMOOTH_WIN):
     return out
 
 
-def _plot(ts, olr, asr, alpha, seff, profiles):
+def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     # Suppress the vertical-resolution sawtooth (see SMOOTH_WIN note above).
     olr, asr, alpha, seff = (_smooth(olr), _smooth(asr),
                              _smooth(alpha), _smooth(seff))
+
+    # ExoColumn's own moist-greenhouse (water-loss) and runaway-greenhouse Seff:
+    #   moist GH = Seff at the first Ts where the stratospheric H2O VMR reaches
+    #             MOIST_GH_VMR (3e-3, the water-loss threshold; Kopparapu Sec 3.1).
+    #   runaway  = the Seff plateau (limiting value over 600 K..T_KTABLE_RELIABLE,
+    #             below the post-runaway rise).
+    svmr = _smooth(strat_vmr)
+    exo_moist = exo_runaway = moist_ts = np.nan
+    _wet = np.where(svmr >= MOIST_GH_VMR)[0]
+    if _wet.size:
+        exo_moist = float(seff[_wet[0]]); moist_ts = float(ts[_wet[0]])
+    _plat = (ts >= 600.) & (ts <= T_KTABLE_RELIABLE)
+    if np.any(_plat):
+        exo_runaway = float(np.nanmax(seff[_plat]))
+    print(f"  ExoColumn moist-GH Seff = {exo_moist:.3f} (Ts={moist_ts:.0f} K)"
+          f" ;  runaway Seff = {exo_runaway:.3f}")
 
     fig, axes = plt.subplots(2, 2, figsize=(9.5, 5.5), dpi=300)
     fig.patch.set_facecolor('white')
@@ -310,6 +330,13 @@ def _plot(ts, olr, asr, alpha, seff, profiles):
                  label=f'Kopparapu runaway ({KOPP_RUNAWAY:.4f})')
     ax_c.axhline(KOPP_MOIST, color='C0', lw=0.9, ls=':',
                  label=f'Kopparapu moist GH ({KOPP_MOIST:.4f})')
+    if np.isfinite(exo_runaway):
+        ax_c.axhline(exo_runaway, color='C1', lw=1.1, ls='--',
+                     label=f'ExoColumn runaway ({exo_runaway:.3f})')
+    if np.isfinite(exo_moist):
+        ax_c.axhline(exo_moist, color='C4', lw=1.1, ls=':',
+                     label=f'ExoColumn moist GH ({exo_moist:.3f})')
+        ax_c.plot(moist_ts, exo_moist, 'o', color='C4', ms=4, zorder=5)
     ax_c.axhline(1.0, color='gray', lw=0.5, alpha=0.5)
     if ts[-1] > H2O_TCRIT:
         ax_c.axvline(H2O_TCRIT, color='0.55', lw=0.7, ls='-.')
