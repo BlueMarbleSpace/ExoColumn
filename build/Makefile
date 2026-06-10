@@ -125,6 +125,7 @@ EXORT_SRCS = \
 EXCOL_SRCS = \
   $(EXCOL_DIR)/exocol_iapws95.F90     \
   $(EXCOL_DIR)/exocol_steam.F90       \
+  $(EXCOL_DIR)/exocol_co2.F90         \
   $(EXCOL_DIR)/exocol_mod.F90         \
   $(EXCOL_DIR)/exocol_ozone.F90       \
   $(EXCOL_DIR)/exocol_config.F90      \

@@ -51,11 +51,15 @@ module exocol_coldstart
                             h2_vmr,  n2_vmr,  o3_vmr, o2_vmr,     &
                             ar_vmr,  o3_profile, variable_ps, ihz_profile, &
                             h2o_inventory_bar, h2o_eos,            &
+                            co2_condense, cp_co2_tdep,             &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
                             CP_N2,  CP_O3,  CP_O2,  CP_AR
   use exocol_convadj, only: esat, malr
+  ! cp_co2 (function) renamed: it collides with the CP_CO2 constant from
+  ! exocol_config under Fortran's case-insensitive names.
+  use exocol_co2,     only: tsat_co2, cp_co2_of_T => cp_co2
   use exocol_steam,   only: steam_dlnTdlnP_sat, steam_dlnTdlnP_dry
   use exocol_iapws95, only: IAPWS_TT, IAPWS_TC   ! triple-point + critical-point T (L-V saturation bounds)
   use exocol_ozone,   only: set_earth_o3_profile, set_rcemip_o3_profile
@@ -113,6 +117,11 @@ contains
     ! fixed mass mixing ratio alpha_v = rho_v/rho_n carried through the dry layer.
     logical  :: use_nonideal_adiabat
     real(r8) :: alfav_dry = 0._r8
+    ! Outer-HZ CO2 condensation (co2_condense) + T-dependent cp (cp_co2_tdep).
+    ! f_co2_vmr·p approximates the CO2 partial pressure (exact in dry air; the
+    ! trace tropospheric H2O at Ts <= 273 K biases it by < 0.3%).
+    real(r8) :: f_co2_vmr, T_co2sat, cp_loc
+    logical  :: co2_pin_announced
 
     write(*,'(/,a)') '  cold_start_init: building initial column from &exocol_init'
 
@@ -168,6 +177,10 @@ contains
           '    ', dry_name(k), '  VMR = ', vmr_dry(k), '  MMR = ', mmr_dry(k)
       end if
     end do
+
+    ! CO2 dry-air mole fraction for the co2_condense saturation pinning.
+    f_co2_vmr         = vmr_dry(1)
+    co2_pin_announced = .false.
 
     ! ---- 2. Pressure grid ----
     if (cs_ps >= 0._r8) then
@@ -393,7 +406,16 @@ contains
       end if
 
     else
-      ! Standard: moist pseudoadiabat from surface, cap at t_strato
+      ! Standard: moist pseudoadiabat from surface, cap at t_strato.
+      ! With co2_condense (outer HZ, Kopparapu 2013 Sec 3.3): after each
+      ! substep, pin the parcel back to the CO2 frost/dew point wherever the
+      ! adiabat would supersaturate in CO2 — the Kasting (1991) treatment in
+      ! which the upper-tropospheric lapse rate follows the CO2 saturation
+      ! vapour pressure curve (latent heat enters implicitly: the saturation
+      ! curve is much shallower than the dry adiabat).  CO2 stays well-mixed
+      ! (gas not depleted by condensation; CO2 clouds neglected, as in CLIMA).
+      ! Once the pinned curve drops to t_strato the isothermal cap takes over
+      ! (Tsat_CO2 decreases monotonically upward, so pinning never re-engages).
       do k = pverp-1, 1, -1
         if (T_at_int(k+1) <= t_strato) then
           T_at_int(k) = t_strato
@@ -404,13 +426,20 @@ contains
         dlogp_layer = log(pint(k) / pint(k+1))
         dlogp_sub   = dlogp_layer / real(NSUB, r8)
         do isub = 1, NSUB
+          ! Dry-air cp at the local temperature when cp_co2_tdep (only the CO2
+          ! share is T-dependent; see exocol_config).  Default: the constant.
+          if (cp_co2_tdep) then
+            cp_loc = cpdry_new + mmr_dry(1) * (cp_co2_of_T(T_lev) - CP_CO2)
+          else
+            cp_loc = cpdry_new
+          end if
           if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT .and. T_lev < IAPWS_TC) then
             ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
             ! vapour SVP; below the triple point fall back to the ideal malr)
-            dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
+            dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cp_loc) &
                      * dlogp_sub
           else
-            Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
+            Gm      = malr(T_lev, p_lev, Rd, exo_g, cp_loc)
             es_sub  = min(esat(T_lev), 0.99_r8 * p_lev)
             r_sub   = eps_wv * es_sub / (p_lev - es_sub)
             T_v_lev = T_lev * (1._r8 + r_sub / eps_wv) / (1._r8 + r_sub)
@@ -419,6 +448,18 @@ contains
           T_prev_sub = T_lev;  p_prev_sub = p_lev
           T_lev   = T_lev + dT_sub
           p_lev   = p_lev * exp(dlogp_sub)
+          if (co2_condense) then
+            T_co2sat = tsat_co2(f_co2_vmr * p_lev)
+            if (T_lev < T_co2sat) then
+              if (.not. co2_pin_announced) then
+                co2_pin_announced = .true.
+                write(*,'(a,f9.2,a,f7.2,a)') &
+                  '    CO2 condensation level: p = ', p_lev/100._r8, &
+                  ' hPa  T = ', T_co2sat, ' K  (adiabat follows CO2 saturation curve)'
+              end if
+              T_lev = T_co2sat
+            end if
+          end if
           if (T_lev <= t_strato) then
             if (p_coldpoint < 0._r8) p_coldpoint = &
               interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, t_strato)
