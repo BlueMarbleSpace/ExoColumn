@@ -201,6 +201,29 @@ module exocol_config
   ! ocean (Kasting 1988: 1.4e24 g).  Set very large to recover unbounded pH2O.
   real(r8),          public, save :: h2o_inventory_bar = 270.0_r8
 
+  ! Outer-HZ (maximum greenhouse, Kopparapu 2013 Sec 3.3) cold-start physics.
+  ! Both default .false. so every validated Earth/IHZ result stays bit-identical.
+  !
+  ! co2_condense: in the standard cold-start profile (ihz_profile=.false.), pin
+  !   the ascending adiabat to the CO2 saturation curve wherever it would
+  !   supersaturate in CO2: T(k) = max(T_adiabat, Tsat_CO2(pCO2(k)), t_strato),
+  !   with pCO2 = co2 VMR × p (CO2 kept well-mixed; condensate is removed but,
+  !   as in CLIMA, the gas-phase mixing ratio is not depleted and CO2-cloud
+  !   radiative effects are neglected).  This is the Kasting (1991) treatment
+  !   in which the upper-tropospheric lapse rate of a cold CO2-rich column
+  !   follows the CO2 saturation vapour pressure curve.  Saturation curve:
+  !   Span & Wagner (1996) auxiliary equations (see exocol_co2).
+  logical,           public, save :: co2_condense     = .false.
+  !
+  ! cp_co2_tdep: evaluate the CO2 contribution to the dry-air specific heat at
+  !   the local temperature, cpdry(T) = cpdry_const + mmr_CO2·(cp_CO2(T) − 844),
+  !   inside the standard cold-start adiabat integration (Kasting's CLIMA also
+  !   uses T-dependent cp).  cp_CO2(T) is the statistical-mechanics ideal-gas
+  !   value (exocol_co2); over 154–273 K it is 10–20% below the fixed 300-K
+  !   value, steepening the dry adiabat of a cold CO2-dominated column.  The
+  !   stored column constant cpdry_col is unchanged (RCE loop unaffected).
+  logical,           public, save :: cp_co2_tdep      = .false.
+
   ! Saturation-vapour-pressure formula (general toggle; see exocol_convadj::esat).
   !   'cc'    (default) → fixed-L Clausius-Clapeyron (esat_cc); preserves every
   !                       validated calibration bit-for-bit.
@@ -302,7 +325,8 @@ contains
                                   surface_flux, z0_rough, &
                                   sw_zenith_quad, sw_nquad, &
                                   flux_only, variable_ps, ihz_profile, &
-                                  h2o_inventory_bar, esat_formula, h2o_eos
+                                  h2o_inventory_bar, esat_formula, h2o_eos, &
+                                  co2_condense, cp_co2_tdep
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -486,6 +510,10 @@ contains
     end if
     if (trim(h2o_eos) == 'nonideal') &
       write(*,'(a)') '  *** h2o_eos = nonideal — Kasting (1988) Appendix-A pseudoadiabat (IAPWS-95 beta) ***'
+    if (co2_condense) &
+      write(*,'(a)') '  *** co2_condense = .true. — cold-start adiabat pinned to CO2 saturation curve (Kasting 1991) ***'
+    if (cp_co2_tdep) &
+      write(*,'(a)') '  *** cp_co2_tdep = .true. — T-dependent cp_CO2 in cold-start adiabat ***'
 
     if (len_trim(input_file) == 0) then
       write(*,'(a)')         '  Initialization    : cold start (from &exocol_init)'
