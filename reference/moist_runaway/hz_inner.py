@@ -75,6 +75,16 @@ EXE      = os.path.join(ROOT, 'run', 'exocol.exe')
 OUT_NC   = os.path.join(ROOT, 'iofiles', 'exocol_out.nc')
 NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
 
+# Kopparapu et al. (2013) reference data (provided directly by R. Kopparapu) for the
+# direct model-vs-model comparison overlaid on the figure:
+#   • waterloss_IHZ_present.dat — the inner-HZ sweep vs surface temperature TGO,
+#     columns: TGO  SEFF  PALB  FH2O  FTIR(1)[=OLR]  FTSO(1)[=absorbed SW].
+#     Feeds panels (a) (OLR/ASR), (b) (planetary albedo), (c) (Seff).
+#   • clima_last.tab — one CLIMA water-loss vertical profile; col 1 = altitude [km],
+#     col 4 = H2O volume mixing ratio.  Feeds panel (d).
+KOPP_SWEEP = os.path.join(HERE, 'waterloss_IHZ_present.dat')
+KOPP_CLIMA = os.path.join(HERE, 'clima_last.tab')
+
 # ---------------------------------------------------------------------------
 # Ts grid (env-overridable for quick tests: HZ_TS_MIN/HZ_TS_MAX/HZ_TS_STEP).
 # The sweep spans the full inner-HZ runaway (Kasting 1988 Fig 1; Kopparapu 2013
@@ -330,6 +340,38 @@ def _smooth(y, w=SMOOTH_WIN):
     return out
 
 
+def _load_kopp_sweep():
+    """Kopparapu+2013 inner-HZ sweep (waterloss_IHZ_present.dat).
+    Returns dict of columns or None if the file is absent."""
+    if not os.path.isfile(KOPP_SWEEP):
+        return None
+    # 3-line header (title, column names, '====' rule) then numeric rows.
+    d = np.genfromtxt(KOPP_SWEEP, skip_header=3)
+    return dict(tgo=d[:, 0], seff=d[:, 1], palb=d[:, 2], fh2o=d[:, 3],
+                olr=d[:, 4], asr=d[:, 5])
+
+
+def _load_kopp_clima():
+    """Kopparapu CLIMA water-loss vertical profiles (clima_last.tab).
+    The file concatenates one ALT/P/T/FH2O/... block PER surface temperature
+    (220, 240, ... K); each block runs top-of-atmosphere -> surface.  Columns are
+    ALT[km]  P[bar]  T[K]  FH2O[VMR]  ...  Returns {surface_T: (altitude_km,
+    h2o_vmr)} keyed by the bottom-level (alt=0) temperature, or None if absent."""
+    if not os.path.isfile(KOPP_CLIMA):
+        return None
+    with open(KOPP_CLIMA) as f:
+        lines = f.readlines()
+    hdr = [i for i, ln in enumerate(lines) if 'ALT' in ln] + [len(lines)]
+    blocks = {}
+    for i0, i1 in zip(hdr[:-1], hdr[1:]):
+        d = np.genfromtxt(lines[i0 + 1:i1])
+        if d.ndim != 2 or d.shape[0] < 2:
+            continue
+        surf_t = round(float(d[-1, 2]))   # T at the alt=0 (surface) row
+        blocks[surf_t] = (d[:, 0], d[:, 3])
+    return blocks
+
+
 def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     # Suppress the vertical-resolution sawtooth (see SMOOTH_WIN note above).
     olr, asr, alpha, seff = (_smooth(olr), _smooth(asr),
@@ -352,6 +394,14 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     print(f"  ExoColumn moist-GH Seff = {exo_moist:.3f} (Ts={moist_ts:.0f} K)"
           f" ;  runaway Seff = {exo_runaway:.3f} (Tc={runaway_ts:.0f} K)")
 
+    # Kopparapu+2013 reference data for the model-vs-model overlay (dashed grey).
+    kopp = _load_kopp_sweep()
+    kclima = _load_kopp_clima()
+    GREY    = '0.3'         # single neutral grey for all non-data annotation
+                            # elements (markers, reference line, legend keys, labels)
+    KOPP_KW = dict(lw=0.9, ls='--', zorder=2)   # colour set per panel (matches the
+                                                # ExoColumn quantity); thin dashed
+
     fig, axes = plt.subplots(2, 2, figsize=(9.5, 7.0), dpi=300)
     fig.patch.set_facecolor('white')
     (ax_a, ax_b), (ax_c, ax_d) = axes
@@ -361,60 +411,113 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     # --- (a) OLR and ASR vs Ts ---
     ax_a.plot(ts, olr, color='C3', lw=1.5)
     ax_a.plot(ts, asr, color='C0', lw=1.5)
+    if kopp is not None:
+        ax_a.plot(kopp['tgo'], kopp['olr'], color='C3', **KOPP_KW)
+        ax_a.plot(kopp['tgo'], kopp['asr'], color='C0', **KOPP_KW)
     ax_a.set_ylabel('Flux (W m⁻²)')
     ax_a.set_xlabel('Surface temperature (K)')
     ax_a.set_ylim(100., 450.)      # focus on the plateau + onset of the rise
     # Label the curves directly (no legend): F_IR = outgoing longwave (OLR),
     # F_SOL = absorbed shortwave.  Anchored on the runaway plateau.
-    ax_a.text(800., 315., '$F_\\mathrm{IR}$', color='C3', fontsize=11,
+    ax_a.text(800., 315., '$F_\\mathrm{IR}$', color='C3', fontsize=10,
               fontweight='bold', ha='center', va='bottom')
-    ax_a.text(800., 248., '$F_\\mathrm{SOL}$', color='C0', fontsize=11,
+    ax_a.text(800., 248., '$F_\\mathrm{SOL}$', color='C0', fontsize=10,
               fontweight='bold', ha='center', va='top')
+    # Single style legend (applies to every panel): solid = this work, dashed
+    # = Kopparapu+2013.  Colour continues to encode the quantity in each panel.
+    if kopp is not None:
+        from matplotlib.lines import Line2D
+        ax_a.legend(handles=[
+            Line2D([0], [0], color=GREY, lw=1.5, label='ExoColumn'),
+            Line2D([0], [0], color=GREY, lw=0.9, ls='--',
+                   label='Clima (Kopparapu et al. 2013)')],
+            loc='upper left', fontsize=8, frameon=False)
     ax_a.set(**kw)
     ax_a.set_facecolor('white')
 
     # --- (b) Planetary albedo vs Ts ---
     ax_b.plot(ts, alpha, color='C2', lw=1.5)
-    ax_b.axhline(ALBEDO, color='0.3', lw=0.9, ls='--')
+    if kopp is not None:
+        ax_b.plot(kopp['tgo'], kopp['palb'], color='C2', **KOPP_KW)
+    ax_b.axhline(ALBEDO, color=GREY, lw=0.9, ls=':')
     ax_b.set_ylabel('Planetary albedo $\\alpha_p$')
     ax_b.set_xlabel('Surface temperature (K)')
     ax_b.set_ylim(0.15, 0.35)
     # Label the curve and the reference line directly (no legend).
     ax_b.text(1400., ALBEDO - 0.006, f'Surface albedo = {ALBEDO:.2f}',
-              color='0.3', fontsize=8, ha='center', va='top')
+              color=GREY, fontsize=8, ha='center', va='top')
     ax_b.set(**kw)
     ax_b.set_facecolor('white')
 
     # --- (c) Seff vs Ts ---
     ax_c.plot(ts, seff, color='C1', lw=1.5)
+    if kopp is not None:
+        ax_c.plot(kopp['tgo'], kopp['seff'], color='C1', **KOPP_KW)
     # Markers on the curve at the two greenhouse limits: moist-GH (water-loss; the
     # Ts where stratospheric H2O VMR first reaches 3e-3) and runaway-GH (at the
     # H2O critical temperature Tc).
     if np.isfinite(exo_moist):
-        ax_c.plot(moist_ts, exo_moist, 'o', color='0.3', ms=3,
-                  markeredgecolor='0.3', markeredgewidth=0.5, zorder=6)
+        ax_c.plot(moist_ts, exo_moist, 'o', color=GREY, ms=3,
+                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
     if np.isfinite(exo_runaway):
-        ax_c.plot(runaway_ts, exo_runaway, 'o', color='0.3', ms=3,
-                  markeredgecolor='0.3', markeredgewidth=0.5, zorder=6)
+        ax_c.plot(runaway_ts, exo_runaway, 'o', color=GREY, ms=3,
+                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+
+    # Kopparapu+2013 IHZ limits on their own (dashed) Seff curve, derived with the
+    # same physical definitions used for ExoColumn: moist greenhouse where the
+    # stratospheric H2O VMR (FH2O column) first reaches MOIST_GH_VMR (interpolated
+    # on Kopparapu's coarser 20 K grid), runaway greenhouse at the H2O critical
+    # temperature Tc.  Drawn as grey SQUARES (ExoColumn uses circles); each also
+    # sits on the dashed-vs-solid curve of its own model.
+    kopp_moist_seff = kopp_run_seff = np.nan
+    if kopp is not None:
+        kt, ksf, kfh = kopp['tgo'], kopp['seff'], kopp['fh2o']
+        wet = np.where(kfh >= MOIST_GH_VMR)[0]
+        if wet.size and wet[0] > 0:
+            j = wet[0]
+            kopp_moist_ts = float(np.interp(np.log10(MOIST_GH_VMR),
+                                            np.log10(kfh[j - 1:j + 1]), kt[j - 1:j + 1]))
+            kopp_moist_seff = float(np.interp(kopp_moist_ts, kt, ksf))
+            ax_c.plot(kopp_moist_ts, kopp_moist_seff, 's', color=GREY, ms=3,
+                      markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+        if kt[0] <= H2O_TCRIT <= kt[-1]:
+            kopp_run_seff = float(np.interp(H2O_TCRIT, kt, ksf))
+            ax_c.plot(H2O_TCRIT, kopp_run_seff, 's', color=GREY, ms=3,
+                      markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+
     ax_c.set_ylabel('$S_{\\rm eff}$')
     ax_c.set_xlabel('Surface temperature (K)')
     ax_c.set_ylim(0.4, 1.8)
-    # Label each limit next to its own marker (two lines to stay compact), with
-    # the implied IHZ orbital distance d = 1/sqrt(Seff) [AU] in parentheses.  The
-    # two markers are close in Ts (~350 vs ~647 K), so moist sits below its marker
-    # and runaway (at Tc) above its marker to keep them clear of each other.
+    # Label each limit (with the implied IHZ orbital distance d = 1/sqrt(Seff) [AU]),
+    # giving both models' Seff: ExoColumn (circle, solid curve) and Kopparapu+2013
+    # (square, dashed curve).  The two limits are close in Ts (~350 vs ~647 K), so
+    # moist sits above its marker (arrow) and runaway just to the right of its own.
+    # Lead each model's line with its plot-marker glyph (● circle = ExoColumn,
+    # ■ square = Clima) so the label doubles as the marker key.  Same grey as the
+    # plotted markers and text.
+    CIRCLE, SQUARE = '•', '▪'   # small glyphs ~matching the ms=3 plotted markers
+    def _limit_text(name, exo_s, kopp_s):
+        lines = [name, f'{CIRCLE} ExoColumn:  $S_\\mathrm{{eff}}$ = {exo_s:.3f}'
+                       f' ({1.0 / np.sqrt(exo_s):.3f} AU)']
+        if np.isfinite(kopp_s):
+            lines.append(f'{SQUARE} Clima:           $S_\\mathrm{{eff}}$ = {kopp_s:.3f}'
+                         f' ({1.0 / np.sqrt(kopp_s):.3f} AU)')
+        return '\n'.join(lines)
+
     if np.isfinite(exo_moist):
-        ax_c.annotate(f'Moist greenhouse\n$S_\\mathrm{{eff}}$ = {exo_moist:.3f}'
-                      f' ({1.0 / np.sqrt(exo_moist):.3f} AU)',
-                      xy=(moist_ts, exo_moist), xytext=(2, -16),
-                      textcoords='offset points', color='0.3', fontsize=8,
-                      ha='left', va='top')
+        ax_c.annotate(_limit_text('MOIST GREENHOUSE', exo_moist, kopp_moist_seff),
+                      xy=(moist_ts, exo_moist), xytext=(2, 60),
+                      textcoords='offset points', color=GREY, fontsize=8,
+                      ha='left', va='top',
+                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
+                                      shrinkB=3))
     if np.isfinite(exo_runaway):
-        ax_c.annotate(f'Runaway greenhouse\n$S_\\mathrm{{eff}}$ = {exo_runaway:.3f}'
-                      f' ({1.0 / np.sqrt(exo_runaway):.3f} AU)',
-                      xy=(runaway_ts, exo_runaway), xytext=(2, 8),
-                      textcoords='offset points', color='0.3', fontsize=8,
-                      ha='left', va='bottom')
+        ax_c.annotate(_limit_text('RUNAWAY GREENHOUSE', exo_runaway, kopp_run_seff),
+                      xy=(runaway_ts, exo_runaway), xytext=(40, -48),
+                      textcoords='offset points', color=GREY, fontsize=8,
+                      ha='left', va='top',
+                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
+                                      shrinkB=3))
     ax_c.set(**kw)
     ax_c.set_facecolor('white')
 
@@ -432,6 +535,14 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
         mask = vmr < 0.99
         z = zmid[mask]; v = vmr[mask]
         ax_d.semilogx(v, z, color=col, lw=1.5)
+        # Overlay the Kopparapu CLIMA profile at the SAME surface temperature,
+        # dashed and colour-matched (solid = ExoColumn, dashed = Kopparapu).
+        if kclima is not None:
+            kc = kclima.get(round(ts_p))
+            if kc is not None:
+                kz, kv = kc
+                km = kz <= PANEL_ZTOP_KM
+                ax_d.semilogx(kv[km], kz[km], color=col, lw=0.9, ls='--')
         # Label only the selected curves (the rest follow the same pattern).
         if not any(abs(ts_p - t) < 0.5 for t in LABEL_TS):
             continue
@@ -466,7 +577,7 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     ax_d.set_ylim(0., PANEL_ZTOP_KM)
     ax_d.set_facecolor('white')
 
-    fig.tight_layout()
+    fig.tight_layout(w_pad=2.0, h_pad=2.0)
     out_dir = os.path.dirname(os.path.abspath(__file__))
     for ext, dpi in [('pdf', 300), ('png', 150)]:
         path = os.path.join(out_dir, f'hz_inner{TAG}.{ext}')

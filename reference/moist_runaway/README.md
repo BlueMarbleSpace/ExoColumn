@@ -22,6 +22,14 @@ profile. The figure has four panels (Kopparapu Fig 3):
 | `hz_inner.py` | Self-contained sweep + plot generator. The full per-run namelist is embedded in `NML_TEMPLATE`, so the case is reproducible from source. |
 | `hz_inner_nonideal.npz` | Cached sweep results (461 `Ts` points + 6 H₂O profiles). Enables instant re-plot. |
 | `hz_inner_nonideal.pdf` / `.png` | The figure. **The PDF is the publication artifact** — hand-edit it as needed. |
+| `waterloss_IHZ_present.dat` | Kopparapu et al. (2013) inner-HZ sweep vs surface temperature (provided directly by R. Kopparapu). Columns: `TGO  SEFF  PALB  FH2O  FTIR(1)`[OLR]`  FTSO(1)`[absorbed SW]. Overlaid on panels (a)–(c). |
+| `clima_last.tab` | Kopparapu CLIMA water-loss vertical profiles — one ALT/P/T/FH2O/… block per surface temperature (220, 240, … K). Col 1 = altitude [km], col 4 = H₂O VMR. The six blocks matching the panel-(d) ExoColumn profiles (280–380 K) are overlaid on panel (d). |
+
+The Kopparapu reference data are drawn as thin **dashed** curves, **colour-matched** to the
+corresponding ExoColumn quantity (solid = ExoColumn, dashed = Kopparapu) — in panel (d)
+that means each CLIMA profile shares the colour of the ExoColumn profile at the same
+surface temperature. A style legend in panel (a) states the solid/dashed convention. If
+either `.dat`/`.tab` file is absent the overlay is silently skipped.
 
 ## Configuration (fixed in `hz_inner.py`)
 
