@@ -6,8 +6,10 @@ outer-edge (maximum greenhouse) habitable-zone limit for a G2V star.
 ## Method (Kopparapu §3.3, inverse climate calculation — no RCE)
 
 Earth-like planet, **1 bar N2**, surface fixed at **Ts = 273 K**, CO2 partial
-pressure swept upward from 1 bar (Kopparapu: 1–35 bar; here **1–8.99 bar**, see
-the 10-bar cap below).  For each pCO2 the cold start builds the prescribed
+pressure swept **1 → 34.7 bar** (= psat_CO2(273 K), the same physical endpoint
+as Kopparapu's "1 to 35 bar, the saturation vapor pressure at that
+temperature"; layers deeper than 10 bar use clamped k-table pressure
+broadening — see below).  For each pCO2 the cold start builds the prescribed
 column — H2O-saturated moist adiabat from the surface, **pinned to the CO2
 saturation curve wherever the ascent supersaturates in CO2** (Kasting 1991;
 `co2_condense`), with the **CO2 share of cp evaluated at the local temperature**
@@ -43,21 +45,27 @@ and the inner-HZ reference verified bit-identical):
   111.6 ≈ 112 W/m², albedo(1 bar) = 0.278, Seff min = 0.337 at 6.7 bar ≈ the
   caption values).
 
-## Results (2026-06-10 sweep, PVER=200)
+## Results (2026-06-10 sweep, PVER=200, full 1–34.7 bar range)
 
 | quantity | ExoColumn | Kopparapu+2013 |
 |---|---|---|
 | F_IR at pCO2 = 1 bar | 123.1 W/m² | 111.6 W/m² |
+| F_IR asymptote (≥ 15 bar) | 72.3–72.5 W/m² | ~65 W/m² |
 | albedo at pCO2 = 1 bar | 0.328 | 0.278 |
+| albedo at pCO2 = 34.7 bar | 0.538 | ~0.54 |
 | Seff at pCO2 = 1 bar | 0.539 | 0.455 |
-| Seff at 8.99 bar (cap) | 0.3949, still falling | 0.341 (their curve) |
-| maximum greenhouse | **Seff ≤ 0.395 → d ≥ 1.59 AU** (min beyond cap) | Seff = 0.337 → d = 1.70 AU |
+| **maximum greenhouse** | **Seff = 0.395 at 8.9 bar → d = 1.59 AU** | Seff = 0.337 at ~7 bar → d = 1.70 AU |
 
-The curve *shapes* track Kopparapu well (F_IR falling toward an asymptote,
-albedo rising with Rayleigh scattering, Seff minimum from their competition);
-the offsets are systematic and diagnosed below.  Our Seff is still decreasing
-(by <0.001 per step) at the 8.99-bar sweep edge, so our maximum-greenhouse
-minimum lies just beyond the current 10-bar cap.
+The Seff minimum is now resolved interior to the sweep.  The structure mirrors
+Kopparapu's panel by panel: F_IR falls to a flat asymptote once the atmosphere
+is LW-opaque (ours from ~15 bar, theirs from ~10), the albedo climbs with
+Rayleigh scattering, and their competition produces the Seff minimum.
+Notably, **F_SOL and the planetary albedo converge onto Kopparapu's curves at
+high pCO2** (the dense-CO2 SW budget becomes Rayleigh-dominated, which both
+models compute from the same Vardavas & Carver data — the near-IR absorption
+difference stops mattering), while F_IR keeps a parallel ~+7 W/m² offset (the
+LW window/far-wing gap below).  Both offsets push Seff high, so our 1.59 AU is
+conservative relative to their 1.70 AU.
 
 ## Diagnosed radiation offsets (ExoRT n68equiv vs CLIMA, dense CO2)
 
@@ -81,13 +89,25 @@ Both biases push Seff high (planet must sit closer in), so our d ≥ 1.59 AU is
 *conservative* relative to Kopparapu's 1.70 AU.  These are ExoRT spectral-data
 limitations (ExoRT is read-only), not methodology differences.
 
-## The 10-bar k-table cap
+## Layers deeper than 10 bar: clamped pressure broadening
 
-The n68equiv k-coefficient pressure grid ends at 10 bar (`radgrid.F90`); above
-it ExoRT's reference-pressure search runs off the table (out-of-bounds index in
-`rad_interp_mod`).  The sweep therefore stops at total ps = 10 bar
-(pCO2 = 8.99 bar).  Extending to Kopparapu's full 35 bar needs a PVER-style
-build-time clamp of the interpolation at the table edge (pressure broadening
-frozen at its 10-bar value — defensible: deeper layers are LW-opaque and barely
-sunlit, and the albedo rise is Rayleigh-driven) — deliberately deferred until
-these results are reviewed.
+The n68equiv k-coefficient pressure grid ends at 10 bar (`radgrid.F90`).  Above
+it ExoRT linearly **extrapolates** k in log10(p) (`rad_interp_mod`: "at the
+tops of grids, extrapolate") — at 35 bar the extrapolation factor is ~6×, which
+is unphysical and can even produce negative k.  The build therefore generates
+`src/calc_opd_mod.F90` from ExoRT's source with one line patched (the same
+PVER-style local-copy pattern; see `build/Makefile`, which fails loudly if the
+anchor line ever changes upstream):
+
+```fortran
+pressure = min(log10(pmid(ik)), log10pgrid(kc_npress))
+```
+
+i.e. the k-table lookup is clamped at the 10-bar table edge — pressure
+broadening frozen at its 10-bar value for deeper layers — while the
+CIA/continuum paths keep the true `pmid` partial pressures and amagats.  This
+is defensible because the >10-bar layers are LW-opaque and barely sunlit, and
+the high-pCO2 albedo rise is Rayleigh-driven (path mass, not k-tables; confirmed
+by our albedo converging onto Kopparapu's at 35 bar).  Columns that stay below
+10 bar are **bit-identical** (verified: the Earth/IHZ flux anchor and the
+8.99-bar sweep point reproduce exactly after the clamp build).

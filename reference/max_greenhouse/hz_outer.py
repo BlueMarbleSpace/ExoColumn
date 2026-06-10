@@ -32,14 +32,17 @@ tools/digitize_kopparapu_fig5.py -> kopparapu2013_fig5.npz) overlaid for direct
 comparison.  Kopparapu reference values: Seff_min = 0.325-0.338 at pCO2 ~ 7-8
 bar -> d = 1.70 AU (text/figure; Kasting+1993: 1.67 AU).
 
-10-BAR CAP: the ExoRT n68equiv k-coefficient pressure grid ends at 10 bar
-(radgrid.F90, read-only), and ExoRT's reference-pressure interpolation reads out
-of bounds above it.  This sweep therefore stops at pCO2 = 8.99 bar (total
-ps = 10 bar including the 1 bar N2).  Kopparapu's Seff minimum (~7-8 bar) lies
-INSIDE this range, so the maximum-greenhouse limit itself is resolved; only the
-rising 10-35 bar tail of the curve is not swept.  (Extending past 10 bar would
-need a PVER-style build-time clamp of the ExoRT interpolation — deliberately
-deferred until these results are reviewed.)
+>10-BAR LAYERS — CLAMPED PRESSURE BROADENING: the ExoRT n68equiv k-coefficient
+pressure grid ends at 10 bar (radgrid.F90, read-only); above it ExoRT linearly
+EXTRAPOLATES k in log10(p), which is unphysical (and can produce negative k).
+The build now generates src/calc_opd_mod.F90 from ExoRT's source with the
+k-table pressure lookup clamped at the 10-bar table edge (same PVER-style
+local-copy pattern; see build/Makefile) — i.e. pressure broadening is frozen at
+its 10-bar value for deeper layers, while CIA/continuum amagats keep the true
+density.  This is defensible because the >10-bar layers are LW-opaque and
+barely sunlit, and the albedo rise is Rayleigh-driven (path mass, not k-table).
+Columns staying below 10 bar are bit-identical.  Verified: the 8.99-bar sweep
+point reproduces the pre-clamp values exactly.
 
 KNOWN RADIATION OFFSET (dense CO2): against Kopparapu's Figure 1 benchmark
 (early Mars: 2 bar, 95% CO2 / 5% N2, Ts = 250 K, 167 K isothermal stratosphere)
@@ -72,11 +75,12 @@ EXE      = os.path.join(ROOT, 'run', 'exocol.exe')
 OUT_NC   = os.path.join(ROOT, 'iofiles', 'exocol_out.nc')
 NML_PATH = os.path.join(ROOT, 'exocol_config.nml')
 
-# pCO2 grid [bar].  Upper end set by the ExoRT 10-bar k-table cap:
-# ps = 1 bar N2 + pCO2 + esat(273 K) <= 10 bar  ->  pCO2 <= 8.99 bar.
+# pCO2 grid [bar].  Upper end = psat_CO2(273 K) = 34.7 bar, the same physical
+# endpoint as Kopparapu's "1 to 35 bar (the saturation vapor pressure for CO2
+# at that temperature)" — beyond it CO2 condenses at the surface itself.
 PCO2_MIN = float(os.environ.get('OHZ_PCO2_MIN', '1.0'))
-PCO2_MAX = float(os.environ.get('OHZ_PCO2_MAX', '8.99'))
-PCO2_N   = int(os.environ.get('OHZ_PCO2_N',   '28'))
+PCO2_MAX = float(os.environ.get('OHZ_PCO2_MAX', '34.7'))
+PCO2_N   = int(os.environ.get('OHZ_PCO2_N',   '40'))
 PCO2_VALUES = np.geomspace(PCO2_MIN, PCO2_MAX, PCO2_N)
 
 TS       = 273.0     # K, fixed surface temperature (Kopparapu Sec 3.3)
@@ -86,7 +90,7 @@ P_N2     = 1.0e5     # Pa, fixed N2 background
 
 # pCO2 values [bar] for which the T(p) profile is cached (diagnostics; shows the
 # CO2-saturation-pinned upper troposphere).
-PROFILE_PCO2 = [1.0, 2.0, 4.0, 8.0]
+PROFILE_PCO2 = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 
 CACHE = os.path.join(HERE, 'hz_outer.npz')
 KOPP  = os.path.join(HERE, 'kopparapu2013_fig5.npz')
@@ -198,7 +202,7 @@ def main():
 
     print("ExoColumn outer-HZ sweep  —  Figure 5 (Kopparapu+2013 style)")
     print(f"  pCO2 range  : {PCO2_VALUES[0]:.2f}–{PCO2_VALUES[-1]:.2f} bar "
-          f"({PCO2_N} points; 10-bar ExoRT k-table cap)")
+          f"({PCO2_N} points; >10 bar layers use clamped k-table broadening)")
     print(f"  Ts          : {TS:.0f} K fixed;  t_strato = {T_STRATO:.0f} K")
     print(f"  composition : 1 bar N2 + pCO2;  rh_init = 1;  albedo = {ALBEDO}")
     print(f"  physics     : co2_condense + cp_co2_tdep;  6-pt zenith quadrature")
@@ -242,8 +246,7 @@ def _plot(pco2, olr, asr, alpha, seff):
     d_min = 1.0 / np.sqrt(s_min)
     print(f"\n  ExoColumn maximum greenhouse: Seff = {s_min:.4f} at "
           f"pCO2 = {p_min:.2f} bar  ->  d = {d_min:.3f} AU"
-          + ("  [AT SWEEP EDGE — true minimum may lie beyond the 10-bar cap]"
-             if at_edge else ""))
+          + ("  [AT SWEEP EDGE — minimum not resolved]" if at_edge else ""))
     print(  "  Kopparapu+2013              : Seff = 0.338 at pCO2 ~ 7 bar  ->  d = 1.70 AU")
 
     kp = np.load(KOPP) if os.path.exists(KOPP) else None
@@ -295,17 +298,17 @@ def _plot(pco2, olr, asr, alpha, seff):
                       ha='left', va='top')
     ax_c.plot(pco2, seff, color='C1', lw=1.6, zorder=4)
     if at_edge:
-        # Seff is still falling at the 10-bar k-table sweep cap: quote the edge
-        # value as a bound on the maximum-greenhouse limit, not a minimum.
+        # Seff is still falling at the sweep edge: quote the edge value as a
+        # bound on the maximum-greenhouse limit, not a minimum.
         ax_c.text(10.3, 0.435, 'Maximum greenhouse\n'
                   f'$S_\\mathrm{{eff}} \\leq$ {s_min:.3f} '
-                  f'($d \\geq$ {d_min:.2f} AU)\nat the 10-bar sweep cap',
+                  f'($d \\geq$ {d_min:.2f} AU)\nat the sweep edge',
                   color='0.25', fontsize=8, ha='left', va='bottom')
     else:
         ax_c.plot(p_min, s_min, 'o', color='0.3', ms=3.5, zorder=6)
         ax_c.annotate(f'Maximum greenhouse\n$S_\\mathrm{{eff}}$ = {s_min:.3f}'
                       f' ({d_min:.2f} AU)',
-                      xy=(p_min, s_min), xytext=(0, 10),
+                      xy=(p_min, s_min), xytext=(10, 12),
                       textcoords='offset points', color='0.25', fontsize=8,
                       ha='center', va='bottom')
     ax_c.set_ylabel('$S_\\mathrm{eff}$')

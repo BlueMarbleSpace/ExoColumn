@@ -26,3 +26,7 @@ __pycache__/
 
 # Claude Code local agent directory
 .claude/
+
+# Generated at build time from ExoRT's calc_opd_mod.F90 with the k-table
+# pressure clamp applied (see build/Makefile)
+src/calc_opd_mod.F90
