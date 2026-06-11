@@ -28,18 +28,21 @@ PROGRAM exocol_driver
   use exo_init_ref,          only: init_ref
   use initialize_rad_mod_1D, only: initialize_kcoeff, initialize_solar, &
                                    initialize_radbuffer
+  use radgrid,               only: use_bps_continuum  ! MT_CKD<->BPS toggle
   use exo_model_specific,    only: init_model_specific
   use ppgrid,                only: pver, pverp
   use exocol_mod
   use exocol_config,         only: read_config, apply_composition_overrides, &
                                    cfg_input_file => input_file, &
                                    latent_heat_mode, flux_only, &
-                                   esat_formula, h2o_eos
+                                   esat_formula, h2o_eos, h2o_continuum, &
+                                   cold_trap_phase
   use exocol_io,             only: read_initial_conditions, write_output
   use exocol_coldstart,      only: cold_start_init
   use exocol_rce_loop,       only: run_rce_loop
   use exocol_radiation,      only: exocol_rad_tend   ! final flux retrieval
-  use exocol_convadj,        only: set_latent_heat_mode, set_esat_mode
+  use exocol_convadj,        only: set_latent_heat_mode, set_esat_mode, &
+                                   set_cold_trap_phase
 
   implicit none
 
@@ -57,6 +60,12 @@ PROGRAM exocol_driver
   ! Select the saturation-vapour-pressure formula model-wide.  read_config has
   ! already forced esat_formula='steam' when h2o_eos='nonideal'.
   call set_esat_mode(trim(esat_formula) == 'steam')
+  ! Sub-freezing saturation phase (cold trap): 'liquid' matches CLIMA (~2x wetter
+  ! cold stratosphere at 200 K); default 'ice' is bit-identical.
+  call set_cold_trap_phase(trim(cold_trap_phase) == 'liquid')
+  ! Select the H2O continuum model in the ExoRT radiation core.  Must be set
+  ! before initialize_kcoeff (which conditionally reads the BPS continuum file).
+  use_bps_continuum = (trim(h2o_continuum) == 'bps')
 
   ! ---- 1. Allocate column state ----
   call exocol_init()

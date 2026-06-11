@@ -39,6 +39,7 @@ module exocol_convadj
   public :: esat_cc
   public :: esat
   public :: set_esat_mode
+  public :: set_cold_trap_phase
   public :: Lvap_T
   public :: malr
   public :: compute_tint_interp
@@ -77,6 +78,23 @@ module exocol_convadj
   ! inner-HZ pseudoadiabat does not use malr (it uses exocol_steam, which carries
   ! the full IAPWS-95 SVP), so this affects only the legacy ideal-malr path.
   logical, save :: use_steam_esat = .false.
+
+  ! Sub-freezing saturation phase selector (set once at init via
+  ! set_cold_trap_phase from &exocol_nml::cold_trap_phase).
+  ! .false. (default) → below the 273.16 K triple point esat() saturates over
+  !                     ICE (esat_cc/L_sub, or — in steam mode — falls back from
+  !                     the WP liquid-vapour curve to esat_cc).  Physically
+  !                     correct for a sub-freezing cold trap; bit-for-bit
+  !                     unchanged from every validated calibration.
+  ! .true.            → saturate over (supercooled) LIQUID at all T: the WP
+  !                     liquid-vapour curve extrapolated below the triple point
+  !                     in steam mode, or esat_cc with L_v in CC mode.  This is
+  !                     the convention used by CLIMA (Kasting lineage), which
+  !                     gives ~2x more cold-trap stratospheric H2O at 200 K; set
+  !                     it for a like-for-like inner-HZ comparison with Kopparapu.
+  ! Affects every esat() call below freezing (the cold trap is where it matters
+  ! most in the inner-HZ sweep); malr/esat_cc stay pure and are unaffected.
+  logical, save :: cold_trap_liquid = .false.
 
 contains
 
@@ -857,6 +875,16 @@ contains
     use_steam_esat = steam
   end subroutine set_esat_mode
 
+  subroutine set_cold_trap_phase(liquid)
+  ! Select the sub-freezing saturation phase used by esat() below the triple
+  ! point.  Called once at init from the driver based on &exocol_nml::cold_trap_phase.
+  !   .false. (default) → saturate over ICE (physical; bit-for-bit unchanged).
+  !   .true.            → saturate over (supercooled) LIQUID (CLIMA convention;
+  !                        ~2x more cold-trap stratospheric H2O at 200 K).
+    logical, intent(in) :: liquid
+    cold_trap_liquid = liquid
+  end subroutine set_cold_trap_phase
+
   function esat(T) result(es)
   ! Saturation vapour pressure [Pa], dispatched by use_steam_esat:
   !   .false. → esat_cc(T)          (fixed-L Clausius-Clapeyron; default)
@@ -865,15 +893,26 @@ contains
   ! pure for the lapse-rate code that must stay pure.
     real(r8), intent(in) :: T
     real(r8) :: es
-    ! Steam mode uses the Wagner-Pruss liquid-vapour curve only ABOVE the triple
-    ! point; below it there is no liquid-vapour equilibrium, so extrapolating the
-    ! WP curve overshoots the true (ice/sublimation) saturation (~2x at 200 K)
-    ! and would flood the cold-trap stratosphere.  Fall back to esat_cc, which is
-    ! phase-aware (ice/L_sub below freezing).  Continuous at the triple point.
-    if (use_steam_esat .and. T >= IAPWS_TT) then
-      es = iapws95_psat_aux(T)
+    ! Below the 273.16 K triple point there is no liquid-vapour equilibrium.
+    ! By default (cold_trap_liquid=.false.) we saturate over ICE: extrapolating
+    ! the Wagner-Pruss liquid-vapour curve there overshoots the true
+    ! (ice/sublimation) saturation (~2x at 200 K) and would flood the cold-trap
+    ! stratosphere, so steam mode falls back to esat_cc (phase-aware, L_sub
+    ! below freezing).  When cold_trap_liquid=.true. we instead saturate over
+    ! (supercooled) LIQUID at all T — the WP curve extrapolated below the triple
+    ! point (steam mode) or esat_cc_liq (CC mode) — matching CLIMA's convention.
+    if (use_steam_esat) then
+      if (T >= IAPWS_TT .or. cold_trap_liquid) then
+        es = iapws95_psat_aux(T)
+      else
+        es = esat_cc(T)
+      end if
     else
-      es = esat_cc(T)
+      if (cold_trap_liquid) then
+        es = esat_cc_liq(T)
+      else
+        es = esat_cc(T)
+      end if
     end if
   end function esat
 
@@ -899,6 +938,19 @@ contains
     end if
     es = es0 * exp((L_use / SHR_CONST_RWV) * (1._r8/T0_sat - 1._r8/T_use))
   end function esat_cc
+
+  pure function esat_cc_liq(T) result(es)
+  ! Clausius-Clapeyron saturation vapour pressure [Pa] over (supercooled) LIQUID
+  ! at ALL temperatures (L_v throughout, no ice branch) — the CC-mode counterpart
+  ! of the WP liquid extrapolation, used by esat() when cold_trap_liquid=.true.
+  ! Same defensive [50,5000] K clamp as esat_cc.
+    real(r8), intent(in) :: T
+    real(r8) :: es, T_use
+    real(r8), parameter :: T_min_safe = 50._r8
+    real(r8), parameter :: T_max_safe = 5000._r8
+    T_use = min(max(T, T_min_safe), T_max_safe)
+    es = es0 * exp((SHR_CONST_LATVAP / SHR_CONST_RWV) * (1._r8/T0_sat - 1._r8/T_use))
+  end function esat_cc_liq
 
   pure function Lvap_T(T) result(L)
   ! Phase-appropriate latent heat for evaporation/sublimation [J/kg].

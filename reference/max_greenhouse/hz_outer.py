@@ -103,6 +103,9 @@ NML_TEMPLATE = """\
   cp_co2_tdep    = .true.
   o3_profile     = 'none'
   msdist         = 1.0
+  cold_trap_phase = 'liquid'   ! Kopparapu/Kasting H2O saturation over liquid below
+                               ! the triple point (consistent with the IHZ sweep);
+                               ! shifts the max-greenhouse Seff by ~-0.011.
   sw_zenith_quad = .true.
   sw_nquad       = 6
 /
