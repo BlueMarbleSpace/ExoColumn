@@ -56,7 +56,7 @@ module exocol_coldstart
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
                             CP_N2,  CP_O3,  CP_O2,  CP_AR
-  use exocol_convadj, only: esat, malr
+  use exocol_convadj, only: esat, malr, twocomp_dlnTdlnP
   ! cp_co2 (function) renamed: it collides with the CP_CO2 constant from
   ! exocol_config under Fortran's case-insensitive names.
   use exocol_co2,     only: tsat_co2, cp_co2_of_T => cp_co2
@@ -312,9 +312,13 @@ contains
             dlogp_sub   = dlogp_layer / real(NSUB, r8)
             do isub = 1, NSUB
               if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT .and. T_lev < IAPWS_TC) then
-                ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
-                ! vapour SVP; below the triple point fall back to the ideal malr)
+                ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat
                 dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
+                         * dlogp_sub
+              else if (use_nonideal_adiabat .and. T_lev < IAPWS_TT) then
+                ! Below the triple point: two-component ideal-gas pseudoadiabat
+                ! (carries ws·cp_v; saturation phase via esat → cold_trap_phase)
+                dT_sub = T_lev * twocomp_dlnTdlnP(T_lev, p_lev, Rd, cpdry_new) &
                          * dlogp_sub
               else
                 Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
@@ -381,9 +385,13 @@ contains
           dlogp_sub   = dlogp_layer / real(NSUB, r8)
           do isub = 1, NSUB
             if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT .and. T_lev < IAPWS_TC) then
-              ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
-              ! vapour SVP; below the triple point fall back to the ideal malr)
+              ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat
               dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cpdry_new) &
+                       * dlogp_sub
+            else if (use_nonideal_adiabat .and. T_lev < IAPWS_TT) then
+              ! Below the triple point: two-component ideal-gas pseudoadiabat
+              ! (carries ws·cp_v; saturation phase via esat → cold_trap_phase)
+              dT_sub = T_lev * twocomp_dlnTdlnP(T_lev, p_lev, Rd, cpdry_new) &
                        * dlogp_sub
             else
               Gm      = malr(T_lev, p_lev, Rd, exo_g, cpdry_new)
@@ -434,9 +442,13 @@ contains
             cp_loc = cpdry_new
           end if
           if (use_nonideal_adiabat .and. T_lev >= IAPWS_TT .and. T_lev < IAPWS_TC) then
-            ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat (liquid-
-            ! vapour SVP; below the triple point fall back to the ideal malr)
+            ! Kasting A4/A5 non-ideal saturated moist pseudoadiabat
             dT_sub = T_lev * steam_dlnTdlnP_sat(T_lev, p_lev, Rd, cp_loc) &
+                     * dlogp_sub
+          else if (use_nonideal_adiabat .and. T_lev < IAPWS_TT) then
+            ! Below the triple point: two-component ideal-gas pseudoadiabat
+            ! (carries ws·cp_v; saturation phase via esat → cold_trap_phase)
+            dT_sub = T_lev * twocomp_dlnTdlnP(T_lev, p_lev, Rd, cp_loc) &
                      * dlogp_sub
           else
             Gm      = malr(T_lev, p_lev, Rd, exo_g, cp_loc)

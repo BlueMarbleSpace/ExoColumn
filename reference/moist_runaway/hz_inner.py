@@ -131,17 +131,22 @@ ALBEDO   = 0.32      # surface albedo = Kopparapu et al. (2013) value, for a DIR
                      # [Our ExoRT-tuned Ts=288 K value was 0.24229; kept in git history.]
 T_STRATO = 200.0     # isothermal stratosphere cap [K]
 
-# Sub-freezing saturation phase for the cold trap.  This figure uses 'liquid'
-# (saturate over supercooled liquid below the 273.16 K triple point) to match
-# CLIMA's convention, so panel (d)'s stratospheric H2O is directly comparable
-# (ExoColumn over ice is ~2x drier at 200 K — a phase convention, not a model
-# error; see memory project_bps_continuum / the cold-trap diagnosis).  NOTE:
-# ExoColumn's *model default* is 'ice' (the physically correct phase for a
-# sub-freezing cold trap); 'liquid' is selected here only for the like-for-like
-# Kopparapu comparison.  Env-overridable: HZ_COLD_TRAP=ice for the ice variant.
-COLD_TRAP_PHASE = os.environ.get('HZ_COLD_TRAP', 'liquid')
+# Sub-freezing saturation phase.  'ice' — the model default — is ALSO CLIMA's
+# actual convention: below 273.16 K Kopparapu's CLIMA saturates over ice
+# everywhere (SATRAT: CC with the sublimation latent heat) and its sub-freezing
+# moist adiabat (convec.f label 13) is the ice-saturated two-component
+# pseudoadiabat that ExoColumn reproduces via exocol_convadj::twocomp_dlnTdlnP
+# (sub-273 K T(P) agrees with clima_last.tab to ±0.07 K at Ts=380 K).  The
+# earlier 'liquid' setting here was based on a misreading of their convention;
+# its apparent hot-case agreement came from two compensating errors (wetter
+# supercooled-liquid esat vs the too-steep textbook malr fallback).
+# Env-overridable: HZ_COLD_TRAP=liquid for the sensitivity variant.
+COLD_TRAP_PHASE = os.environ.get('HZ_COLD_TRAP', 'ice')
 
 MW_H2O   = 18.015    # g/mol
+P_DRY    = 1.0e5     # Pa; the sweep's dry-N2 inventory (cold-start DEFAULT_PS).
+                     # With variable_ps the model surface pressure is
+                     # ps = P_DRY + e_sfc, so e_sfc = ps − P_DRY exactly.
 
 # The OLR/albedo/Seff curves carry a small high-frequency SAWTOOTH: as Ts sweeps,
 # the tropopause kink (moist adiabat meeting the isothermal t_strato) migrates
@@ -263,23 +268,37 @@ def run_one(ts, continuum='mtckd'):
             swdn   = ds['SWDN'][:]
             tmid   = ds['tmid'][:]
             pmid   = ds['pmid'][:]
-            h2ommr = ds['h2ommr'][:]
+            h2ommr = np.array(ds['h2ommr'][:])
             mwdry  = float(ds['mw'][:])
             zint   = np.array(ds['zint'][:])   # interface heights [m]
+            ps     = float(ds['ps'][:])
 
         olr   = float(lwup[0])
         asr   = float(swdn[0] - swup[0])
         alpha = float(swup[0] / swdn[0]) if swdn[0] > 0 else 0.0
         seff  = olr / asr if asr > 1e-6 else np.nan
 
-        # H2O volume mixing ratio profile: VMR ≈ h2ommr × mwdry / MW_H2O
-        h2o_vmr = h2ommr * mwdry / MW_H2O
+        # H2O volume mixing ratio profile — exact two-component conversion from
+        # the moist specific humidity q.  The dilute form q·mwdry/18 overshoots
+        # by ~25% at the 380 K surface (q ≈ 0.45); CLIMA's FH2O is a true mole
+        # fraction, so the exact form is required for the panel-(d) overlay.
+        h2o_vmr = (h2ommr / MW_H2O) / (h2ommr / MW_H2O + (1.0 - h2ommr) / mwdry)
         # Stratospheric H2O VMR = the cold-trap minimum (driest point in the
         # column); used to locate the moist-greenhouse / water-loss limit
         # (the Ts where this reaches MOIST_GH_VMR = 3e-3; Kopparapu Sec 3.1).
         strat_vmr = float(np.nanmin(h2o_vmr)) if np.any(np.isfinite(h2o_vmr)) else np.nan
         # Layer-midpoint altitude [km] from interface heights (TOA=0 … srf=pverp)
         zmid_km = 0.5 * (zint[:-1] + zint[1:]) / 1000.
+        # Prepend the true surface point (z = 0): with variable_ps the column is
+        # p_dry (1 bar) + e_sfc, so the surface H2O mole fraction is just
+        # (ps − p_dry)/ps.  CLIMA's profiles include z = 0; without this point
+        # our plotted curves start at the lowest midpoint (~200 m), which at
+        # Ts = 280–300 K reads ~5–10% dry of the surface value.
+        sfc_vmr = (ps - P_DRY) / ps
+        if 0.0 < sfc_vmr < 1.0:
+            zmid_km = np.concatenate([zmid_km, [0.0]])
+            h2o_vmr = np.concatenate([h2o_vmr, [sfc_vmr]])
+            pmid    = np.concatenate([np.array(pmid), [ps]])
 
         return dict(olr=olr, asr=asr, alpha=alpha, seff=seff, strat_vmr=strat_vmr,
                     h2o_vmr=h2o_vmr, pmid=np.array(pmid),
@@ -355,11 +374,12 @@ def main():
           ("  (Kasting 1988 Appendix-A, IAPWS-95)" if H2O_EOS == 'nonideal' else ""))
     print(f"  H2O contin. : MT_CKD" + ("  +  BPS overlay" if BPS_OVERLAY else ""))
     print(f"  cold trap   : saturate over {COLD_TRAP_PHASE}" +
-          ("  (CLIMA-match; model default = ice)" if COLD_TRAP_PHASE == 'liquid' else ""))
+          ("  (= CLIMA convention; see COLD_TRAP_PHASE note)" if COLD_TRAP_PHASE == 'ice'
+           else "  (sensitivity variant; CLIMA + model default = ice)"))
     print(f"  Ts range    : {TS_VALUES[0]:.0f}–{TS_VALUES[-1]:.0f} K")
     print(f"  t_strato    : {T_STRATO:.0f} K  (isothermal, fully saturated)")
     print(f"  variable_ps : ps = p_N2(1 bar) + esat(Ts)")
-    print(f"  composition : N2=0.78 + O2=0.21 + Ar=0.01 + CO2=3.3e-4 + H2O  [no O3/CH4]")
+    print(f"  composition : N2 + CO2=3.3e-4 + H2O  [no O2/Ar/O3/CH4]")
     print()
 
     arr, profiles = _sweep('mtckd')
@@ -668,10 +688,24 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     ax_d.set_ylabel('Altitude (km)')
     ax_d.set_ylim(0., PANEL_ZTOP_KM)
     ax_d.set_facecolor('white')
-    # Note the cold-trap saturation convention used for this figure.
-    if COLD_TRAP_PHASE == 'liquid':
+    # Known residual in the overlay: Kopparapu's tabulated profiles freeze-dry at
+    # their cold trap's GRID level, which sits one coarse level (ΔlnP ≈ 0.10-0.19)
+    # below the 200 K cap (T* = 202-206 K for Ts ≤ 340 K), inflating their
+    # stratospheric H2O by the es_ice(T*)/es_ice(200 K) factor of ~1.3-2.1.
+    # ExoColumn freeze-dries at the interpolated 200 K crossing (deliberately —
+    # grid-snapped cold traps caused the panel (a)-(c) staircase).  Verified:
+    # our ratios x their grid factor = 0.97-0.98 at every profiled Ts.
+    if COLD_TRAP_PHASE == 'ice':
         ax_d.text(0.03, 0.03,
-                  'cold trap: sat. over liquid\n(CLIMA convention; ExoColumn default = ice)',
+                  'Kopparapu profiles freeze-dry at their last grid level\n'
+                  'below the 200 K cold trap (202–206 K for $T_s\\leq$ 340 K):\n'
+                  'their strat. H₂O reads ×1.3–2 high there',
+                  transform=ax_d.transAxes, color=GREY, fontsize=7,
+                  ha='left', va='bottom')
+    else:
+        ax_d.text(0.03, 0.03,
+                  'cold trap: sat. over supercooled liquid\n'
+                  '(sensitivity variant; CLIMA + model default = ice)',
                   transform=ax_d.transAxes, color=GREY, fontsize=7,
                   ha='left', va='bottom')
 

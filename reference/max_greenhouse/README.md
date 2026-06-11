@@ -45,21 +45,26 @@ and the inner-HZ reference verified bit-identical):
   111.6 ≈ 112 W/m², albedo(1 bar) = 0.278, Seff min = 0.337 at 6.7 bar ≈ the
   caption values).
 
-## Results (2026-06-11 sweep, PVER=200, full 1–34.7 bar range, liquid cold trap)
+## Results (2026-06-10 sweep, PVER=200, full 1–34.7 bar range)
 
-H₂O saturates over liquid below the triple point (`cold_trap_phase='liquid'`,
-the Kasting/Kopparapu convention, consistent with the IHZ sweep); this lowers
-F_IR by ~2–3 W/m² and the maximum-greenhouse Seff by ~0.011 vs the earlier
-ice-cold-trap run (which gave 0.395 → 1.59 AU).
+> **Cold-trap phase note (2026-06-11).**  This case briefly switched to
+> `cold_trap_phase='liquid'` (Seff 0.395 → 0.384, d 1.59 → 1.61 AU) on the
+> belief that supercooled-liquid saturation below 273.16 K was CLIMA's
+> convention.  Inspection of the actual CLIMA source (atmos repo: `SATRAT`
+> uses the sublimation latent heat below the triple point; `convec.f` label 13
+> is the ice-saturated sub-freezing pseudoadiabat) showed CLIMA is fully
+> **ice-based** below 273.16 K — i.e. ExoColumn's `'ice'` default *is* the
+> Kopparapu-consistent choice — so the liquid run was reverted and the
+> ice-based results below stand as the reference.
 
 | quantity | ExoColumn | Kopparapu+2013 |
 |---|---|---|
-| F_IR at pCO2 = 1 bar | 120.0 W/m² | 111.6 W/m² |
-| F_IR asymptote (≥ 15 bar) | 70.9–71.1 W/m² | ~65 W/m² |
-| albedo at pCO2 = 1 bar | 0.327 | 0.278 |
-| albedo at pCO2 = 34.7 bar | 0.536 | ~0.54 |
-| Seff at pCO2 = 1 bar | 0.525 | 0.455 |
-| **maximum greenhouse** | **Seff = 0.384 at ~8.7 bar → d = 1.61 AU** | Seff = 0.337 at ~7 bar → d = 1.70 AU |
+| F_IR at pCO2 = 1 bar | 123.1 W/m² | 111.6 W/m² |
+| F_IR asymptote (≥ 15 bar) | 72.3–72.5 W/m² | ~65 W/m² |
+| albedo at pCO2 = 1 bar | 0.328 | 0.278 |
+| albedo at pCO2 = 34.7 bar | 0.538 | ~0.54 |
+| Seff at pCO2 = 1 bar | 0.539 | 0.455 |
+| **maximum greenhouse** | **Seff = 0.395 at 8.9 bar → d = 1.59 AU** | Seff = 0.337 at ~7 bar → d = 1.70 AU |
 
 The Seff minimum is now resolved interior to the sweep.  The structure mirrors
 Kopparapu's panel by panel: F_IR falls to a flat asymptote once the atmosphere
@@ -69,7 +74,7 @@ Notably, **F_SOL and the planetary albedo converge onto Kopparapu's curves at
 high pCO2** (the dense-CO2 SW budget becomes Rayleigh-dominated, which both
 models compute from the same Vardavas & Carver data — the near-IR absorption
 difference stops mattering), while F_IR keeps a parallel ~+7 W/m² offset (the
-LW window/far-wing gap below).  Both offsets push Seff high, so our 1.61 AU is
+LW window/far-wing gap below).  Both offsets push Seff high, so our 1.59 AU is
 conservative relative to their 1.70 AU.
 
 ## Diagnosed radiation offsets (ExoRT n68equiv vs CLIMA, dense CO2)
@@ -90,7 +95,7 @@ less near-IR sunlight in dense CO2 than CLIMA — the same family as the
 documented inner-HZ near-IR H2O offset.  Rayleigh is *not* the cause (both
 models use Vardavas & Carver 1984 CO2/N2 coefficients).
 
-Both biases push Seff high (planet must sit closer in), so our d ≥ 1.61 AU is
+Both biases push Seff high (planet must sit closer in), so our d ≥ 1.59 AU is
 *conservative* relative to Kopparapu's 1.70 AU.  These are ExoRT spectral-data
 limitations (ExoRT is read-only), not methodology differences.
 

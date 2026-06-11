@@ -7,7 +7,12 @@ can come from (i) the moist pseudoadiabat / cold-point placement (shows up in T(
 and VMR(P)) or (ii) the hydrostatic altitude mapping (shows up in z(P) at matched
 pressure).  This script separates the two by comparing all three against Kopparapu's
 CLIMA profiles (clima_last.tab), using the SAME config as the reference figure
-(pure N2, liquid cold trap, BPS continuum, nonideal EOS, 6-pt zenith, p_top=0.002).
+(pure N2, ice cold trap = CLIMA's actual convention, BPS continuum, nonideal EOS,
+6-pt zenith, p_top=0.002).  NOTE: CLIMA's tabulated stratospheric H2O freeze-dries
+at its last grid level below the 200 K cap (T* = 202-206 K for Ts <= 340 K), so its
+strat values read x1.3-2.1 above the true cold-trap value there; ExoColumn uses the
+interpolated 200 K crossing.  Expect strat ratios of ~0.45-0.75 at Ts <= 340 and
+~0.92-0.98 at 360/380 — that residual is Kopparapu's grid artifact, not physics.
 
 Requires an ExoColumn binary at PVER>=200.  Run from anywhere (paths via __file__).
 """
@@ -24,7 +29,7 @@ OUT  = os.path.join(ROOT, 'iofiles', 'exocol_out.nc')
 CLIMA = os.path.join(ROOT, 'reference', 'moist_runaway', 'clima_last.tab')
 PNG  = os.path.join(HERE, 'diag_ptz_clima.png')
 MW_H2O = 18.015
-TS_LIST = (340.0, 360.0, 380.0)
+TS_LIST = (280.0, 300.0, 340.0, 360.0, 380.0)
 
 NML_T = """&exocol_nml
   flux_only=.true.
@@ -34,7 +39,7 @@ NML_T = """&exocol_nml
   msdist=1.0
   h2o_eos='nonideal'
   h2o_continuum='bps'
-  cold_trap_phase='liquid'
+  cold_trap_phase='ice'
   sw_zenith_quad=.true.
   sw_nquad=6
 /
@@ -70,7 +75,9 @@ def run_exo(ts):
         h2ommr = np.array(ds['h2ommr'][:]); mw = float(ds['mw'][:])
         zint = np.array(ds['zint'][:])
     zmid = 0.5 * (zint[:-1] + zint[1:]) / 1000.0
-    vmr = h2ommr * mw / MW_H2O
+    # exact mmr->vmr: the dilute form q*mw/18 overestimates by ~25% at the
+    # 380 K surface (q ~ 0.45); CLIMA's FH2O is a true mole fraction
+    vmr = (h2ommr / MW_H2O) / (h2ommr / MW_H2O + (1.0 - h2ommr) / mw)
     return dict(T=tmid, P=pmid, z=zmid, vmr=vmr)
 
 
@@ -133,9 +140,9 @@ def main():
             a.set_facecolor('white')
 
         # quantitative cold-point comparison
-        # ExoColumn cold point: shallowest (lowest-P) level still on the adiabat
-        # before the isothermal cap == the tropopause; approximate via min VMR's P
-        ecp = e['P'][np.argmin(e['vmr'])]
+        # ExoColumn cold point: the DEEPEST (max-P) level at the strat VMR (the
+        # strat is a constant-vmr column, so argmin alone would return the TOA)
+        ecp = e['P'][np.abs(e['vmr'] - e['vmr'].min()) < 1e-3 * e['vmr'].min()].max()
         # CLIMA cold point: deepest (max-P) 200K level
         m200 = np.abs(cT - cT.min()) < 0.5
         ccp = cP[m200].max()

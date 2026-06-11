@@ -23,7 +23,7 @@ module exocol_convadj
   use shr_const_mod, only: SHR_CONST_RGAS, SHR_CONST_LATVAP, &
                             SHR_CONST_LATSUB, &
                             SHR_CONST_TKFRZ, SHR_CONST_RWV, &
-                            SHR_CONST_MWWV
+                            SHR_CONST_MWWV, SHR_CONST_CPWV
   use ppgrid,        only: pver, pverp
   use exocol_iapws95, only: iapws95_psat_aux, IAPWS_TT
 
@@ -42,6 +42,7 @@ module exocol_convadj
   public :: set_cold_trap_phase
   public :: Lvap_T
   public :: malr
+  public :: twocomp_dlnTdlnP
   public :: compute_tint_interp
   public :: compute_cape
   public :: set_latent_heat_mode
@@ -84,14 +85,21 @@ module exocol_convadj
   ! .false. (default) → below the 273.16 K triple point esat() saturates over
   !                     ICE (esat_cc/L_sub, or — in steam mode — falls back from
   !                     the WP liquid-vapour curve to esat_cc).  Physically
-  !                     correct for a sub-freezing cold trap; bit-for-bit
-  !                     unchanged from every validated calibration.
+  !                     correct for a sub-freezing cold trap, bit-for-bit
+  !                     unchanged from every validated calibration, AND the
+  !                     convention of Kopparapu et al. (2013)'s CLIMA: its
+  !                     SATRAT uses CC with the sublimation latent heat below
+  !                     273.16 K, and its sub-freezing moist adiabat (convec.f
+  !                     label 13) is the ice-saturated two-component
+  !                     pseudoadiabat (= twocomp_dlnTdlnP below).
   ! .true.            → saturate over (supercooled) LIQUID at all T: the WP
   !                     liquid-vapour curve extrapolated below the triple point
-  !                     in steam mode, or esat_cc with L_v in CC mode.  This is
-  !                     the convention used by CLIMA (Kasting lineage), which
-  !                     gives ~2x more cold-trap stratospheric H2O at 200 K; set
-  !                     it for a like-for-like inner-HZ comparison with Kopparapu.
+  !                     in steam mode, or esat_cc with L_v in CC mode (~2x more
+  !                     cold-trap stratospheric H2O at 200 K).  Retained as a
+  !                     sensitivity toggle.  NOTE: this was previously mislabeled
+  !                     as "CLIMA's convention" — verified against the CLIMA
+  !                     source (atmos repo) on 2026-06-11, CLIMA is fully
+  !                     ice-based below the triple point.
   ! Affects every esat() call below freezing (the cold trap is where it matters
   ! most in the inner-HZ sweep); malr/esat_cc stay pure and are unaffected.
   logical, save :: cold_trap_liquid = .false.
@@ -878,8 +886,9 @@ contains
   subroutine set_cold_trap_phase(liquid)
   ! Select the sub-freezing saturation phase used by esat() below the triple
   ! point.  Called once at init from the driver based on &exocol_nml::cold_trap_phase.
-  !   .false. (default) → saturate over ICE (physical; bit-for-bit unchanged).
-  !   .true.            → saturate over (supercooled) LIQUID (CLIMA convention;
+  !   .false. (default) → saturate over ICE (physical; bit-for-bit unchanged;
+  !                        also CLIMA's convention — see cold_trap_liquid note).
+  !   .true.            → saturate over (supercooled) LIQUID (sensitivity toggle;
   !                        ~2x more cold-trap stratospheric H2O at 200 K).
     logical, intent(in) :: liquid
     cold_trap_liquid = liquid
@@ -898,9 +907,11 @@ contains
     ! the Wagner-Pruss liquid-vapour curve there overshoots the true
     ! (ice/sublimation) saturation (~2x at 200 K) and would flood the cold-trap
     ! stratosphere, so steam mode falls back to esat_cc (phase-aware, L_sub
-    ! below freezing).  When cold_trap_liquid=.true. we instead saturate over
-    ! (supercooled) LIQUID at all T — the WP curve extrapolated below the triple
-    ! point (steam mode) or esat_cc_liq (CC mode) — matching CLIMA's convention.
+    ! below freezing); this ice branch is also what Kopparapu's CLIMA does
+    ! (SATRAT, sublimation L below 273.16 K).  When cold_trap_liquid=.true. we
+    ! instead saturate over (supercooled) LIQUID at all T — the WP curve
+    ! extrapolated below the triple point (steam mode) or esat_cc_liq (CC mode)
+    ! — retained as a sensitivity toggle.
     if (use_steam_esat) then
       if (T >= IAPWS_TT .or. cold_trap_liquid) then
         es = iapws95_psat_aux(T)
@@ -1000,5 +1011,54 @@ contains
               (1._r8 + L**2 * ws / (cp_dry * SHR_CONST_RWV * T**2))
     gamma_m = max(gamma_m, gamma_floor)
   end function malr
+
+  function twocomp_dlnTdlnP(T, p, Rd, cp_dry) result(dlnTdlnP)
+  ! Two-component ideal-gas moist pseudoadiabat dlnT/dlnP — the ideal-gas
+  ! analogue of exocol_steam::steam_dlnTdlnP_sat (Kasting 1988 A4/A5), for the
+  ! cold-start integration below the 273.16 K triple point where the IAPWS-95
+  ! liquid-vapour Maxwell construction (and hence the non-ideal A4/A5) does
+  ! not exist.  Unlike the textbook malr (g/cp_DRY), it carries the heat
+  ! capacity of BOTH components: at runaway upper-troposphere mixing ratios
+  ! (ws ~ 0.3) the dropped ws·cp_v term makes malr ~18% too steep vs CLIMA,
+  ! freeze-drying the stratosphere at Ts >= 360 K.
+  !
+  ! Pseudoadiabatic entropy budget (condensate removed; ideal gases; Kirchhoff
+  ! dL/dT = cp_v − c_cond makes the condensate heat capacity cancel exactly):
+  !   (cp_d + ws·cp_v − L·ws/T)·dlnT − Rd·dlnp_d + (L·ws/T)·dlnws = 0
+  !   dlnws = β·dlnT − dlnp_d ,   β ≡ dln es/dln T ,   L ≡ β·Rv·T
+  !   → dlnT/dlnp_d = (Rd + L·ws/T) / (cp_d + ws·cp_v + (L·ws/T)(β−1))
+  !   p = p_d + es  →  dlnP/dlnT = (p_d/p)·dlnp_d/dlnT + (es/p)·β
+  !
+  ! es comes from the esat() dispatcher, so the sub-freezing saturation phase
+  ! follows the model configuration (cold_trap_phase: ice = physical default
+  ! AND CLIMA's convention; supercooled liquid = sensitivity toggle) and the
+  ! steam/cc esat mode.  With the ice default this routine is term-for-term
+  ! CLIMA's convec.f label-13 block (HL=SUBL, CC=cp_v, DLPDLT assembly).
+  ! β — and through it the effective latent heat L = β·Rv·T — is a central
+  ! log-space finite difference of that same esat, keeping the lapse rate
+  ! exactly consistent with the saturation curve the cold start later uses to
+  ! assign the vapour profile.  Limits: ws→0 gives the dry adiabat Rd/cp_d;
+  ! es→p gives 1/β (parcel rides the pure-steam saturation curve).
+  ! Not pure (esat reads module-saved selectors); cold-start use only.
+    real(r8), intent(in) :: T       ! temperature        [K]
+    real(r8), intent(in) :: p       ! total pressure     [Pa]
+    real(r8), intent(in) :: Rd      ! dry gas constant   [J/kg/K]
+    real(r8), intent(in) :: cp_dry  ! dry isobaric cp    [J/kg/K]
+    real(r8) :: dlnTdlnP
+    real(r8) :: dT, beta, es, L, pd, ws, eps, dlnpd_dlnT, dlnP_dlnT
+
+    dT   = max(1.0e-2_r8, 1.0e-3_r8*T)
+    beta = (log(esat(T+dT)) - log(esat(T-dT))) / (log(T+dT) - log(T-dT))
+    es   = esat(T)
+    L    = beta * SHR_CONST_RWV * T
+    eps  = Rd / SHR_CONST_RWV
+    pd   = max(p - es, 1.0e-6_r8*p)      ! >0; →0 in the pure-steam limit
+    ws   = eps * es / pd
+
+    dlnpd_dlnT = (cp_dry + ws*SHR_CONST_CPWV + (L*ws/T)*(beta - 1._r8)) &
+                 / (Rd + L*ws/T)
+    dlnP_dlnT  = (pd/p)*dlnpd_dlnT + (min(es, p)/p)*beta
+    dlnTdlnP   = 1._r8 / dlnP_dlnT
+  end function twocomp_dlnTdlnP
 
 end module exocol_convadj
