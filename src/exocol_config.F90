@@ -259,12 +259,14 @@ module exocol_config
   ! Saturation phase below the 273.16 K triple point (cold trap / cold layers).
   !   'ice'    (default) → saturate over ice (physical; bit-identical to all
   !                        prior results).  Real Brewer-Dobson freeze-drying.
+  !                        Also Kopparapu et al. (2013) CLIMA's convention
+  !                        (verified in its source: SATRAT uses the sublimation
+  !                        latent heat below 273.16 K).
   !   'liquid'           → saturate over (supercooled) liquid at all T (the
   !                        Wagner-Pruss curve extrapolated below the triple point
-  !                        in steam mode, or CC-with-L_v in cc mode).  Matches
-  !                        CLIMA's convention (~2x more cold-trap stratospheric
-  !                        H2O at 200 K); use for a like-for-like inner-HZ
-  !                        comparison with Kopparapu et al. (2013).
+  !                        in steam mode, or CC-with-L_v in cc mode).  ~2x more
+  !                        cold-trap stratospheric H2O at 200 K; sensitivity
+  !                        toggle (previously mislabeled "CLIMA convention").
   character(len=32), public, save :: cold_trap_phase  = 'ice'
 
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----

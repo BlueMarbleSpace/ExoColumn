@@ -60,8 +60,9 @@ PROGRAM exocol_driver
   ! Select the saturation-vapour-pressure formula model-wide.  read_config has
   ! already forced esat_formula='steam' when h2o_eos='nonideal'.
   call set_esat_mode(trim(esat_formula) == 'steam')
-  ! Sub-freezing saturation phase (cold trap): 'liquid' matches CLIMA (~2x wetter
-  ! cold stratosphere at 200 K); default 'ice' is bit-identical.
+  ! Sub-freezing saturation phase (cold trap): default 'ice' is bit-identical
+  ! and is also CLIMA's convention; 'liquid' is a sensitivity toggle (~2x wetter
+  ! cold stratosphere at 200 K).
   call set_cold_trap_phase(trim(cold_trap_phase) == 'liquid')
   ! Select the H2O continuum model in the ExoRT radiation core.  Must be set
   ! before initialize_kcoeff (which conditionally reads the BPS continuum file).
