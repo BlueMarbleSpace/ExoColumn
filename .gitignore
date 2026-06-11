@@ -27,6 +27,9 @@ __pycache__/
 # Claude Code local agent directory
 .claude/
 
-# Generated at build time from ExoRT's calc_opd_mod.F90 with the k-table
-# pressure clamp applied (see build/Makefile)
+# Generated at build time by build/patch_exort.py from ExoRT's n68equiv source:
+# calc_opd_mod.F90 (k-table clamp + MT_CKD<->BPS continuum branch), radgrid.F90
+# (use_bps_continuum toggle), initialize_rad_mod_1D.F90 (BPS continuum read).
 src/calc_opd_mod.F90
+src/radgrid.F90
+src/initialize_rad_mod_1D.F90

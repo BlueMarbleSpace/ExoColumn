@@ -243,6 +243,30 @@ module exocol_config
   !                          for thermodynamic consistency.
   character(len=32), public, save :: h2o_eos          = 'ideal'
 
+  ! Water-vapour continuum model used by the ExoRT n68equiv radiation core.
+  !   'mtckd' (default) → MT_CKD 3.3 applied as an 8-point Gauss distribution
+  !                       (stock n68equiv; bit-identical to all prior results).
+  !   'bps'             → Wolf BPS continuum (bps_h20_continuum_n68.nc), applied
+  !                       as a per-band layer average.  Matches the continuum
+  !                       used by Kopparapu et al. (2013), enabling a more direct
+  !                       HZ comparison.  Sets radgrid::use_bps_continuum before
+  !                       the ExoRT init sequence.  NB: this swaps both the
+  !                       continuum model AND its sub-band treatment (layer-avg
+  !                       vs 8-gpt), so it is a controlled comparison, not an
+  !                       identity (see reference/ HZ notes).
+  character(len=32), public, save :: h2o_continuum    = 'mtckd'
+
+  ! Saturation phase below the 273.16 K triple point (cold trap / cold layers).
+  !   'ice'    (default) → saturate over ice (physical; bit-identical to all
+  !                        prior results).  Real Brewer-Dobson freeze-drying.
+  !   'liquid'           → saturate over (supercooled) liquid at all T (the
+  !                        Wagner-Pruss curve extrapolated below the triple point
+  !                        in steam mode, or CC-with-L_v in cc mode).  Matches
+  !                        CLIMA's convention (~2x more cold-trap stratospheric
+  !                        H2O at 200 K); use for a like-for-like inner-HZ
+  !                        comparison with Kopparapu et al. (2013).
+  character(len=32), public, save :: cold_trap_phase  = 'ice'
+
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
   ! with exocol_mod state variables (ts, coszrs, asdir, ...) must be renamed
@@ -326,6 +350,7 @@ contains
                                   sw_zenith_quad, sw_nquad, &
                                   flux_only, variable_ps, ihz_profile, &
                                   h2o_inventory_bar, esat_formula, h2o_eos, &
+                                  h2o_continuum, cold_trap_phase, &
                                   co2_condense, cp_co2_tdep
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
@@ -442,6 +467,16 @@ contains
       esat_formula = 'steam'
       write(*,'(a)') "  NOTE: h2o_eos='nonideal' forces esat_formula='steam'."
     end if
+    if (trim(h2o_continuum) /= 'mtckd' .and. trim(h2o_continuum) /= 'bps') then
+      write(*,'(3a)') "  WARNING: unknown h2o_continuum='", trim(h2o_continuum), &
+        "' — defaulting to 'mtckd'"
+      h2o_continuum = 'mtckd'
+    end if
+    if (trim(cold_trap_phase) /= 'ice' .and. trim(cold_trap_phase) /= 'liquid') then
+      write(*,'(3a)') "  WARNING: unknown cold_trap_phase='", trim(cold_trap_phase), &
+        "' — defaulting to 'ice'"
+      cold_trap_phase = 'ice'
+    end if
 
     call announce()
 
@@ -510,6 +545,13 @@ contains
     end if
     if (trim(h2o_eos) == 'nonideal') &
       write(*,'(a)') '  *** h2o_eos = nonideal — Kasting (1988) Appendix-A pseudoadiabat (IAPWS-95 beta) ***'
+    if (trim(h2o_continuum) == 'bps') then
+      write(*,'(a)') '  H2O continuum     : BPS layer-average (Kopparapu-comparison; bps_h20_continuum_n68.nc)'
+    else
+      write(*,'(a)') '  H2O continuum     : MT_CKD 3.3 8-gpt (stock n68equiv)'
+    end if
+    if (trim(cold_trap_phase) == 'liquid') &
+      write(*,'(a)') '  *** cold_trap_phase = liquid — sub-freezing saturation over (supercooled) liquid (CLIMA-match) ***'
     if (co2_condense) &
       write(*,'(a)') '  *** co2_condense = .true. — cold-start adiabat pinned to CO2 saturation curve (Kasting 1991) ***'
     if (cp_co2_tdep) &

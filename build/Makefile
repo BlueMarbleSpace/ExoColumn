@@ -89,21 +89,25 @@ $(shell printf 'module sys_rootdir\n  implicit none\n  public\n  character(len=2
 $(shell sed -E 's|^([[:space:]]*integer[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_pver[[:space:]]*=[[:space:]]*)[0-9]+.*|\1$(PVER)  ! set by ExoColumn build (PVER=$(PVER))|' \
   $(SRC_DIR)/exoplanet_mod.F90 > $(EXCOL_DIR)/exoplanet_mod.F90)
 
-# Generate src/calc_opd_mod.F90 from ExoRT's n68equiv source with the
-# k-coefficient pressure interpolation CLAMPED at the table top (10 bar).
-# Above its pressure grid ExoRT linearly EXTRAPOLATES k in log10(p)
-# (rad_interp_mod: "at the tops of grids, extrapolate"), which is unphysical
-# for >10 bar columns and can even produce negative k.  The clamp freezes the
-# pressure broadening at its 10-bar value for deeper layers; partial pressures
-# and amagats for the CIA/continuum paths still use the true pmid.  Columns
-# that stay below 10 bar are BIT-IDENTICAL (the min() is a no-op).  Same
-# local-copy pattern as exoplanet_mod above; ExoRT's file is preserved.
-$(shell sed 's|pressure = log10(pmid(ik))       ! log pressure|pressure = min(log10(pmid(ik)), log10pgrid(kc_npress))  ! log pressure; CLAMPED at k-table top by ExoColumn build|' \
-  $(SPEC_DIR)/calc_opd_mod.F90 > $(EXCOL_DIR)/calc_opd_mod.F90)
-# Fail loudly if the anchor line ever changes in a future ExoRT update (the
-# sed above would otherwise silently produce an unpatched copy).
-ifeq ($(shell grep -c 'CLAMPED at k-table top' $(EXCOL_DIR)/calc_opd_mod.F90),0)
-$(error calc_opd_mod clamp patch failed: anchor line not found in $(SPEC_DIR)/calc_opd_mod.F90 — ExoRT source changed?)
+# Generate local copies of three n68equiv source files via patch_exort.py:
+#   calc_opd_mod.F90          k-coefficient pressure interpolation CLAMPED at the
+#                             table top (10 bar; above its grid ExoRT linearly
+#                             EXTRAPOLATES k in log10(p), unphysical for >10 bar
+#                             columns and can produce negative k — the clamp
+#                             freezes pressure broadening at its 10-bar value for
+#                             deeper layers, while partial pressures/amagats keep
+#                             the true pmid; <10 bar columns are BIT-IDENTICAL)
+#                             PLUS the runtime MT_CKD<->BPS H2O-continuum branch.
+#   radgrid.F90               public `use_bps_continuum` flag + BPS filename.
+#   initialize_rad_mod_1D.F90 conditional read of bps_h20_continuum_n68.nc.
+# Same local-copy pattern as exoplanet_mod above; ExoRT's source is preserved.
+# The patches are anchored to explicit lines and the script exits non-zero
+# (printing ERROR) if any anchor disappears in a future ExoRT update.
+PATCH_EXORT_LOG := $(shell python3 $(BUILD_DIR)/patch_exort.py $(SPEC_DIR) $(EXCOL_DIR) 2>&1)
+# Success requires the positive PATCH_OK sentinel; its absence (anchor miss,
+# python exception, or missing python3 → empty log) is a hard failure.
+ifeq ($(findstring PATCH_OK,$(PATCH_EXORT_LOG)),)
+$(error patch_exort.py failed (is python3 available?): $(PATCH_EXORT_LOG))
 endif
 
 # ---- ExoRT objects (same as n68equiv.exe target minus main.F90) ----
@@ -121,7 +125,7 @@ EXORT_SRCS = \
   $(MISC_DIR)/ppgrid.F90              \
   $(MISC_DIR)/pmgrid.F90              \
   $(MISC_DIR)/ioFileMod.F90           \
-  $(SPEC_DIR)/radgrid.F90             \
+  $(EXCOL_DIR)/radgrid.F90            \
   $(MAIN_DIR)/input.F90               \
   $(MISC_DIR)/physconst.F90           \
   $(MAIN_DIR)/output.F90              \
@@ -132,7 +136,7 @@ EXORT_SRCS = \
   $(SPEC_DIR)/rad_interp_mod.F90      \
   $(MAIN_DIR)/rayleigh_data.F90       \
   $(EXCOL_DIR)/calc_opd_mod.F90       \
-  $(SPEC_DIR)/initialize_rad_mod_1D.F90 \
+  $(EXCOL_DIR)/initialize_rad_mod_1D.F90 \
   $(MAIN_DIR)/planck_mod.F90          \
   $(SPEC_DIR)/model_specific.F90      \
   $(MAIN_DIR)/exo_init_ref.F90        \

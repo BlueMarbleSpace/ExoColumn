@@ -131,6 +131,16 @@ ALBEDO   = 0.32      # surface albedo = Kopparapu et al. (2013) value, for a DIR
                      # [Our ExoRT-tuned Ts=288 K value was 0.24229; kept in git history.]
 T_STRATO = 200.0     # isothermal stratosphere cap [K]
 
+# Sub-freezing saturation phase for the cold trap.  This figure uses 'liquid'
+# (saturate over supercooled liquid below the 273.16 K triple point) to match
+# CLIMA's convention, so panel (d)'s stratospheric H2O is directly comparable
+# (ExoColumn over ice is ~2x drier at 200 K — a phase convention, not a model
+# error; see memory project_bps_continuum / the cold-trap diagnosis).  NOTE:
+# ExoColumn's *model default* is 'ice' (the physically correct phase for a
+# sub-freezing cold trap); 'liquid' is selected here only for the like-for-like
+# Kopparapu comparison.  Env-overridable: HZ_COLD_TRAP=ice for the ice variant.
+COLD_TRAP_PHASE = os.environ.get('HZ_COLD_TRAP', 'liquid')
+
 MW_H2O   = 18.015    # g/mol
 
 # The OLR/albedo/Seff curves carry a small high-frequency SAWTOOTH: as Ts sweeps,
@@ -169,6 +179,19 @@ PANEL_ZTOP_KM = 100.0
 # re-running the ~14-min sweep.  Set HZ_REPLOT=1 to load this and skip the runs.
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'hz_inner{TAG}.npz')
 
+# BPS H2O-continuum overlay.  The Wolf BPS continuum is the one Kopparapu's CLIMA
+# used; ExoColumn defaults to MT_CKD 3.3 (8-gpt).  Overlaying both isolates the
+# continuum's contribution to the residual albedo/Seff offset vs Kopparapu (see
+# memory project_bps_continuum: BPS closes ~half the albedo gap; OLR is continuum-
+# insensitive, so the OLR/Seff residual is line data).  ON by default; HZ_BPS=0
+# reproduces the MT_CKD-only figure.  In flux_only mode the continuum changes ONLY
+# the radiation diagnostics (OLR/ASR/albedo/Seff) — the cold-start T and H2O
+# profiles are identical for both continua — so the overlay appears on panels
+# (a)-(c) only; panel (d) is continuum-independent.
+BPS_OVERLAY = os.environ.get('HZ_BPS', '1') != '0'
+CACHE_BPS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         f'hz_inner{TAG}_bps.npz')
+
 NML_TEMPLATE = """\
 &exocol_nml
   flux_only      = .true.
@@ -177,6 +200,8 @@ NML_TEMPLATE = """\
   o3_profile     = 'none'
   msdist         = 1.0
   h2o_eos        = '{h2o_eos}'
+  h2o_continuum  = '{continuum}'
+  cold_trap_phase = '{cold_trap}'
   sw_zenith_quad = .true.
   sw_nquad       = 6
 /
@@ -193,24 +218,31 @@ NML_TEMPLATE = """\
   aldif      = {albedo:.4f}
 /
 &exocol_composition
-  n2_vmr   = 0.78
-  o2_vmr   = 0.210
-  ar_vmr   = 0.01
+  n2_vmr   = 0.99967
+  o2_vmr   = 0.0
+  ar_vmr   = 0.0
   co2_vmr  = 3.3e-4
   ch4_vmr  = 0.0
   o3_vmr   = 0.0
 /
 """
+# Background composition: pure N2 (1 bar) + 330 ppm CO2 + saturated H2O — matching
+# Kopparapu et al. (2013)'s IHZ "Earth" model (their Fig 3: FCO2=3.3e-4, N2 background;
+# no O2/O3/CH4) and consistent with the OHZ sweep.  O2+Ar (the earlier Earth-air
+# mix) shifted Seff by only ~+0.003 and albedo by ~+0.005, but pure N2 is the
+# apples-to-apples choice and isolates the H2O line-data residual.
 
 # ---------------------------------------------------------------------------
 
-def run_one(ts):
+def run_one(ts, continuum='mtckd'):
     """
-    Run ExoColumn flux_only at surface temperature ts.
+    Run ExoColumn flux_only at surface temperature ts with the chosen H2O
+    continuum ('mtckd' | 'bps').
     Returns dict with scalar diagnostics and profiles, or None on failure.
     """
     nml = NML_TEMPLATE.format(ts=ts, t_strato=T_STRATO, albedo=ALBEDO,
-                              h2o_eos=H2O_EOS)
+                              h2o_eos=H2O_EOS, continuum=continuum,
+                              cold_trap=COLD_TRAP_PHASE)
     orig = None
     if os.path.exists(NML_PATH):
         with open(NML_PATH) as f:
@@ -260,23 +292,42 @@ def run_one(ts):
             os.remove(NML_PATH)
 
 
-def _save_cache(arr, profiles):
-    """Persist sweep results so the figure can be re-plotted without re-running."""
+def _save_cache(arr, profiles, path=CACHE):
+    """Persist sweep results so the figure can be re-plotted without re-running.
+    `profiles` may be empty (the BPS overlay reuses the MT_CKD profiles for panel d)."""
     ks = sorted(profiles)
-    np.savez(CACHE, rows=arr,
+    np.savez(path, rows=arr,
              prof_ts=np.array(ks, dtype=float),
              prof_z=np.array([profiles[k][0] for k in ks]),
              prof_v=np.array([profiles[k][1] for k in ks]),
              prof_p=np.array([profiles[k][2] for k in ks]))
-    print(f"Cached: {CACHE}")
+    print(f"Cached: {path}")
 
 
-def _load_cache():
-    d = np.load(CACHE)
+def _load_cache(path=CACHE):
+    d = np.load(path)
     arr = d['rows']
     profiles = {float(t): (z, v, p) for t, z, v, p in
                 zip(d['prof_ts'], d['prof_z'], d['prof_v'], d['prof_p'])}
     return arr, profiles
+
+
+def _sweep(continuum):
+    """Run the full Ts sweep for one continuum.  Returns (rows_array, profiles).
+    Profiles (for panel d) are only meaningful for the first/MT_CKD pass."""
+    rows = []
+    profiles = {}
+    for ts in TS_VALUES:
+        r = run_one(ts, continuum)
+        if r is None:
+            print(f"  [{continuum}] Ts={ts:5.1f} K  SKIPPED")
+            continue
+        print(f"  [{continuum}] Ts={ts:5.1f} K  OLR={r['olr']:7.2f}  ASR={r['asr']:7.2f}"
+              f"  α={r['alpha']:.3f}  Seff={r['seff']:.4f}")
+        rows.append((ts, r['olr'], r['asr'], r['alpha'], r['seff'], r['strat_vmr']))
+        if any(abs(ts - ts_p) < 0.5 for ts_p in PROFILE_TS):
+            profiles[ts] = (r['zmid_km'], r['h2o_vmr'], r['pmid'])
+    return np.array(rows), profiles
 
 
 def main():
@@ -287,7 +338,13 @@ def main():
         print(f"HZ_REPLOT: re-plotting from {CACHE}")
         arr, profiles = _load_cache()
         ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a = arr.T
-        _plot(ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a, profiles)
+        bps = None
+        if BPS_OVERLAY and os.path.exists(CACHE_BPS):
+            bps, _ = _load_cache(CACHE_BPS)
+            print(f"HZ_REPLOT: BPS overlay from {CACHE_BPS}")
+        elif BPS_OVERLAY:
+            print("  (no BPS cache yet — plotting MT_CKD only; run the sweep to build it)")
+        _plot(ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a, profiles, bps=bps)
         return
 
     if not os.path.isfile(EXE):
@@ -296,34 +353,31 @@ def main():
     print("ExoColumn inner-HZ sweep  —  Figure 3 (Kopparapu+2013 style)")
     print(f"  H2O EOS     : {H2O_EOS}" +
           ("  (Kasting 1988 Appendix-A, IAPWS-95)" if H2O_EOS == 'nonideal' else ""))
+    print(f"  H2O contin. : MT_CKD" + ("  +  BPS overlay" if BPS_OVERLAY else ""))
+    print(f"  cold trap   : saturate over {COLD_TRAP_PHASE}" +
+          ("  (CLIMA-match; model default = ice)" if COLD_TRAP_PHASE == 'liquid' else ""))
     print(f"  Ts range    : {TS_VALUES[0]:.0f}–{TS_VALUES[-1]:.0f} K")
     print(f"  t_strato    : {T_STRATO:.0f} K  (isothermal, fully saturated)")
     print(f"  variable_ps : ps = p_N2(1 bar) + esat(Ts)")
     print(f"  composition : N2=0.78 + O2=0.21 + Ar=0.01 + CO2=3.3e-4 + H2O  [no O3/CH4]")
     print()
 
-    rows = []
-    profiles = {}   # ts → (zmid_km, h2o_vmr, pmid) for selected Ts
-    for ts in TS_VALUES:
-        r = run_one(ts)
-        if r is None:
-            print(f"  Ts={ts:5.1f} K  SKIPPED")
-            continue
-        print(f"  Ts={ts:5.1f} K  OLR={r['olr']:7.2f}  ASR={r['asr']:7.2f}"
-              f"  α={r['alpha']:.3f}  Seff={r['seff']:.4f}")
-        rows.append((ts, r['olr'], r['asr'], r['alpha'], r['seff'], r['strat_vmr']))
-        if any(abs(ts - ts_p) < 0.5 for ts_p in PROFILE_TS):
-            profiles[ts] = (r['zmid_km'], r['h2o_vmr'], r['pmid'])
-
-    if not rows:
+    arr, profiles = _sweep('mtckd')
+    if arr.size == 0:
         print("No successful runs.")
         return
-
-    arr  = np.array(rows)
-    _save_cache(arr, profiles)
+    _save_cache(arr, profiles, CACHE)
     ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a = arr.T
 
-    _plot(ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a, profiles)
+    bps = None
+    if BPS_OVERLAY:
+        print("\n  --- BPS continuum pass (radiation diagnostics only) ---")
+        barr, _ = _sweep('bps')
+        if barr.size:
+            _save_cache(barr, {}, CACHE_BPS)   # profiles are continuum-independent
+            bps = barr
+
+    _plot(ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a, profiles, bps=bps)
 
 
 def _smooth(y, w=SMOOTH_WIN):
@@ -372,10 +426,17 @@ def _load_kopp_clima():
     return blocks
 
 
-def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
+def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     # Suppress the vertical-resolution sawtooth (see SMOOTH_WIN note above).
     olr, asr, alpha, seff = (_smooth(olr), _smooth(asr),
                              _smooth(alpha), _smooth(seff))
+
+    # BPS-continuum overlay (radiation diagnostics only; same Ts grid).
+    bts = bolr = basr = balp = bseff = None
+    if bps is not None and bps.size:
+        bts, bolr, basr, balp, bseff = (bps[:, 0], _smooth(bps[:, 1]),
+                                        _smooth(bps[:, 2]), _smooth(bps[:, 3]),
+                                        _smooth(bps[:, 4]))
 
     # ExoColumn's own moist-greenhouse (water-loss) and runaway-greenhouse Seff:
     #   moist GH = Seff at the first Ts where the stratospheric H2O VMR reaches
@@ -394,6 +455,18 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     print(f"  ExoColumn moist-GH Seff = {exo_moist:.3f} (Ts={moist_ts:.0f} K)"
           f" ;  runaway Seff = {exo_runaway:.3f} (Tc={runaway_ts:.0f} K)")
 
+    # BPS-continuum greenhouse-limit Seff.  The cold-start T/H2O profiles (hence
+    # strat_vmr → moist_ts, and Tc) are continuum-independent, so the BPS limits
+    # are simply the BPS Seff curve read at the SAME Ts as the MT_CKD limits.
+    bps_moist = bps_runaway = np.nan
+    if bseff is not None:
+        if np.isfinite(moist_ts):
+            bps_moist = float(np.interp(moist_ts, bts, bseff))
+        if np.isfinite(runaway_ts):
+            bps_runaway = float(np.interp(runaway_ts, bts, bseff))
+        print(f"  BPS       moist-GH Seff = {bps_moist:.3f} (Ts={moist_ts:.0f} K)"
+              f" ;  runaway Seff = {bps_runaway:.3f} (Tc={runaway_ts:.0f} K)")
+
     # Kopparapu+2013 reference data for the model-vs-model overlay (dashed grey).
     kopp = _load_kopp_sweep()
     kclima = _load_kopp_clima()
@@ -409,8 +482,12 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     kw = dict(xlim=(200., 2200.))
 
     # --- (a) OLR and ASR vs Ts ---
+    BPS_KW = dict(lw=1.1, ls=':', zorder=3)   # dotted = ExoColumn BPS continuum
     ax_a.plot(ts, olr, color='C3', lw=1.5)
     ax_a.plot(ts, asr, color='C0', lw=1.5)
+    if bolr is not None:
+        ax_a.plot(bts, bolr, color='C3', **BPS_KW)
+        ax_a.plot(bts, basr, color='C0', **BPS_KW)
     if kopp is not None:
         ax_a.plot(kopp['tgo'], kopp['olr'], color='C3', **KOPP_KW)
         ax_a.plot(kopp['tgo'], kopp['asr'], color='C0', **KOPP_KW)
@@ -427,16 +504,21 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     # = Kopparapu+2013.  Colour continues to encode the quantity in each panel.
     if kopp is not None:
         from matplotlib.lines import Line2D
-        ax_a.legend(handles=[
-            Line2D([0], [0], color=GREY, lw=1.5, label='ExoColumn'),
-            Line2D([0], [0], color=GREY, lw=0.9, ls='--',
-                   label='Clima (Kopparapu et al. 2013)')],
-            loc='upper left', fontsize=8, frameon=False)
+        handles = [Line2D([0], [0], color=GREY, lw=1.5,
+                          label='ExoColumn (MT_CKD)' if bolr is not None else 'ExoColumn')]
+        if bolr is not None:
+            handles.append(Line2D([0], [0], color=GREY, lw=1.1, ls=':',
+                                  label='ExoColumn (BPS)'))
+        handles.append(Line2D([0], [0], color=GREY, lw=0.9, ls='--',
+                              label='Clima (Kopparapu et al. 2013)'))
+        ax_a.legend(handles=handles, loc='upper left', fontsize=8, frameon=False)
     ax_a.set(**kw)
     ax_a.set_facecolor('white')
 
     # --- (b) Planetary albedo vs Ts ---
     ax_b.plot(ts, alpha, color='C2', lw=1.5)
+    if balp is not None:
+        ax_b.plot(bts, balp, color='C2', **BPS_KW)
     if kopp is not None:
         ax_b.plot(kopp['tgo'], kopp['palb'], color='C2', **KOPP_KW)
     ax_b.axhline(ALBEDO, color=GREY, lw=0.9, ls=':')
@@ -451,16 +533,24 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
 
     # --- (c) Seff vs Ts ---
     ax_c.plot(ts, seff, color='C1', lw=1.5)
+    if bseff is not None:
+        ax_c.plot(bts, bseff, color='C1', **BPS_KW)
     if kopp is not None:
         ax_c.plot(kopp['tgo'], kopp['seff'], color='C1', **KOPP_KW)
     # Markers on the curve at the two greenhouse limits: moist-GH (water-loss; the
     # Ts where stratospheric H2O VMR first reaches 3e-3) and runaway-GH (at the
-    # H2O critical temperature Tc).
+    # H2O critical temperature Tc).  Circle = MT_CKD, diamond = BPS, square = Clima.
     if np.isfinite(exo_moist):
         ax_c.plot(moist_ts, exo_moist, 'o', color=GREY, ms=3,
                   markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
     if np.isfinite(exo_runaway):
         ax_c.plot(runaway_ts, exo_runaway, 'o', color=GREY, ms=3,
+                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+    if np.isfinite(bps_moist):
+        ax_c.plot(moist_ts, bps_moist, 'D', color=GREY, ms=3,
+                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+    if np.isfinite(bps_runaway):
+        ax_c.plot(runaway_ts, bps_runaway, 'D', color=GREY, ms=3,
                   markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
 
     # Kopparapu+2013 IHZ limits on their own (dashed) Seff curve, derived with the
@@ -495,24 +585,26 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     # Lead each model's line with its plot-marker glyph (● circle = ExoColumn,
     # ■ square = Clima) so the label doubles as the marker key.  Same grey as the
     # plotted markers and text.
-    CIRCLE, SQUARE = '•', '▪'   # small glyphs ~matching the ms=3 plotted markers
-    def _limit_text(name, exo_s, kopp_s):
-        lines = [name, f'{CIRCLE} ExoColumn:  $S_\\mathrm{{eff}}$ = {exo_s:.3f}'
-                       f' ({1.0 / np.sqrt(exo_s):.3f} AU)']
+    CIRCLE, DIAMOND, SQUARE = '•', '◆', '▪'   # glyphs ~matching the ms=3 markers
+    def _limit_text(name, exo_s, bps_s, kopp_s):
+        def _au(s):
+            return f'$S_\\mathrm{{eff}}$ = {s:.3f} ({1.0 / np.sqrt(s):.3f} AU)'
+        lines = [name, f'{CIRCLE} ExoColumn (MT_CKD):  {_au(exo_s)}']
+        if np.isfinite(bps_s):
+            lines.append(f'{DIAMOND} ExoColumn (BPS):       {_au(bps_s)}')
         if np.isfinite(kopp_s):
-            lines.append(f'{SQUARE} Clima:           $S_\\mathrm{{eff}}$ = {kopp_s:.3f}'
-                         f' ({1.0 / np.sqrt(kopp_s):.3f} AU)')
+            lines.append(f'{SQUARE} Clima:                        {_au(kopp_s)}')
         return '\n'.join(lines)
 
     if np.isfinite(exo_moist):
-        ax_c.annotate(_limit_text('MOIST GREENHOUSE', exo_moist, kopp_moist_seff),
-                      xy=(moist_ts, exo_moist), xytext=(2, 60),
+        ax_c.annotate(_limit_text('MOIST GREENHOUSE', exo_moist, bps_moist, kopp_moist_seff),
+                      xy=(moist_ts, exo_moist), xytext=(2, 66),
                       textcoords='offset points', color=GREY, fontsize=8,
                       ha='left', va='top',
                       arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
                                       shrinkB=3))
     if np.isfinite(exo_runaway):
-        ax_c.annotate(_limit_text('RUNAWAY GREENHOUSE', exo_runaway, kopp_run_seff),
+        ax_c.annotate(_limit_text('RUNAWAY GREENHOUSE', exo_runaway, bps_runaway, kopp_run_seff),
                       xy=(runaway_ts, exo_runaway), xytext=(40, -48),
                       textcoords='offset points', color=GREY, fontsize=8,
                       ha='left', va='top',
@@ -576,6 +668,12 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles):
     ax_d.set_ylabel('Altitude (km)')
     ax_d.set_ylim(0., PANEL_ZTOP_KM)
     ax_d.set_facecolor('white')
+    # Note the cold-trap saturation convention used for this figure.
+    if COLD_TRAP_PHASE == 'liquid':
+        ax_d.text(0.03, 0.03,
+                  'cold trap: sat. over liquid\n(CLIMA convention; ExoColumn default = ice)',
+                  transform=ax_d.transAxes, color=GREY, fontsize=7,
+                  ha='left', va='bottom')
 
     fig.tight_layout(w_pad=2.0, h_pad=2.0)
     out_dir = os.path.dirname(os.path.abspath(__file__))
