@@ -52,7 +52,7 @@ module exocol_coldstart
                             ar_vmr,  o3_profile, variable_ps, ihz_profile, &
                             h2o_inventory_bar, h2o_eos,            &
                             co2_condense, cp_co2_tdep,             &
-                            coldtrap_dT_offset,                    &
+                            coldtrap_dT_offset, co2_vmr_total,     &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
@@ -109,6 +109,7 @@ contains
     ! Cold-trap sampling point for coldtrap_dT_offset > 0 (Kopparapu grid
     ! emulation): the adiabat crossing of T = t_strato + offset.
     real(r8) :: T_trapsamp, p_trapsamp, T_freeze_dry
+    real(r8) :: f_h2o_k   ! layer H2O mole fraction of total air (co2_vmr_total)
     character(len=4) :: dry_name(7)
     ! Kasting IHZ dry-adiabat variables (initialised to safe no-dry-layer defaults)
     real(r8) :: f_vmr, Mw_mix, w_h2o, Rv, R_mix, cp_h2o_steam, cp_mix, kappa_mix
@@ -581,7 +582,21 @@ contains
     end do
 
     ! ---- 5. Dry-gas MMR profiles (well-mixed, except O3 per o3_profile) ----
-    co2mmr(:)  = mmr_dry(1)
+    if (co2_vmr_total) then
+      ! CLIMA convention (co2_vmr_total): co2_vmr is the mole fraction of
+      ! TOTAL (moist) air at every layer (Kopparapu's constant FCO2), so the
+      ! CO2 amount per unit dry air rises in wet layers by 1/(1 - f_H2O).
+      ! ExoRT consumes co2mmr as a DRY mass mixing ratio (calc_gasopd:
+      ! u_co2 = qco2*mwdry/mwco2 * coldens_dry), so the enhancement factor
+      ! applies directly to the well-mixed dry MMR.
+      do k = 1, pver
+        f_h2o_k   = (h2ommr(k) / SHR_CONST_MWWV) / &
+                    (h2ommr(k) / SHR_CONST_MWWV + (1._r8 - h2ommr(k)) / mwdry_new)
+        co2mmr(k) = mmr_dry(1) / max(1._r8 - f_h2o_k, 1.0e-3_r8)
+      end do
+    else
+      co2mmr(:)  = mmr_dry(1)
+    end if
     ch4mmr(:)  = mmr_dry(2)
     c2h6mmr(:) = mmr_dry(3)
     h2mmr(:)   = mmr_dry(4)

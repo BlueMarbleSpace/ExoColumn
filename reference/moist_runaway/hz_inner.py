@@ -228,6 +228,9 @@ NML_TEMPLATE = """\
   h2o_continuum  = '{continuum}'
   cold_trap_phase = '{cold_trap}'
   coldtrap_dT_offset = {trap_off:.3f}
+  co2_vmr_total  = .true.   ! CLIMA convention: CO2 = 3.3e-4 of TOTAL air per
+                            ! layer (their constant FCO2); +3.5% CO2 in the
+                            ! lowest layers at 300 K (~0.1 W/m2), ~0 hot end
   sw_zenith_quad = .true.
   sw_nquad       = 6
 /
