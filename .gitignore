@@ -33,3 +33,5 @@ __pycache__/
 src/calc_opd_mod.F90
 src/radgrid.F90
 src/initialize_rad_mod_1D.F90
+tools/absco-ref_wv-mt-ckd.nc
+tools/lbl_olr_benchmark_ts300.npz

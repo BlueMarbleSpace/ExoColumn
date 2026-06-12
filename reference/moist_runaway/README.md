@@ -46,6 +46,16 @@ either `.dat`/`.tab` file is absent the overlay is silently skipped.
   are 11.0–82.8°; the integrand is the same flux-weighted average, so this is a small
   quadrature-node difference, and Kopparapu's weights are not published for an exact match.)
 - **`variable_ps`:** `ps = p_N2(1 bar) + esat(Ts)`; **`msdist = 1 AU`**.
+- **CO₂ mixing convention:** `co2_vmr_total = .true.` — CO₂ is 3.3×10⁻⁴ of the
+  **total (moist)** air at every layer, Kopparapu/CLIMA's convention (their
+  FCO₂ = const at all levels, verified in `clima_last.tab`). For a steam-rich
+  column this means the CO₂ amount **grows** with the vapour inventory
+  (×~200 in absolute terms at Ts → Tc where p ≈ 220 bar) — unphysical for a
+  fixed CO₂ inventory (the model default holds CO₂/N₂ constant) but required
+  for apples-to-apples: it is radiatively negligible at the moist-GH end
+  (−0.02 W/m² OLR at 300 K) yet lowers the steam-plateau OLR by ~7 W/m² and
+  the runaway-limit Seff from 1.088 to **1.060**. Yang et al. (2016) flag the
+  same convention caveat for their own intercomparison.
 - **Model top:** `p_top = 0.002 Pa` — so even the coldest profiled column (280 K)
   reaches ≥100 km in panel (d) (at 0.01 Pa it stopped at ~96 km). SW is converged
   wrt the top (mass above 0.002 Pa is ~1e-8 of the column).
@@ -113,26 +123,34 @@ overlays the ExoColumn and CLIMA H₂O profiles. The figure uses the `'ice'`
 cold-trap convention — the model default *and* CLIMA's actual convention (see
 Configuration).
 
-- **Greenhouse-limit `Seff`** (this figure, `'ice'` cold trap + sub-273 K
-  two-component adiabat):
+- **Greenhouse-limit `Seff`** (this figure: `'ice'` cold trap + sub-273 K
+  two-component adiabat + CLIMA CO₂-of-total convention):
   | | moist GH | runaway GH (Tc=647 K) |
   |---|---|---|
-  | ExoColumn MT_CKD | 1.088 (Ts=345 K) | 1.088 |
-  | ExoColumn BPS | 1.075 (Ts=345 K) | 1.101 |
-  | Kopparapu/CLIMA | 1.018 | 1.060 |
-  (Pure-N₂ background. Note Kopparapu's moist-GH limit derives from their
-  grid-inflated stratospheric H₂O — see the panel-(d) bullet below — so their
-  water-loss threshold is crossed at a cooler Ts than a grid-converged CLIMA
-  would give.)
+  | ExoColumn MT_CKD | 1.087 (Ts=345 K) | 1.060 |
+  | ExoColumn BPS | 1.074 (Ts=345 K) | 1.072 |
+  | Kopparapu/CLIMA | 1.016 | 1.060 |
+  (Pure-N₂ background. With the **physical** fixed-CO₂-inventory convention
+  the runaway limit is 1.088/1.101 — the CO₂-of-total convention's growing
+  CO₂ inventory lowers the steam-plateau OLR by ~7 W/m². The MT_CKD runaway
+  value landing exactly on Kopparapu's 1.060 is partly compensating offsets:
+  our plateau OLR is ~7 W/m² **below** theirs under the matched convention
+  while our absorbed SW is ~2.5% below theirs (albedo offset). Kopparapu's
+  moist-GH limit derives from their grid-inflated stratospheric H₂O — see the
+  panel-(d) bullet — so their water-loss threshold is crossed at a cooler Ts
+  than a grid-converged CLIMA would give.)
 - **Continuum (BPS vs MT_CKD):** BPS lowers the planetary albedo toward CLIMA,
   closing ~half the panel-(b) albedo offset and ~20 % of the moist-GH `Seff`
   gap; **OLR is continuum-insensitive**, so the residual `Seff`/OLR offset is
   near-IR H₂O **line** data (ExoRT n68/HITRAN-2016 k-distribution vs CLIMA),
   not the continuum.
 - **LW (F_IR) offset vs Kopparapu (diagnosed 2026-06-11):** ΔOLR(Ts) is a bell:
-  +4 W/m² at 220 K, peaking at **~+20 W/m² at 300–320 K**, collapsing to ~0 by
-  400 K with both models meeting at the same Simpson–Nakajima plateau
-  (291–293 W/m²) — i.e. our F_IR *rises faster* toward the plateau. With T(P)
+  +4 W/m² at 220 K, peaking at **~+20 W/m² at 300–320 K**, collapsing through
+  zero near 400 K — i.e. our F_IR *rises faster* toward the plateau. Under the
+  matched CO₂-of-total convention our steam-plateau OLR then sits ~7 W/m²
+  **below** theirs (284–285 vs 291.8 W/m² at 500–1300 K; with the physical
+  fixed-CO₂-inventory convention the plateaus coincide at ~291.7 — a
+  coincidence of our LW transparency against their growing CO₂ opacity). With T(P)
   and the H₂O profile now verified to match CLIMA, this is a pure
   radiation-core (gas-opacity) difference in the **semi-transparent** regime.
   Spectral home (band-resolved, Ts = 300 K): the 8–12.5 µm window is 67–82 %
@@ -141,12 +159,29 @@ Configuration).
   H₂O-free N₂+CO₂ column, still +3.7 W/m²) bounds the CO₂-side share at
   ~4 W/m², leaving ~16 W/m² on the H₂O side (window + rotation-band wings).
   Ruled out: the continuum choice (BPS vs MT_CKD ≤ 0.4 W/m² per band), the
-  T/q state (matched), and the cold-trap sampling (≤ 0.7 W/m²).  Same family
-  as the dense-CO₂ F_IR offset diagnosed vs SMART in
-  `reference/max_greenhouse/` (ExoRT n68 k-data vs CLIMA's HITEMP-2010-based
-  coefficients; ExoRT is read-only, so closing it needs new k-tables).  This
-  LW deficit is ~60 % of the moist-GH `Seff` gap (OLR ratio 1.047 at 340 K);
-  the SW/albedo offset (ASR ratio 1.028) is the rest.
+  T/q state (matched), and the cold-trap sampling (≤ 0.7 W/m²).
+  **Line-by-line verdict (2026-06-12, `tools/lbl_olr_benchmark.py`):** an
+  independent LBL calculation on the *same* Ts = 300 K column (RADIS/HITRAN
+  lines for H₂O+CO₂ at 0.01 cm⁻¹ + a faithful port of the AER MT_CKD
+  continuum, diffusivity-1.66 Schwarzschild) gives **OLR = 272.4 W/m²
+  (10–3000 cm⁻¹) vs ExoRT n68 = 269.7 — agreement to 1 %**, with per-band
+  residuals ≤ 0.35 W/m² everywhere except the CO₂-wing/rotation-band overlap
+  (−1.7/−1.5/−0.5 W/m² in 720–800/545–617/667–720, ExoRT slightly *more*
+  opaque than LBL).  Kopparapu's 250.2 W/m² is **22 W/m² below the LBL** — the
+  size of an entire second MT_CKD continuum (the whole continuum removes
+  23.7 W/m² from the lines-only 296.4) and far beyond plausible
+  continuum-model spread.  Conclusion: the F_IR bell is **CLIMA-2013 being
+  too opaque relative to modern line-by-line radiative transfer, not an
+  ExoRT deficiency** — consistent with Yang et al. (2016), where the ExoRT
+  lineage (CAM4_Wolf) tracks the SMART LBL while band models spread
+  10–25 W/m², and with Kopparapu's ≈1420 W/m² runaway threshold vs
+  Goldblatt/SMART's ≈1340.  LBL caveats (all ≲ 1 W/m² here): no N₂–N₂ CIA,
+  air- (not N₂-) broadened widths, no CO₂ χ-factors at 330 ppm.  This
+  reframes the moist-GH `Seff` gap: ~60 % of it (the OLR ratio 1.047 at
+  340 K) is CLIMA's LW opacity bias, the rest the SW/albedo offset (ASR
+  ratio 1.028) — i.e. our limit is the better-grounded one by the LBL
+  standard, and "agreement with Kopparapu" should not be pursued further on
+  the LW side.
 - **H₂O profiles (panel d):** fully apples-to-apples as of 2026-06-11. Both
   models integrate the same physics: two-component moist pseudoadiabat (steam
   tables / IAPWS-95 above 273.16 K, matching <0.1 %; ice-saturated two-component

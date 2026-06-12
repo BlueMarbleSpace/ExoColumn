@@ -269,6 +269,19 @@ module exocol_config
   !                        toggle (previously mislabeled "CLIMA convention").
   character(len=32), public, save :: cold_trap_phase  = 'ice'
 
+  ! CO2 mixing convention for the cold start (default .false. → bit-identical).
+  !   .false. → co2_vmr is the mole fraction of DRY air, well-mixed: CO2/N2 is
+  !             constant everywhere (physical for a noncondensable).
+  !   .true.  → co2_vmr is the mole fraction of TOTAL (moist) air at every
+  !             layer — the Kopparapu/CLIMA convention (their FCO2 = const at
+  !             all levels, verified in clima_last.tab even where f_H2O = 0.56),
+  !             so the CO2 dry-air VMR rises in wet layers by 1/(1 − f_H2O).
+  !             Radiatively small for 330 ppm: ~+3.5% CO2 in the lowest layers
+  !             at Ts = 300 K (~0.1 W/m² OLR), converging to no effect in the
+  !             steam regime where H2O dominates the opacity.  mwdry/cpdry are
+  !             unchanged (the CO2 perturbation to both is < 1e-5 at 330 ppm).
+  logical,           public, save :: co2_vmr_total = .false.
+
   ! Cold-trap sampling offset [K] (default 0 → bit-identical).  When > 0, the
   ! cold-start stratospheric humidity is freeze-dried at the point on the
   ! continuous adiabat where T = t_strato + coldtrap_dT_offset, instead of at
@@ -366,7 +379,7 @@ contains
                                   flux_only, variable_ps, ihz_profile, &
                                   h2o_inventory_bar, esat_formula, h2o_eos, &
                                   h2o_continuum, cold_trap_phase, &
-                                  coldtrap_dT_offset, &
+                                  coldtrap_dT_offset, co2_vmr_total, &
                                   co2_condense, cp_co2_tdep
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
@@ -575,6 +588,8 @@ contains
     if (coldtrap_dT_offset > 0._r8) &
       write(*,'(a,f6.2,a)') '  *** coldtrap_dT_offset = ', coldtrap_dT_offset, &
         ' K — strat humidity sampled above the cap (Kopparapu grid emulation) ***'
+    if (co2_vmr_total) &
+      write(*,'(a)') '  *** co2_vmr_total = .true. — co2_vmr is the mole fraction of TOTAL air (CLIMA convention) ***'
     if (co2_condense) &
       write(*,'(a)') '  *** co2_condense = .true. — cold-start adiabat pinned to CO2 saturation curve (Kasting 1991) ***'
     if (cp_co2_tdep) &
