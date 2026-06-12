@@ -24,6 +24,10 @@ profile. The figure has four panels (Kopparapu Fig 3):
 | `hz_inner_nonideal.pdf` / `.png` | The figure. **The PDF is the publication artifact** — hand-edit it as needed. |
 | `waterloss_IHZ_present.dat` | Kopparapu et al. (2013) inner-HZ sweep vs surface temperature (provided directly by R. Kopparapu). Columns: `TGO  SEFF  PALB  FH2O  FTIR(1)`[OLR]`  FTSO(1)`[absorbed SW]. Overlaid on panels (a)–(c). |
 | `clima_last.tab` | Kopparapu CLIMA water-loss vertical profiles — one ALT/P/T/FH2O/… block per surface temperature (220, 240, … K). Col 1 = altitude [km], col 4 = H₂O VMR. The six blocks matching the panel-(d) ExoColumn profiles (280–380 K) are overlaid on panel (d). |
+| `lbl_olr_benchmark_ts300.png` | The line-by-line OLR benchmark figure for the saturated Ts = 300 K column: LBL vs ExoRT n68 vs CLIMA (both k-coefficient generations). The attribution figure for the F_IR offset (see "LW offset" under Key results). |
+| `lbl_olr_benchmark_ts300.npz` | LBL spectrum cache (compressed float32) + the ExoRT band OLR for the same column. Regenerate with `tools/lbl_olr_benchmark.py` (~25 min, RADIS/HITRAN). |
+| `clima_band_olr_ts300.txt` | CLIMA 55-interval TOA OLR on the same column, both k-coefficient generations (2013-era + Wolf HITRAN2016), from the patched public CLIMA at `/models/atmos`. Provenance in the file header. |
+| `plot_lbl_olr.py` | Renders `lbl_olr_benchmark_ts300.png` from the two data files above (instant). |
 
 The Kopparapu reference data are drawn as thin **dashed** curves, **colour-matched** to the
 corresponding ExoColumn quantity (solid = ExoColumn, dashed = Kopparapu) — in panel (d)
@@ -103,6 +107,32 @@ HZ_REPLOT=1 python reference/moist_runaway/hz_inner.py
 ```
 
 Loads `hz_inner_nonideal.npz` and regenerates the figure without any model runs.
+
+### LBL OLR benchmark figure (`lbl_olr_benchmark_ts300.png`)
+
+Re-plot (instant, from the committed data):
+
+```bash
+python reference/moist_runaway/plot_lbl_olr.py
+```
+
+Full regeneration of the underlying data:
+1. **Column:** run `run/exocol.exe` with the `hz_inner.py` namelist at
+   `ts=300` (nonideal EOS, ice cold trap, `co2_vmr_total`, `flux_only`).
+2. **LBL spectrum:** `python tools/lbl_olr_benchmark.py iofiles/exocol_out.nc`
+   (~25 min; RADIS + HITRAN cached in `~/.radisdb`, AER MT_CKD coefficients
+   auto-downloaded; writes the npz here by default).
+3. **CLIMA bands:** the patched public CLIMA at `/models/atmos` (band-OLR
+   write in `CLIMA/RADTRANS/ir.f`, matched inverse deck in `CLIMA/IO/`); run
+   `./Clima.run` once with the distributed Wolf-HITRAN2016 data files and once
+   with the 2013-era ones (swap the four `OPEN` filenames in `ClimaMain.f`,
+   units 15–18, and rebuild — see `clima_band_olr_ts300.txt`'s header), take
+   the last 55 rows of `CLIMA/IO/ir_band_olr.tab` each time (×10⁻³ → W/m²).
+   Validation anchor: the 2013-era run must give FTIR ≈ 250–252 W/m²
+   (Kopparapu's tabulated 250.2) on the reproduced column.
+
+The SW (albedo) twin lives in `tools/` (`lbl_sw_benchmark.py` +
+`plot_lbl_benchmarks.py`); its verdict is quoted under Key results.
 
 ### Useful environment overrides
 
@@ -205,7 +235,7 @@ Configuration).
   k-coefficients that the CLIMA maintainers adopted in 2021 (commit
   `54934f6`, computed by E. Wolf with HELIOS-K).  The opacity-data swap
   alone moves CLIMA 16 of the 22 W/m² toward the LBL; spectrally
-  (`tools/clima_band_olr_ts300.txt`, overlaid on the benchmark figure) the
+  (`clima_band_olr_ts300.txt`, overlaid on the benchmark figure) the
   2013-era deficit is a broad depression across the entire H₂O rotation
   band and window (~150–1300 cm⁻¹), not a localized feature.  I.e. **the
   community that maintains CLIMA has itself superseded the 2013 opacities

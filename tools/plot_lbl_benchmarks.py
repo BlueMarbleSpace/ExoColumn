@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-plot_lbl_benchmarks.py — render the LBL benchmark figures (LW OLR and SW
-albedo, from tools/lbl_{olr,sw}_benchmark_ts300.npz), spectral axes in
-wavenumber.
+plot_lbl_benchmarks.py — render the SW (planetary albedo) LBL benchmark
+figure from tools/lbl_sw_benchmark_ts300.npz, spectral axis in wavenumber.
+The LW (OLR) benchmark figure lives with the moist_runaway reference case:
+reference/moist_runaway/plot_lbl_olr.py.
 
-Usage: python tools/plot_lbl_benchmarks.py   (renders whatever npz exists)
+Usage: python tools/plot_lbl_benchmarks.py
 """
 import os
 import numpy as np
@@ -13,89 +14,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def plot_lw():
-    path = os.path.join(HERE, 'lbl_olr_benchmark_ts300.npz')
-    if not os.path.isfile(path):
-        print(f"skip LW ({path} missing)")
-        return
-    d = np.load(path)
-    wn, oc = d['wn'], d['olr_nu_cont']
-    edges, exo = d['band_edges'], d['band_exo']
-    ts = float(d['ts'])
-
-    # band-integrate the LBL
-    lbl_b = np.full(len(exo), np.nan)
-    for i in range(len(exo)):
-        m = (wn >= edges[i]) & (wn < edges[i + 1])
-        if m.sum() > 2:
-            lbl_b[i] = np.trapezoid(oc[m], wn[m])
-    w_b = np.diff(edges)
-
-    # CLIMA band OLR on the matched column (both k-coefficient generations,
-    # computed with the patched /models/atmos ir.f — see the data file header)
-    clima_path = os.path.join(HERE, 'clima_band_olr_ts300.txt')
-    clima = np.loadtxt(clima_path) if os.path.isfile(clima_path) else None
-
-    fig, ax = plt.subplots(2, 1, figsize=(7.0, 6.2), dpi=300,
-                           height_ratios=[2.2, 1], sharex=True)
-    fig.patch.set_facecolor('white')
-    a = ax[0]
-    k = 501
-    ker = np.ones(k) / k
-    a.plot(wn[::10], np.convolve(oc, ker, 'same')[::10], color='0.55', lw=0.6,
-           label='LBL: HITRAN lines + MT_CKD continuum (smoothed)')
-    a.stairs(lbl_b / w_b, edges, color='k', lw=1.4, label='LBL, n68-band averages')
-    a.stairs(exo / w_b, edges, color='C3', lw=1.2, label='ExoRT n68 (this work)')
-    totals = ('totals (10–3000 cm$^{-1}$)\n'
-              'LBL                272.4 W m$^{-2}$\n'
-              'ExoRT n68          269.7 W m$^{-2}$')
-    if clima is not None:
-        ce = np.append(clima[:, 0], clima[-1, 1])
-        cw = np.diff(ce)
-        a.stairs(clima[:, 3] / cw, ce, color='C0', lw=1.0, ls='--',
-                 label='CLIMA, Wolf HITRAN2016 k (2021)')
-        a.stairs(clima[:, 2] / cw, ce, color='C2', lw=1.0, ls='--',
-                 label='CLIMA, 2013-era k (= Kopparapu 2013)')
-        totals += (f'\nCLIMA 2021 k       {clima[:,3].sum():.1f} W m$^{{-2}}$'
-                   f'\nCLIMA 2013-era k   {clima[:,2].sum():.1f} W m$^{{-2}}$'
-                   '\nKopparapu 2013 tab 250.2 W m$^{-2}$')
-    a.set_ylabel('OLR spectral density (W m$^{-2}$ / cm$^{-1}$)')
-    a.set_xlim(10, 2000)
-    a.set_ylim(0, 0.42)
-    a.legend(loc='upper left', fontsize=7.5, frameon=False)
-    a.set_title(f'Clear-sky OLR, saturated $T_s$ = {ts:.0f} K column '
-                '(1 bar N$_2$ + 330 ppm CO$_2$ + H$_2$O)', fontsize=10)
-    a.text(0.985, 0.975, totals, transform=a.transAxes, ha='right', va='top',
-           fontsize=8, family='monospace')
-    a.set_facecolor('white')
-
-    b = ax[1]
-    ctr = 0.5 * (edges[:-1] + edges[1:])
-    b.bar(ctr, (exo - lbl_b) / w_b, width=w_b * 0.92, color='C3', alpha=0.75,
-          label='ExoRT − LBL')
-    if clima is not None:
-        # CLIMA(2013-era) − LBL on the common 55-interval grid
-        lbl_c = np.full(len(cw), np.nan)
-        for i in range(len(cw)):
-            m = (wn >= ce[i]) & (wn < ce[i + 1])
-            if m.sum() > 2:
-                lbl_c[i] = np.trapezoid(oc[m], wn[m])
-        cctr = 0.5 * (ce[:-1] + ce[1:])
-        b.step(np.append(ce[0], ce[1:]), np.append((clima[:, 2] - lbl_c) / cw,
-               np.nan), where='post', color='C2', lw=1.0,
-               label='CLIMA 2013-era − LBL')
-        b.legend(fontsize=7, frameon=False, loc='lower right')
-    b.axhline(0, color='k', lw=0.6)
-    b.set_ylabel('model − LBL\n(W m$^{-2}$ / cm$^{-1}$)')
-    b.set_xlabel('Wavenumber (cm$^{-1}$)')
-    b.set_facecolor('white')
-    fig.tight_layout()
-    out = os.path.join(HERE, 'lbl_olr_benchmark_ts300.png')
-    fig.savefig(out, facecolor='white', dpi=200)
-    plt.close(fig)
-    print(f"wrote {out}")
 
 
 def plot_sw():
@@ -159,5 +77,4 @@ def plot_sw():
 
 
 if __name__ == '__main__':
-    plot_lw()
     plot_sw()

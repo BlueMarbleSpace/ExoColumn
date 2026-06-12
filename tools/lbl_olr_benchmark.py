@@ -208,7 +208,9 @@ def main():
     ap.add_argument('--wmin', type=float, default=10.0)
     ap.add_argument('--wmax', type=float, default=3000.0)
     ap.add_argument('--wstep', type=float, default=0.01)
-    ap.add_argument('--out', default=os.path.join(HERE, 'lbl_olr_benchmark'))
+    ap.add_argument('--out', default=os.path.join(
+        os.path.dirname(HERE), 'reference', 'moist_runaway',
+        'lbl_olr_benchmark_ts300'))
     args = ap.parse_args()
 
     lay = load_column(args.ncfile, args.nlay)
@@ -256,11 +258,12 @@ def main():
         print(f"\n  common-range totals ({args.wmin:.0f}-{args.wmax:.0f} cm-1): "
               f"LBL = {lbl_t:.2f}  ExoRT n68 = {exo_t:.2f}  "
               f"(ExoRT - LBL = {exo_t-lbl_t:+.2f} W/m2)")
-        np.savez(args.out + '.npz', wn=wn,
-                 olr_nu_lines=results['lines only (H2O+CO2)'][1],
-                 olr_nu_cont=results['lines + MT_CKD continuum'][1],
-                 band_edges=edges, band_exo=band['olr'],
-                 T=lay['T'], p_mb=lay['p_mb'], x_h2o=lay['x_h2o'], ts=lay['ts'])
+        np.savez_compressed(
+            args.out + '.npz', wn=wn.astype(np.float32),
+            olr_nu_lines=results['lines only (H2O+CO2)'][1].astype(np.float32),
+            olr_nu_cont=results['lines + MT_CKD continuum'][1].astype(np.float32),
+            band_edges=edges, band_exo=band['olr'],
+            T=lay['T'], p_mb=lay['p_mb'], x_h2o=lay['x_h2o'], ts=lay['ts'])
         print(f"\nsaved {args.out}.npz")
 
 
