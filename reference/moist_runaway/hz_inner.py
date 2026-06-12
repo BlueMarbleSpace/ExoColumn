@@ -668,21 +668,21 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
             return f'$S_\\mathrm{{eff}}$ = {s:.3f} ({1.0 / np.sqrt(s):.3f} AU)'
         lines = [name, f'{CIRCLE} ExoColumn (MT_CKD):  {_au(exo_s)}']
         if np.isfinite(bps_s):
-            lines.append(f'{DIAMOND} ExoColumn (BPS):       {_au(bps_s)}')
+            lines.append(f'{DIAMOND} ExoColumn (BPS):        {_au(bps_s)}')
         if np.isfinite(kopp_s):
-            lines.append(f'{SQUARE} Clima:                        {_au(kopp_s)}')
+            lines.append(f'{SQUARE} Clima (BPS):                 {_au(kopp_s)}')
         return '\n'.join(lines)
 
     if np.isfinite(exo_moist):
         ax_c.annotate(_limit_text('MOIST GREENHOUSE', exo_moist, bps_moist, kopp_moist_seff),
-                      xy=(moist_ts, exo_moist), xytext=(2, 66),
+                      xy=(moist_ts, exo_moist), xytext=(-8, 68),
                       textcoords='offset points', color=GREY, fontsize=8,
                       ha='left', va='top',
                       arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
                                       shrinkB=3))
     if np.isfinite(exo_runaway):
         ax_c.annotate(_limit_text('RUNAWAY GREENHOUSE', exo_runaway, bps_runaway, kopp_run_seff),
-                      xy=(runaway_ts, exo_runaway), xytext=(40, -48),
+                      xy=(runaway_ts, exo_runaway), xytext=(0, -40),
                       textcoords='offset points', color=GREY, fontsize=8,
                       ha='left', va='top',
                       arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
@@ -736,7 +736,7 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     for j, (ts_p, x, col) in enumerate(lab):
         txt = (f'$T_s$ = {ts_p:.0f} K' if abs(ts_p - LABEL_TS_PREFIX) < 0.5
                else f'{ts_p:.0f} K')
-        ax_d.annotate(txt, xy=(x, ylab[j]), xytext=(3, -10),
+        ax_d.annotate(txt, xy=(x, ylab[j]), xytext=(3, -10+12),
                       textcoords='offset points', color=col, fontsize=10,
                       fontweight='bold', ha='left', va='top')
 
@@ -754,26 +754,26 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     # to 0-2% — the sampling-faithful overlay; panels (a)-(c) and all limits
     # keep the model's own interpolated-200 K cold trap (effect on Seff at the
     # limits < 0.003 — see KOPP_TSTAR_OFFSET).
-    if TRAP_EMU:
-        ax_d.text(0.03, 0.03,
-                  'cold trap sampled at Kopparapu\'s tabulated grid level\n'
-                  '($T^*$ = 200.1–205.8 K, one CLIMA layer below the 200 K cap)\n'
-                  'for this overlay; panels (a)–(c) use the true 200 K trap',
-                  transform=ax_d.transAxes, color=GREY, fontsize=7,
-                  ha='left', va='bottom')
-    elif COLD_TRAP_PHASE == 'ice':
-        ax_d.text(0.03, 0.03,
-                  'Kopparapu profiles freeze-dry at their last grid level\n'
-                  'below the 200 K cold trap (202–206 K for $T_s\\leq$ 340 K):\n'
-                  'their strat. H₂O reads ×1.3–2 high there',
-                  transform=ax_d.transAxes, color=GREY, fontsize=7,
-                  ha='left', va='bottom')
-    else:
-        ax_d.text(0.03, 0.03,
-                  'cold trap: sat. over supercooled liquid\n'
-                  '(sensitivity variant; CLIMA + model default = ice)',
-                  transform=ax_d.transAxes, color=GREY, fontsize=7,
-                  ha='left', va='bottom')
+    #if TRAP_EMU:
+    #    ax_d.text(0.03, 0.03,
+    #              'cold trap sampled at Kopparapu\'s tabulated grid level\n'
+    #              '($T^*$ = 200.1–205.8 K, one CLIMA layer below the 200 K cap)\n'
+    #              'for this overlay; panels (a)–(c) use the true 200 K trap',
+    #              transform=ax_d.transAxes, color=GREY, fontsize=7,
+    #              ha='left', va='bottom')
+    #elif COLD_TRAP_PHASE == 'ice':
+    #    ax_d.text(0.03, 0.03,
+    #              'Kopparapu profiles freeze-dry at their last grid level\n'
+    #              'below the 200 K cold trap (202–206 K for $T_s\\leq$ 340 K):\n'
+    #              'their strat. H₂O reads ×1.3–2 high there',
+    #              transform=ax_d.transAxes, color=GREY, fontsize=7,
+    #              ha='left', va='bottom')
+    #else:
+    #    ax_d.text(0.03, 0.03,
+    #              'cold trap: sat. over supercooled liquid\n'
+    #              '(sensitivity variant; CLIMA + model default = ice)',
+    #              transform=ax_d.transAxes, color=GREY, fontsize=7,
+    #              ha='left', va='bottom')
 
     fig.tight_layout(w_pad=2.0, h_pad=2.0)
     out_dir = os.path.dirname(os.path.abspath(__file__))

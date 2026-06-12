@@ -56,30 +56,30 @@ def main():
     k = 501
     ker = np.ones(k) / k
     a.plot(wn[::10], np.convolve(oc, ker, 'same')[::10], color='0.55', lw=0.6,
-           label='LBL: HITRAN lines + MT_CKD continuum (smoothed)')
+           label='LBL: HITRAN lines + MT_CKD continuum')
     a.stairs(lbl_b / w_b, edges, color='k', lw=1.4, label='LBL, n68-band averages')
     a.stairs(exo / w_b, edges, color='C3', lw=1.2, label='ExoRT n68 (this work)')
     ce = np.append(clima[:, 0], clima[-1, 1])
     cw = np.diff(ce)
-    a.stairs(clima[:, 3] / cw, ce, color='C0', lw=1.0, ls='--',
-             label='CLIMA, Wolf HITRAN2016 k (2021)')
+    #a.stairs(clima[:, 3] / cw, ce, color='C0', lw=1.0, ls='--',
+    #         label='CLIMA, Wolf HITRAN2016 k (2021)')
     a.stairs(clima[:, 2] / cw, ce, color='C2', lw=1.0, ls='--',
-             label='CLIMA, 2013-era k (= Kopparapu 2013)')
-    totals = ('totals (10–3000 cm$^{-1}$)\n'
-              'LBL                272.4 W m$^{-2}$\n'
-              'ExoRT n68          269.7 W m$^{-2}$\n'
-              f'CLIMA 2021 k       {clima[:, 3].sum():.1f} W m$^{{-2}}$\n'
-              f'CLIMA 2013-era k   {clima[:, 2].sum():.1f} W m$^{{-2}}$\n'
-              'Kopparapu 2013 tab 250.2 W m$^{-2}$')
-    a.set_ylabel('OLR spectral density (W m$^{-2}$ / cm$^{-1}$)')
+             label='Clima (Kopparapu et al. 2013)')
+    #totals = ('totals (10–3000 cm$^{-1}$)\n'
+    #          'LBL                272.4 W m$^{-2}$\n'
+    #          'ExoRT n68          269.7 W m$^{-2}$\n'
+    #          f'CLIMA 2021 k       {clima[:, 3].sum():.1f} W m$^{{-2}}$\n'
+    #          f'CLIMA 2013-era k   {clima[:, 2].sum():.1f} W m$^{{-2}}$\n'
+    #          'Kopparapu 2013 tab 250.2 W m$^{-2}$')
+    a.set_ylabel('F$_{IR}$ spectral density (W m$^{-2}$ / cm$^{-1}$)')
     a.set_xlim(10, 2000)
     a.set_ylim(0, 0.42)
-    a.legend(loc='upper left', fontsize=7.5, frameon=False)
+    a.legend(loc='upper right', fontsize=7.5, frameon=False)
     a.set_title(f'Clear-sky OLR, saturated $T_s$ = {ts:.0f} K column '
                 '(1 bar N$_2$ + 330 ppm CO$_2$ + H$_2$O)', fontsize=10)
-    a.text(0.985, 0.975, totals, transform=a.transAxes, ha='right', va='top',
-           fontsize=8, family='monospace')
-    a.set_facecolor('white')
+    #a.text(0.985, 0.975, totals, transform=a.transAxes, ha='right', va='top',
+    #       fontsize=8, family='monospace')
+    #a.set_facecolor('white')
 
     b = ax[1]
     ctr = 0.5 * (edges[:-1] + edges[1:])
@@ -92,7 +92,7 @@ def main():
             lbl_c[i] = np.trapezoid(oc[m], wn[m])
     b.step(np.append(ce[0], ce[1:]), np.append((clima[:, 2] - lbl_c) / cw,
            np.nan), where='post', color='C2', lw=1.0,
-           label='CLIMA 2013-era − LBL')
+           label='Clima - LBL')
     b.legend(fontsize=7, frameon=False, loc='lower right')
     b.axhline(0, color='k', lw=0.6)
     b.set_ylabel('model − LBL\n(W m$^{-2}$ / cm$^{-1}$)')
@@ -101,8 +101,11 @@ def main():
     fig.tight_layout()
     out = os.path.join(HERE, 'lbl_olr_benchmark_ts300.png')
     fig.savefig(out, facecolor='white', dpi=200)
-    plt.close(fig)
     print(f"wrote {out}")
+    out = os.path.join(HERE, 'lbl_olr_benchmark_ts300.pdf')
+    fig.savefig(out, facecolor='white', dpi=300)
+    print(f"wrote {out}")
+    plt.close(fig)
 
 
 if __name__ == '__main__':
