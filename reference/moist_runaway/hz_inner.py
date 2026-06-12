@@ -180,6 +180,26 @@ LABEL_TS_PREFIX = 340.0
 # the axis and every curve fills it (cf. Kopparapu Fig 3d).
 PANEL_ZTOP_KM = 100.0
 
+# Kopparapu cold-trap SAMPLING emulation for the panel-(d) profile runs.
+# Kopparapu's tabulated water-loss profiles (clima_last.tab) freeze-dry at the
+# cold trap's vertical GRID level — the last level on the adiabat, one coarse
+# layer (dlnP ~ 0.10-0.19) below the 200 K cap — i.e. at T* = 200 + dT with the
+# per-case dT below (measured directly from clima_last.tab), inflating their
+# stratospheric H2O by es_ice(T*)/es_ice(200 K) ~ 1.3-2.1x over the true
+# cold-trap value.  With coldtrap_dT_offset set to these dT, ExoColumn samples
+# its (continuous) adiabat at the same temperature, reproducing their
+# tabulated stratospheric H2O to 0-2% at every profiled Ts — the
+# sampling-faithful overlay.  ONLY the 6 panel-(d) profile runs use this;
+# the sweep behind panels (a)-(c) and ALL quoted limits keep the model's own
+# interpolated-200 K cold trap (the radiative effect of the wetter sampled
+# stratosphere is < 0.7 W/m2 in OLR and < 0.003 in Seff at 280 K, < 0.0001 in
+# Seff at the moist-GH limit — verified 2026-06-11 — so the two conventions
+# are interchangeable for the limits; the choice matters only for the
+# panel-(d) overlay).  Set HZ_TRAP_EMU=0 to plot the model's own cold trap.
+TRAP_EMU = os.environ.get('HZ_TRAP_EMU', '1') != '0'
+KOPP_TSTAR_OFFSET = {280.0: 5.82, 300.0: 2.28, 320.0: 4.65,
+                     340.0: 3.39, 360.0: 1.74, 380.0: 0.13}
+
 # Results cache so the figure can be re-plotted (label tweaks, clip, styling) without
 # re-running the ~14-min sweep.  Set HZ_REPLOT=1 to load this and skip the runs.
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'hz_inner{TAG}.npz')
@@ -207,6 +227,7 @@ NML_TEMPLATE = """\
   h2o_eos        = '{h2o_eos}'
   h2o_continuum  = '{continuum}'
   cold_trap_phase = '{cold_trap}'
+  coldtrap_dT_offset = {trap_off:.3f}
   sw_zenith_quad = .true.
   sw_nquad       = 6
 /
@@ -239,15 +260,17 @@ NML_TEMPLATE = """\
 
 # ---------------------------------------------------------------------------
 
-def run_one(ts, continuum='mtckd'):
+def run_one(ts, continuum='mtckd', trap_off=0.0):
     """
     Run ExoColumn flux_only at surface temperature ts with the chosen H2O
-    continuum ('mtckd' | 'bps').
+    continuum ('mtckd' | 'bps').  trap_off > 0 samples the cold trap at
+    T = t_strato + trap_off on the adiabat (Kopparapu grid emulation; used
+    only for the panel-(d) profile re-runs — see KOPP_TSTAR_OFFSET).
     Returns dict with scalar diagnostics and profiles, or None on failure.
     """
     nml = NML_TEMPLATE.format(ts=ts, t_strato=T_STRATO, albedo=ALBEDO,
                               h2o_eos=H2O_EOS, continuum=continuum,
-                              cold_trap=COLD_TRAP_PHASE)
+                              cold_trap=COLD_TRAP_PHASE, trap_off=trap_off)
     orig = None
     if os.path.exists(NML_PATH):
         with open(NML_PATH) as f:
@@ -386,6 +409,19 @@ def main():
     if arr.size == 0:
         print("No successful runs.")
         return
+
+    # Panel-(d) profile re-runs with Kopparapu's cold-trap sampling (the rows
+    # behind panels (a)-(c) and the limits are NOT touched — see KOPP_TSTAR_OFFSET).
+    if TRAP_EMU:
+        print("\n  --- panel-(d) profiles: Kopparapu cold-trap sampling emulation ---")
+        for ts_p, off in sorted(KOPP_TSTAR_OFFSET.items()):
+            r = run_one(ts_p, 'mtckd', trap_off=off)
+            if r is None:
+                continue
+            profiles[ts_p] = (r['zmid_km'], r['h2o_vmr'], r['pmid'])
+            print(f"  Ts={ts_p:5.1f} K  T*-200={off:4.2f} K  "
+                  f"strat VMR={float(np.nanmin(r['h2o_vmr'])):.3e}")
+
     _save_cache(arr, profiles, CACHE)
     ts_a, olr_a, asr_a, alp_a, seff_a, svmr_a = arr.T
 
@@ -688,14 +724,23 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     ax_d.set_ylabel('Altitude (km)')
     ax_d.set_ylim(0., PANEL_ZTOP_KM)
     ax_d.set_facecolor('white')
-    # Known residual in the overlay: Kopparapu's tabulated profiles freeze-dry at
-    # their cold trap's GRID level, which sits one coarse level (ΔlnP ≈ 0.10-0.19)
-    # below the 200 K cap (T* = 202-206 K for Ts ≤ 340 K), inflating their
-    # stratospheric H2O by the es_ice(T*)/es_ice(200 K) factor of ~1.3-2.1.
-    # ExoColumn freeze-dries at the interpolated 200 K crossing (deliberately —
-    # grid-snapped cold traps caused the panel (a)-(c) staircase).  Verified:
-    # our ratios x their grid factor = 0.97-0.98 at every profiled Ts.
-    if COLD_TRAP_PHASE == 'ice':
+    # Cold-trap sampling note.  Kopparapu's tabulated profiles freeze-dry at
+    # their cold trap's GRID level, one coarse layer (ΔlnP ≈ 0.10-0.19) below
+    # the 200 K cap (T* = 200.1-205.8 K), which inflates their stratospheric
+    # H2O by es_ice(T*)/es_ice(200 K) ≈ 1.0-2.1x over the true cold-trap value.
+    # With TRAP_EMU (default) the profile runs sample ExoColumn's adiabat at
+    # the same T* (coldtrap_dT_offset), reproducing their tabulated strat H2O
+    # to 0-2% — the sampling-faithful overlay; panels (a)-(c) and all limits
+    # keep the model's own interpolated-200 K cold trap (effect on Seff at the
+    # limits < 0.003 — see KOPP_TSTAR_OFFSET).
+    if TRAP_EMU:
+        ax_d.text(0.03, 0.03,
+                  'cold trap sampled at Kopparapu\'s tabulated grid level\n'
+                  '($T^*$ = 200.1–205.8 K, one CLIMA layer below the 200 K cap)\n'
+                  'for this overlay; panels (a)–(c) use the true 200 K trap',
+                  transform=ax_d.transAxes, color=GREY, fontsize=7,
+                  ha='left', va='bottom')
+    elif COLD_TRAP_PHASE == 'ice':
         ax_d.text(0.03, 0.03,
                   'Kopparapu profiles freeze-dry at their last grid level\n'
                   'below the 200 K cold trap (202–206 K for $T_s\\leq$ 340 K):\n'

@@ -52,6 +52,7 @@ module exocol_coldstart
                             ar_vmr,  o3_profile, variable_ps, ihz_profile, &
                             h2o_inventory_bar, h2o_eos,            &
                             co2_condense, cp_co2_tdep,             &
+                            coldtrap_dT_offset,                    &
                             MW_CO2, MW_CH4, MW_C2H6, MW_H2,       &
                             MW_N2,  MW_O3,  MW_O2,  MW_AR,         &
                             CP_CO2, CP_CH4, CP_C2H6, CP_H2,       &
@@ -105,6 +106,9 @@ contains
     integer  :: k_top_conv
     real(r8) :: es_tropo, q_cold_trap, p_coldpoint, p_tropo_use
     real(r8) :: T_prev_sub, p_prev_sub
+    ! Cold-trap sampling point for coldtrap_dT_offset > 0 (Kopparapu grid
+    ! emulation): the adiabat crossing of T = t_strato + offset.
+    real(r8) :: T_trapsamp, p_trapsamp, T_freeze_dry
     character(len=4) :: dry_name(7)
     ! Kasting IHZ dry-adiabat variables (initialised to safe no-dry-layer defaults)
     real(r8) :: f_vmr, Mw_mix, w_h2o, Rv, R_mix, cp_h2o_steam, cp_mix, kappa_mix
@@ -259,6 +263,8 @@ contains
 
     T_at_int(pverp) = cs_ts
     p_coldpoint     = -1._r8   ! true cold-point pressure; interpolated below
+    T_trapsamp      = t_strato + coldtrap_dT_offset
+    p_trapsamp      = -1._r8   ! adiabat crossing of T_trapsamp (offset > 0 only)
 
     if (cs_ts <= t_strato) then
       write(*,'(a)') &
@@ -330,6 +336,9 @@ contains
               T_prev_sub = T_lev;  p_prev_sub = p_lev
               T_lev   = T_lev + dT_sub
               p_lev   = p_lev * exp(dlogp_sub)
+              if (coldtrap_dT_offset > 0._r8 .and. p_trapsamp < 0._r8 .and. &
+                  T_lev <= T_trapsamp) p_trapsamp = &
+                  interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, T_trapsamp)
               if (T_lev <= t_strato) then
                 if (p_coldpoint < 0._r8) p_coldpoint = &
                   interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, t_strato)
@@ -403,6 +412,9 @@ contains
             T_prev_sub = T_lev;  p_prev_sub = p_lev
             T_lev   = T_lev + dT_sub
             p_lev   = p_lev * exp(dlogp_sub)
+            if (coldtrap_dT_offset > 0._r8 .and. p_trapsamp < 0._r8 .and. &
+                T_lev <= T_trapsamp) p_trapsamp = &
+                interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, T_trapsamp)
             if (T_lev <= t_strato) then
               if (p_coldpoint < 0._r8) p_coldpoint = &
                 interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, t_strato)
@@ -472,6 +484,9 @@ contains
               T_lev = T_co2sat
             end if
           end if
+          if (coldtrap_dT_offset > 0._r8 .and. p_trapsamp < 0._r8 .and. &
+              T_lev <= T_trapsamp) p_trapsamp = &
+              interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, T_trapsamp)
           if (T_lev <= t_strato) then
             if (p_coldpoint < 0._r8) p_coldpoint = &
               interp_logp(T_prev_sub, p_prev_sub, T_lev, p_lev, t_strato)
@@ -516,6 +531,15 @@ contains
       else
         p_tropo_use = pint(k_top_conv)
       end if
+      ! Kopparapu grid emulation (coldtrap_dT_offset > 0): freeze-dry at the
+      ! warmer sampling point on the adiabat instead of the true cold point.
+      if (coldtrap_dT_offset > 0._r8 .and. p_trapsamp > 0._r8) then
+        es_tropo    = esat(T_trapsamp)
+        p_tropo_use = p_trapsamp
+        write(*,'(a,f7.2,a,f9.2,a)') &
+          '    cold-trap SAMPLED at T = ', T_trapsamp, ' K, p = ', &
+          p_trapsamp/100._r8, ' hPa  (coldtrap_dT_offset emulation)'
+      end if
       q_cold_trap = eps_wv * es_tropo / (p_tropo_use - es_tropo)
       write(*,'(a,f9.2,a)') &
         '    cold-point p (interp) : ', p_tropo_use/100._r8, ' hPa'
@@ -531,8 +555,15 @@ contains
     ! in the inner-HZ steam regime it is essential (without it q≫1 is handed to
     ! ExoRT and the water-vapour opacity path produces garbage).  The dry-base
     ! branch already stores a mass fraction (h2ommr_dry = w_h2o), i.e. moist q.
+    ! With the Kopparapu-emulation offset active, the constant freeze-dried
+    ! region starts at the (warmer) sampling level, exactly as in CLIMA's
+    ! tabulated profiles where f is constant from the last adiabatic grid
+    ! level upward; otherwise it starts at the t_strato cap (bit-identical).
+    T_freeze_dry = t_strato
+    if (coldtrap_dT_offset > 0._r8 .and. p_trapsamp > 0._r8) &
+      T_freeze_dry = T_trapsamp
     do k = 1, pver
-      if (tmid(k) > t_strato) then
+      if (tmid(k) > T_freeze_dry) then
         ! In the dry layer (subsaturated-surface runaway branch), h2ommr is held
         ! constant at the inventory-set value.  In the moist layer, h2ommr = rh·qsat.
         if (ihz_profile .and. (.not. surface_saturated) .and. k >= k_cond) then
