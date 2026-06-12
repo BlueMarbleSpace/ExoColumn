@@ -269,6 +269,19 @@ module exocol_config
   !                        toggle (previously mislabeled "CLIMA convention").
   character(len=32), public, save :: cold_trap_phase  = 'ice'
 
+  ! Cold-trap sampling offset [K] (default 0 → bit-identical).  When > 0, the
+  ! cold-start stratospheric humidity is freeze-dried at the point on the
+  ! continuous adiabat where T = t_strato + coldtrap_dT_offset, instead of at
+  ! the exact t_strato crossing.  The temperature profile itself is unchanged
+  ! (still capped at t_strato).  Purpose: emulate Kopparapu et al. (2013)
+  ! CLIMA's cold-trap sampling, whose tabulated water-loss profiles freeze-dry
+  ! at the last vertical GRID level below the 200 K cap (T* = 200.1–205.8 K
+  ! depending on Ts — one coarse layer, dlnP ≈ 0.10–0.19) rather than at the
+  ! true crossing; the warmer sample inflates the stratospheric H2O by
+  ! es(T*)/es(200 K) ≈ 1.3–2.1x.  Set per-case to their measured T*−200 for a
+  ! sampling-faithful overlay against clima_last.tab.
+  real(r8),          public, save :: coldtrap_dT_offset = 0.0_r8
+
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
   ! with exocol_mod state variables (ts, coszrs, asdir, ...) must be renamed
@@ -353,6 +366,7 @@ contains
                                   flux_only, variable_ps, ihz_profile, &
                                   h2o_inventory_bar, esat_formula, h2o_eos, &
                                   h2o_continuum, cold_trap_phase, &
+                                  coldtrap_dT_offset, &
                                   co2_condense, cp_co2_tdep
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
@@ -479,6 +493,10 @@ contains
         "' — defaulting to 'ice'"
       cold_trap_phase = 'ice'
     end if
+    if (coldtrap_dT_offset < 0._r8) then
+      write(*,'(a)') '  WARNING: coldtrap_dT_offset < 0 — resetting to 0'
+      coldtrap_dT_offset = 0._r8
+    end if
 
     call announce()
 
@@ -553,7 +571,10 @@ contains
       write(*,'(a)') '  H2O continuum     : MT_CKD 3.3 8-gpt (stock n68equiv)'
     end if
     if (trim(cold_trap_phase) == 'liquid') &
-      write(*,'(a)') '  *** cold_trap_phase = liquid — sub-freezing saturation over (supercooled) liquid (CLIMA-match) ***'
+      write(*,'(a)') '  *** cold_trap_phase = liquid — sub-freezing saturation over (supercooled) liquid (sensitivity) ***'
+    if (coldtrap_dT_offset > 0._r8) &
+      write(*,'(a,f6.2,a)') '  *** coldtrap_dT_offset = ', coldtrap_dT_offset, &
+        ' K — strat humidity sampled above the cap (Kopparapu grid emulation) ***'
     if (co2_condense) &
       write(*,'(a)') '  *** co2_condense = .true. — cold-start adiabat pinned to CO2 saturation curve (Kasting 1991) ***'
     if (cp_co2_tdep) &

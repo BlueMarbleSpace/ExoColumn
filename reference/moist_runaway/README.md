@@ -101,6 +101,7 @@ Loads `hz_inner_nonideal.npz` and regenerates the figure without any model runs.
 | `HZ_REPLOT` | (unset) | If set, re-plot from the caches; skip the sweep. |
 | `HZ_BPS` | 1 | Overlay the BPS-continuum sweep (dotted) on panels (a)–(c) for a direct Kopparapu-continuum comparison; set 0 for the MT_CKD-only figure. Doubles the sweep time (a second radiation pass per `Ts`). |
 | `HZ_COLD_TRAP` | ice | Sub-freezing saturation phase. `ice` (this figure) is both the model default and CLIMA's actual convention; `liquid` is a sensitivity variant (~2× wetter cold stratosphere). |
+| `HZ_TRAP_EMU` | 1 | Re-run the six panel-(d) profiles with `coldtrap_dT_offset` set to Kopparapu's measured per-case cold-trap grid offsets (T*−200 = 0.13–5.82 K from `clima_last.tab`), reproducing their tabulated stratospheric H₂O to 0–2% (sampling-faithful overlay). Panels (a)–(c) and all limits always use the model's own interpolated-200 K cold trap. Set 0 to plot the model's own cold trap in panel (d) (their curves then read ×1.3–2.1 high at Ts ≤ 340 K). |
 | `HZ_TS_MIN` / `HZ_TS_MAX` / `HZ_TS_STEP` | 200 / 2500 / 5 | Restrict/refine the `Ts` grid (e.g. a quick validation subset). |
 | `HZ_SMOOTH` | 5 | Running-median window (points) suppressing the resolution sawtooth; set 1 for the raw curve. |
 
@@ -128,6 +129,24 @@ Configuration).
   gap; **OLR is continuum-insensitive**, so the residual `Seff`/OLR offset is
   near-IR H₂O **line** data (ExoRT n68/HITRAN-2016 k-distribution vs CLIMA),
   not the continuum.
+- **LW (F_IR) offset vs Kopparapu (diagnosed 2026-06-11):** ΔOLR(Ts) is a bell:
+  +4 W/m² at 220 K, peaking at **~+20 W/m² at 300–320 K**, collapsing to ~0 by
+  400 K with both models meeting at the same Simpson–Nakajima plateau
+  (291–293 W/m²) — i.e. our F_IR *rises faster* toward the plateau. With T(P)
+  and the H₂O profile now verified to match CLIMA, this is a pure
+  radiation-core (gas-opacity) difference in the **semi-transparent** regime.
+  Spectral home (band-resolved, Ts = 300 K): the 8–12.5 µm window is 67–82 %
+  transparent in n68 (~117 W/m² of OLR) and the 380–800 cm⁻¹
+  H₂O-rotation/CO₂-wing complex 43–54 %; the Ts = 220 K limit (an essentially
+  H₂O-free N₂+CO₂ column, still +3.7 W/m²) bounds the CO₂-side share at
+  ~4 W/m², leaving ~16 W/m² on the H₂O side (window + rotation-band wings).
+  Ruled out: the continuum choice (BPS vs MT_CKD ≤ 0.4 W/m² per band), the
+  T/q state (matched), and the cold-trap sampling (≤ 0.7 W/m²).  Same family
+  as the dense-CO₂ F_IR offset diagnosed vs SMART in
+  `reference/max_greenhouse/` (ExoRT n68 k-data vs CLIMA's HITEMP-2010-based
+  coefficients; ExoRT is read-only, so closing it needs new k-tables).  This
+  LW deficit is ~60 % of the moist-GH `Seff` gap (OLR ratio 1.047 at 340 K);
+  the SW/albedo offset (ASR ratio 1.028) is the rest.
 - **H₂O profiles (panel d):** fully apples-to-apples as of 2026-06-11. Both
   models integrate the same physics: two-component moist pseudoadiabat (steam
   tables / IAPWS-95 above 273.16 K, matching <0.1 %; ice-saturated two-component
@@ -137,16 +156,21 @@ Configuration).
   0.3–1 % at every profiled Ts (the dry partial pressure is 1.0005 bar in both).
   The plotted VMR uses the exact two-component mmr→VMR conversion (the dilute
   `q·mw/18` form read ~25 % high at the 380 K surface) and includes the true
-  z = 0 surface point. **Known residual:** Kopparapu's *tabulated* profiles
+  z = 0 surface point. **Cold-trap sampling:** Kopparapu's *tabulated* profiles
   freeze-dry at their cold trap's grid level, one coarse layer (ΔlnP ≈ 0.10–0.19)
-  below the 200 K cap — i.e. at T* = 202–206 K for `Ts ≤ 340 K` — which inflates
-  their stratospheric H₂O by es_ice(T*)/es_ice(200 K) ≈ 1.3–2.1×. ExoColumn
-  freeze-dries at the *interpolated* 200 K crossing (grid-snapped cold traps are
-  what caused the panel (a)–(c) staircase). Accounting for that factor, the two
-  models agree to 2–3 % at **every** profiled Ts (280–380 K); the raw tabulated
-  ratios are ~0.45–0.75 at Ts ≤ 340 K and 0.92–0.98 at 360/380 K. This grid
-  artifact also means Kopparapu's water-loss (moist-GH) limit was diagnosed from
-  slightly inflated stratospheric H₂O.
+  below the 200 K cap — i.e. at T* = 200.1–205.8 K — which inflates their
+  stratospheric H₂O by es_ice(T*)/es_ice(200 K) ≈ 1.0–2.1× over the true
+  cold-trap value. The default figure (`HZ_TRAP_EMU=1`) therefore re-runs the
+  six profile cases with `coldtrap_dT_offset` = their measured per-case T*−200,
+  sampling our continuous adiabat at the same temperature: the overlay then
+  matches their tabulated stratospheric H₂O to **0–2 % at every profiled Ts**
+  (and the surface to 0.1–1 %). ExoColumn's own cold trap remains the
+  *interpolated* 200 K crossing (grid-snapped traps caused the panel (a)–(c)
+  staircase), and panels (a)–(c) + all quoted limits use it exclusively — the
+  emulation's radiative effect is < 0.7 W/m² in OLR (at 280 K) and < 0.003 in
+  Seff, i.e. the IHZ limits are **insensitive to the cold-trap sampling
+  convention**; the moist-GH/runaway gaps vs Kopparapu are entirely the
+  radiation offsets (LW: see below; SW: near-IR H₂O absorption/albedo).
 
 ## Caveats
 
