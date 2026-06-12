@@ -131,13 +131,14 @@ def load_column(path, nlay):
     # coarsen: contiguous chunks of equal count
     n = len(tmid)
     idx = np.array_split(np.arange(n), nlay)
-    lay = dict(T=[], p_mb=[], x_h2o=[], x_co2=[], N_h2o=[], N_co2=[])
+    lay = dict(T=[], p_mb=[], x_h2o=[], x_co2=[], N_h2o=[], N_co2=[], N_dry=[])
     for ii in idx:
         w = pdel[ii] / pdel[ii].sum()
         lay['T'].append(float(np.sum(w * tmid[ii])))
         lay['p_mb'].append(float(np.sum(w * pmid[ii])) / 100.0)
         nh, nco, ntot = N_h2o[ii].sum(), N_co2[ii].sum(), N_tot[ii].sum()
         lay['N_h2o'].append(nh); lay['N_co2'].append(nco)
+        lay['N_dry'].append(N_dry[ii].sum())
         lay['x_h2o'].append(nh / ntot); lay['x_co2'].append(nco / ntot)
     lay = {k: np.array(v) for k, v in lay.items()}
     lay['ts'] = ts; lay['band'] = band

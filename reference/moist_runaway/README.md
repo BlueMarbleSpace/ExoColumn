@@ -144,6 +144,24 @@ Configuration).
   gap; **OLR is continuum-insensitive**, so the residual `Seff`/OLR offset is
   near-IR H₂O **line** data (ExoRT n68/HITRAN-2016 k-distribution vs CLIMA),
   not the continuum.
+- **SW line-by-line verdict (2026-06-12, `tools/lbl_sw_benchmark.py`):** the
+  SW twin of the OLR benchmark — RADIS/HITRAN H₂O+CO₂ (0.5–5 µm) + the MT_CKD
+  continuum, ExoRT's own Rayleigh formulas at band midpoints, a Toon-89
+  **quadrature** two-stream (ExoRT's solar scheme; validated to ±0.0006 band
+  albedo in the gas-free vis/UV bands and ±10⁻⁵ energy conservation), the
+  same 6-node zenith quadrature, and ExoRT's own per-band incident fluxes as
+  stellar weights.  Result at Ts = 300 K: **planetary albedo LBL = 0.2730 vs
+  ExoRT n68 = 0.2733 (+0.0002)**; absorbed SW within 0.1 W/m².  So the n68
+  k-distribution reproduces line-by-line SW absorption essentially exactly
+  *given its ingredients* (HITRAN lines + MT_CKD continuum), and the old
+  "n68 under-absorbs near-IR H₂O" interpretation is **revised**: Kopparapu's
+  albedo (0.257 at 300 K, ~0.016 below the LBL) reflects their *ingredient*
+  choices — the BPS continuum absorbs more near-IR than MT_CKD (our band
+  BPS toggle closes about half the gap, consistently) — plus residual
+  solar-spectrum/resolution differences, not an ExoRT k-table error.
+  Combined with the LW verdict below: **both radiation cores of this model
+  are LBL-grade at the bell peak; the remaining Seff offsets vs Kopparapu
+  (2013) are attributable to their 2013-era opacity ingredients.**
 - **LW (F_IR) offset vs Kopparapu (diagnosed 2026-06-11):** ΔOLR(Ts) is a bell:
   +4 W/m² at 220 K, peaking at **~+20 W/m² at 300–320 K**, collapsing through
   zero near 400 K — i.e. our F_IR *rises faster* toward the plateau. Under the
