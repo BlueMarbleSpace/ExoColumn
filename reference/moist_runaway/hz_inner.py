@@ -200,6 +200,23 @@ TRAP_EMU = os.environ.get('HZ_TRAP_EMU', '1') != '0'
 KOPP_TSTAR_OFFSET = {280.0: 5.82, 300.0: 2.28, 320.0: 4.65,
                      340.0: 3.39, 360.0: 1.74, 380.0: 0.13}
 
+# Verification mode: HZ_TRAP_EMU_SWEEP=1 applies the Kopparapu cold-trap
+# sampling offset to EVERY sweep run (δ(Ts) linearly interpolated between the
+# measured per-case anchors above; clamped flat outside 280-380 K), so the
+# whole figure — including the greenhouse limits — uses the panel-(d) H2O
+# treatment.  Verified 2026-06-12: the moist-GH and runaway limits are
+# unchanged (see README).  The published figure keeps δ=0 for the sweep.
+# Pair with HZ_TAG_SUFFIX (e.g. _trapemu) so the verification caches/figures
+# do not overwrite the published ones.
+TRAP_EMU_SWEEP = os.environ.get('HZ_TRAP_EMU_SWEEP', '0') != '0'
+TAG += os.environ.get('HZ_TAG_SUFFIX', '')
+
+
+def _trap_off_sweep(ts):
+    """Interpolated Kopparapu cold-trap sampling offset for sweep Ts [K]."""
+    ks = sorted(KOPP_TSTAR_OFFSET)
+    return float(np.interp(ts, ks, [KOPP_TSTAR_OFFSET[k] for k in ks]))
+
 # Results cache so the figure can be re-plotted (label tweaks, clip, styling) without
 # re-running the ~14-min sweep.  Set HZ_REPLOT=1 to load this and skip the runs.
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), f'hz_inner{TAG}.npz')
@@ -363,7 +380,8 @@ def _sweep(continuum):
     rows = []
     profiles = {}
     for ts in TS_VALUES:
-        r = run_one(ts, continuum)
+        off = _trap_off_sweep(ts) if TRAP_EMU_SWEEP else 0.0
+        r = run_one(ts, continuum, trap_off=off)
         if r is None:
             print(f"  [{continuum}] Ts={ts:5.1f} K  SKIPPED")
             continue
