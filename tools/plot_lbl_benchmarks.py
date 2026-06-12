@@ -33,6 +33,11 @@ def plot_lw():
             lbl_b[i] = np.trapezoid(oc[m], wn[m])
     w_b = np.diff(edges)
 
+    # CLIMA band OLR on the matched column (both k-coefficient generations,
+    # computed with the patched /models/atmos ir.f — see the data file header)
+    clima_path = os.path.join(HERE, 'clima_band_olr_ts300.txt')
+    clima = np.loadtxt(clima_path) if os.path.isfile(clima_path) else None
+
     fig, ax = plt.subplots(2, 1, figsize=(7.0, 6.2), dpi=300,
                            height_ratios=[2.2, 1], sharex=True)
     fig.patch.set_facecolor('white')
@@ -43,26 +48,47 @@ def plot_lw():
            label='LBL: HITRAN lines + MT_CKD continuum (smoothed)')
     a.stairs(lbl_b / w_b, edges, color='k', lw=1.4, label='LBL, n68-band averages')
     a.stairs(exo / w_b, edges, color='C3', lw=1.2, label='ExoRT n68 (this work)')
+    totals = ('totals (10–3000 cm$^{-1}$)\n'
+              'LBL                272.4 W m$^{-2}$\n'
+              'ExoRT n68          269.7 W m$^{-2}$')
+    if clima is not None:
+        ce = np.append(clima[:, 0], clima[-1, 1])
+        cw = np.diff(ce)
+        a.stairs(clima[:, 3] / cw, ce, color='C0', lw=1.0, ls='--',
+                 label='CLIMA, Wolf HITRAN2016 k (2021)')
+        a.stairs(clima[:, 2] / cw, ce, color='C2', lw=1.0, ls='--',
+                 label='CLIMA, 2013-era k (= Kopparapu 2013)')
+        totals += (f'\nCLIMA 2021 k       {clima[:,3].sum():.1f} W m$^{{-2}}$'
+                   f'\nCLIMA 2013-era k   {clima[:,2].sum():.1f} W m$^{{-2}}$'
+                   '\nKopparapu 2013 tab 250.2 W m$^{-2}$')
     a.set_ylabel('OLR spectral density (W m$^{-2}$ / cm$^{-1}$)')
     a.set_xlim(10, 2000)
     a.set_ylim(0, 0.42)
-    a.legend(loc='upper left', fontsize=8, frameon=False)
+    a.legend(loc='upper left', fontsize=7.5, frameon=False)
     a.set_title(f'Clear-sky OLR, saturated $T_s$ = {ts:.0f} K column '
                 '(1 bar N$_2$ + 330 ppm CO$_2$ + H$_2$O)', fontsize=10)
-    a.text(0.985, 0.975,
-           'totals (10–3000 cm$^{-1}$)\n'
-           'LBL          272.4 W m$^{-2}$\n'
-           'ExoRT n68    269.7 W m$^{-2}$\n'
-           'CLIMA (K13)  250.2 W m$^{-2}$',
-           transform=a.transAxes, ha='right', va='top', fontsize=8.5,
-           family='monospace')
+    a.text(0.985, 0.975, totals, transform=a.transAxes, ha='right', va='top',
+           fontsize=8, family='monospace')
     a.set_facecolor('white')
 
     b = ax[1]
     ctr = 0.5 * (edges[:-1] + edges[1:])
-    b.bar(ctr, (exo - lbl_b) / w_b, width=w_b * 0.92, color='C3', alpha=0.75)
+    b.bar(ctr, (exo - lbl_b) / w_b, width=w_b * 0.92, color='C3', alpha=0.75,
+          label='ExoRT − LBL')
+    if clima is not None:
+        # CLIMA(2013-era) − LBL on the common 55-interval grid
+        lbl_c = np.full(len(cw), np.nan)
+        for i in range(len(cw)):
+            m = (wn >= ce[i]) & (wn < ce[i + 1])
+            if m.sum() > 2:
+                lbl_c[i] = np.trapezoid(oc[m], wn[m])
+        cctr = 0.5 * (ce[:-1] + ce[1:])
+        b.step(np.append(ce[0], ce[1:]), np.append((clima[:, 2] - lbl_c) / cw,
+               np.nan), where='post', color='C2', lw=1.0,
+               label='CLIMA 2013-era − LBL')
+        b.legend(fontsize=7, frameon=False, loc='lower right')
     b.axhline(0, color='k', lw=0.6)
-    b.set_ylabel('ExoRT − LBL\n(W m$^{-2}$ / cm$^{-1}$)')
+    b.set_ylabel('model − LBL\n(W m$^{-2}$ / cm$^{-1}$)')
     b.set_xlabel('Wavenumber (cm$^{-1}$)')
     b.set_facecolor('white')
     fig.tight_layout()

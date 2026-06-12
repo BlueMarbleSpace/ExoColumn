@@ -194,7 +194,22 @@ Configuration).
   ExoRT deficiency** — consistent with Yang et al. (2016), where the ExoRT
   lineage (CAM4_Wolf) tracks the SMART LBL while band models spread
   10–25 W/m², and with Kopparapu's ≈1420 W/m² runaway threshold vs
-  Goldblatt/SMART's ≈1340.  LBL caveats (all ≲ 1 W/m² here): no N₂–N₂ CIA,
+  Goldblatt/SMART's ≈1340.
+  **Confirmed by running CLIMA itself (2026-06-12):** the public `atmos`
+  CLIMA (built at `/models/atmos`, inverse mode, reproducing Kopparapu's
+  tabulated 300 K column to ΔT < 0.35 K and the same grid/cold-trap level)
+  gives, through the *same* `ir.f` radiation: **251.8 W/m²** with the
+  2013-era k-coefficients (`NEWHITRAN_ir_55_H2O` + `Ramses_HITRAN_ir_55_CO2`
+  — matching Kopparapu's 250.2 to 0.6%, i.e. the 2013 configuration is
+  positively identified) and **267.5 W/m²** with the Wolf HITRAN2016
+  k-coefficients that the CLIMA maintainers adopted in 2021 (commit
+  `54934f6`, computed by E. Wolf with HELIOS-K).  The opacity-data swap
+  alone moves CLIMA 16 of the 22 W/m² toward the LBL; spectrally
+  (`tools/clima_band_olr_ts300.txt`, overlaid on the benchmark figure) the
+  2013-era deficit is a broad depression across the entire H₂O rotation
+  band and window (~150–1300 cm⁻¹), not a localized feature.  I.e. **the
+  community that maintains CLIMA has itself superseded the 2013 opacities
+  — with k-tables from the same lineage as ExoRT's.**  LBL caveats (all ≲ 1 W/m² here): no N₂–N₂ CIA,
   air- (not N₂-) broadened widths, no CO₂ χ-factors at 330 ppm.  This
   reframes the moist-GH `Seff` gap: ~60 % of it (the OLR ratio 1.047 at
   340 K) is CLIMA's LW opacity bias, the rest the SW/albedo offset (ASR
