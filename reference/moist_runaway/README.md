@@ -210,7 +210,7 @@ Configuration).
   Ruled out: the continuum choice (BPS vs MT_CKD ≤ 0.4 W/m² per band), the
   T/q state (matched), and the cold-trap sampling (≤ 0.7 W/m²).
   **Line-by-line verdict (2026-06-12, `tools/lbl_olr_benchmark.py`):** an
-  independent LBL calculation on the *same* Ts = 300 K column (RADIS/HITRAN
+  independent LBL calculation on the *same* Ts = 300 K column (RADIS/HITRAN2020
   lines for H₂O+CO₂ at 0.01 cm⁻¹ + a faithful port of the AER MT_CKD
   continuum, diffusivity-1.66 Schwarzschild) gives **OLR = 272.4 W/m²
   (10–3000 cm⁻¹) vs ExoRT n68 = 269.7 — agreement to 1 %**, with per-band
@@ -239,7 +239,16 @@ Configuration).
   2013-era deficit is a broad depression across the entire H₂O rotation
   band and window (~150–1300 cm⁻¹), not a localized feature.  I.e. **the
   community that maintains CLIMA has itself superseded the 2013 opacities
-  — with k-tables from the same lineage as ExoRT's.**  LBL caveats (all ≲ 1 W/m² here): no N₂–N₂ CIA,
+  — with k-tables from the same lineage as ExoRT's.**  *Line-list edition (methods
+  note):* RADIS serves HITRAN's current consolidated edition (HITRAN2020) —
+  hitran.org no longer exposes the 2016 line-by-line edition through RADIS,
+  astroquery, HAPI or its web interface, and no 2016 `.par` files are cached
+  locally.  The n68 k-tables are built from HITRAN2016, but the 2016→2020
+  updates to the H₂O rotation/ν₂ bands that dominate this 10–3000 cm⁻¹ OLR are
+  sub-1% (CO₂ at 330 ppm contributes only the well-established 15 µm band), so
+  the line-list edition is a sub-leading term well below the n68−LBL residual:
+  that residual is the correlated-k approximation, not the line list.  LBL
+  caveats (all ≲ 1 W/m² here): no N₂–N₂ CIA,
   air- (not N₂-) broadened widths, no CO₂ χ-factors at 330 ppm.  This
   reframes the moist-GH `Seff` gap: ~60 % of it (the OLR ratio 1.047 at
   340 K) is CLIMA's LW opacity bias, the rest the SW/albedo offset (ASR

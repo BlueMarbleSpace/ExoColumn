@@ -13,12 +13,19 @@ This script computes an independent line-by-line OLR for the SAME column so
 the offset can be split into "ExoRT n68 vs LBL" and "CLIMA vs LBL" parts.
 
 Ingredients:
-  * Lines: HITRAN (via RADIS 0.17, cached in ~/.radisdb) for H2O and CO2,
-    Voigt profiles, RADIS default lineshape truncation; air-broadened widths
-    (the N2 background is approximated as air — same approximation as the
-    k-tables).  HITEMP-2010 differs from modern HITRAN by ~1% at these
-    temperatures (memory: reference_radis_hitemp), so the line list choice is
-    not a leading-order term.
+  * Lines: HITRAN for H2O and CO2 (via RADIS 0.17's fetch_databank('hitran'),
+    cached in ~/.radisdb), Voigt profiles, RADIS default lineshape truncation;
+    air-broadened widths (the N2 background is approximated as air — same
+    approximation as the k-tables).  Line-list edition (methods note): RADIS
+    serves HITRAN's *current* consolidated edition, HITRAN2020 — hitran.org no
+    longer exposes the 2016 line-by-line edition through any of RADIS, astroquery,
+    HAPI or the LBL web interface, and no 2016 .par files are cached locally.
+    The ExoRT n68 k-tables this is benchmarked against are built from HITRAN2016,
+    but the 2016->2020 updates to the H2O rotation/nu2 bands that dominate the
+    10-3000 cm-1 OLR are sub-1% (and CO2 at 330 ppm contributes only the
+    well-established 15 um band).  So the line-list edition is a sub-leading term,
+    smaller than the n68-LBL residual (272.4 vs 269.7 W/m2, ~1%): that residual is
+    the correlated-k (k-distribution) approximation, not the line list.
   * H2O continuum: faithful Python port of the AER MT_CKD water-vapour
     continuum (mt_ckd_h2o_module.f90; self + foreign, T-power-law on the self
     coefficient, (p/p_ref)(T_ref/T) density scaling, FASCOD radiation term).
