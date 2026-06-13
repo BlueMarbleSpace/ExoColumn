@@ -76,7 +76,7 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smooth_cm=6.0):
         clima = np.loadtxt(clima_txt)
         clima_e = np.append(clima[:, 0], clima[-1, 1])
         a.stairs(clima[:, 2] / np.diff(clima_e), clima_e, color='C2', lw=1.0,
-                 ls='--', zorder=3, label='Clima (Kopparapu et al. 2013)')
+                 zorder=3, label='Clima (Kopparapu et al. 2013)')
         clima_b = clima[:, 2]
 
     a.set_xlim(*xlim); a.set_ylim(*ylim)
