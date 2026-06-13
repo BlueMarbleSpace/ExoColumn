@@ -4,9 +4,15 @@ plot_lbl_olr.py — render the clear-sky OLR line-by-line benchmark figure
 (lbl_olr_benchmark_ts300.png) for the saturated Ts = 300 K IHZ column, from
 the two co-located data files:
 
-  * lbl_olr_benchmark_ts300.npz — LBL spectrum (RADIS/HITRAN H2O+CO2 lines +
+  * lbl_olr_benchmark_ts300.npz — LBL spectrum (RADIS/HITRAN2020 H2O+CO2 lines +
     AER MT_CKD continuum, diffusivity-1.66 Schwarzschild) and the ExoRT n68
-    band_lwup_toa for the same column.  Regenerate with the compute engine:
+    band_lwup_toa for the same column.  Line-list edition (methods note): RADIS
+    fetches HITRAN's current consolidated edition (HITRAN2020); hitran.org no
+    longer serves the 2016 line-by-line edition.  The n68 k-tables are HITRAN2016,
+    but 2016->2020 changes the H2O rotation/nu2 bands dominating this OLR by
+    sub-1%, well below the n68-LBL residual — so that residual is the
+    correlated-k approximation, not the line-list edition.  Regenerate with the
+    compute engine:
         run/exocol.exe on the hz_inner Ts=300 namelist (co2_vmr_total,
         ice cold trap, nonideal EOS), then
         python tools/lbl_olr_benchmark.py iofiles/exocol_out.nc
@@ -56,7 +62,7 @@ def main():
     k = 501
     ker = np.ones(k) / k
     a.plot(wn[::10], np.convolve(oc, ker, 'same')[::10], color='0.55', lw=0.6,
-           label='LBL: HITRAN lines + MT_CKD continuum')
+           label='LBL: HITRAN2020 lines + MT_CKD continuum')
     a.stairs(lbl_b / w_b, edges, color='k', lw=1.4, label='LBL, n68-band averages')
     a.stairs(exo / w_b, edges, color='C3', lw=1.2, label='ExoRT n68 (this work)')
     ce = np.append(clima[:, 0], clima[-1, 1])
