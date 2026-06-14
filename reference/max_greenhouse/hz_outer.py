@@ -7,8 +7,9 @@ REFERENCE CASE: maximum-greenhouse outer HZ (CO2 condensation + T-dependent cp).
 Follows Kopparapu et al. (2013) Section 3.3 exactly:
 
   - Earth-like planet, 1 bar N2 background, surface temperature FIXED at 273 K.
-  - CO2 partial pressure pCO2 swept upward from 1 bar (Kopparapu: 1..35 bar; here
-    1..8.99 bar — see the 10-BAR CAP note below).
+  - CO2 partial pressure pCO2 swept upward from 1 bar to 34.7 bar = psat_CO2(273 K),
+    the same physical endpoint as Kopparapu's "1 to 35 bar".  Layers deeper than
+    10 bar use clamped k-table pressure broadening — see the 10-BAR CAP note below.
   - Fully (H2O-)saturated troposphere (rh_init = 1; trivially little water at
     273 K), moist adiabat from the surface.
   - CO2 CONDENSATION: wherever the ascending adiabat would supersaturate in CO2,
@@ -29,8 +30,12 @@ planetary albedo and Seff = F_IR/F_SOL.  The maximum-greenhouse limit is the
 Seff minimum.  Three-panel figure matching Kopparapu+2013 Fig. 5 (house style),
 with their curves (pixel-digitized from the paper by
 tools/digitize_kopparapu_fig5.py -> kopparapu2013_fig5.npz) overlaid for direct
-comparison.  Kopparapu reference values: Seff_min = 0.325-0.338 at pCO2 ~ 7-8
-bar -> d = 1.70 AU (text/figure; Kasting+1993: 1.67 AU).
+comparison.  Kopparapu's published maximum-greenhouse limit is d = 1.70 AU,
+Seff = 0.343 (Fig 5 caption + Table 1; Kasting+1993: 1.67 AU).  The paper is
+internally inconsistent at the last digit (Sec. 3.3 text prints "0.325", the
+drawn Fig-5(c) curve bottoms at ~0.337 = what we digitize, and the 2014
+parametric fit gives 0.356); we overlay the faithful digitized curves and label
+the limit with the citable 0.343/1.70 AU headline (see KOPP_* constants below).
 
 >10-BAR LAYERS — CLAMPED PRESSURE BROADENING: the ExoRT n68equiv k-coefficient
 pressure grid ends at 10 bar (radgrid.F90, read-only); above it ExoRT linearly
@@ -94,6 +99,20 @@ PROFILE_PCO2 = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 
 CACHE = os.path.join(HERE, 'hz_outer.npz')
 KOPP  = os.path.join(HERE, 'kopparapu2013_fig5.npz')
+
+# Kopparapu et al. (2013) maximum-greenhouse limit for the Sun, AS PUBLISHED.
+# We quote the universally-cited headline value from the Figure 5 caption and
+# Table 1: d = 1.70 AU, Seff = 0.343 (self-consistent: 1/sqrt(0.343) = 1.707 AU).
+# The paper is internally inconsistent at the decimal level: the Sec. 3.3 TEXT
+# prints "Seff = 0.325" (= 1.75 AU, and below the drawn Fig-5(c) curve), the
+# drawn Fig-5(c) curve bottoms at ~0.337 (what our pixel digitization recovers,
+# verified against the rendered figure), and the 2014 parametric fit (ApJL 787,
+# L29, Eq. 4) lists Seff_sun = 0.356 (= 1.68 AU).  The digitized curves overlaid
+# below are faithful to Fig 5; this constant is only used to LABEL the limit with
+# the citable caption/Table-1 number rather than our ~0.337 pixel read.
+KOPP_SEFF_MAX = 0.343
+KOPP_PCO2_MAX = 8.0     # bar (their "~8 bar")
+KOPP_D_MAX    = 1.70    # AU, as published (1/sqrt(0.343) = 1.707, rounded to 1.70)
 
 NML_TEMPLATE = """\
 &exocol_nml
@@ -247,7 +266,9 @@ def _plot(pco2, olr, asr, alpha, seff):
     print(f"\n  ExoColumn maximum greenhouse: Seff = {s_min:.4f} at "
           f"pCO2 = {p_min:.2f} bar  ->  d = {d_min:.3f} AU"
           + ("  [AT SWEEP EDGE — minimum not resolved]" if at_edge else ""))
-    print(  "  Kopparapu+2013              : Seff = 0.338 at pCO2 ~ 7 bar  ->  d = 1.70 AU")
+    print(f"  Kopparapu+2013              : Seff = {KOPP_SEFF_MAX:.3f} at "
+          f"pCO2 ~ {KOPP_PCO2_MAX:.0f} bar  ->  d = {KOPP_D_MAX:.2f} AU  "
+          f"(Fig 5 caption / Table 1)")
 
     kp = np.load(KOPP) if os.path.exists(KOPP) else None
 
@@ -290,9 +311,12 @@ def _plot(pco2, olr, asr, alpha, seff):
         ax_c.plot(kp['seff_p'], kp['seff'], **kw_kopp)
         ks = kp['seff']; kpp = kp['seff_p']
         ki = int(np.argmin(ks))
+        # Mark the drawn-curve minimum (the dot sits on the digitized curve),
+        # but LABEL it with Kopparapu's published headline value (Fig 5 caption /
+        # Table 1: Seff = 0.343, d = 1.70 AU) rather than our ~0.337 pixel read.
         ax_c.plot(kpp[ki], ks[ki], 'o', color='0.55', ms=3, zorder=3)
-        ax_c.annotate('Kopparapu+2013\n$S_\\mathrm{eff}$ = '
-                      f'{ks[ki]:.3f} ({1/np.sqrt(ks[ki]):.2f} AU)',
+        ax_c.annotate(f'Kopparapu+2013\n$S_\\mathrm{{eff}}$ = '
+                      f'{KOPP_SEFF_MAX:.3f} ({KOPP_D_MAX:.2f} AU)',
                       xy=(kpp[ki], ks[ki]), xytext=(40, -4),
                       textcoords='offset points', color='0.45', fontsize=8,
                       ha='left', va='top')

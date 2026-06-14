@@ -41,9 +41,19 @@ and the inner-HZ reference verified bit-identical):
 - `hz_outer.pdf` / `.png` — the three-panel figure (Fig. 5 format, house style),
   with the digitized Kopparapu curves overlaid.
 - `kopparapu2013_fig5.npz` — Kopparapu Fig. 5 curves, pixel-digitized from the
-  paper PDF by `tools/digitize_kopparapu_fig5.py` (validated: F_IR(1 bar) =
-  111.6 ≈ 112 W/m², albedo(1 bar) = 0.278, Seff min = 0.337 at 6.7 bar ≈ the
-  caption values).
+  paper PDF by `tools/digitize_kopparapu_fig5.py`.  The digitization is faithful
+  to the figure (verified panel-by-panel against the rendered Fig 5): F_IR(1 bar)
+  = 111.6 ≈ 112 W/m², F_IR asymptote ≈ 65, F_SOL(1 bar) ≈ 245, albedo 0.278 → 0.54,
+  and the Seff curve bottoms at ~0.337 just below the 0.34 gridline at ~7–8 bar —
+  exactly where the drawn blue curve sits.  **Published headline value (what we
+  label in the figure): d = 1.70 AU, Seff = 0.343 (Fig 5 caption + Table 1).**
+  Note Kopparapu's paper is internally inconsistent at the last digit: the §3.3
+  text misprints "Seff = 0.325" (= 1.75 AU, below the drawn curve), the drawn
+  curve minimum reads ~0.337 (= 1.72 AU), and the 2014 parametric fit (ApJL 787,
+  L29, Eq. 4) lists Seff_sun = 0.356 (= 1.68 AU).  The 1.70 AU / 0.343 caption
+  value is self-consistent (1/√0.343 = 1.707) and the one universally cited; the
+  2014 mass-dependence paper confirms the maximum-greenhouse coefficients are
+  unchanged from 2013.
 
 ## Results (2026-06-10 sweep, PVER=200, full 1–34.7 bar range)
 
@@ -64,7 +74,12 @@ and the inner-HZ reference verified bit-identical):
 | albedo at pCO2 = 1 bar | 0.328 | 0.278 |
 | albedo at pCO2 = 34.7 bar | 0.538 | ~0.54 |
 | Seff at pCO2 = 1 bar | 0.539 | 0.455 |
-| **maximum greenhouse** | **Seff = 0.395 at 8.9 bar → d = 1.59 AU** | Seff = 0.337 at ~7 bar → d = 1.70 AU |
+| **maximum greenhouse** | **Seff = 0.395 at 8.9 bar → d = 1.59 AU** | Seff = 0.343 at ~8 bar → d = 1.70 AU |
+
+(Kopparapu's maximum-greenhouse entry is his published caption/Table-1 headline,
+Seff = 0.343 / 1.70 AU; the digitized curve we overlay bottoms at ~0.337 — see
+the `kopparapu2013_fig5.npz` note above for the paper's internal 0.325/0.337/0.356
+spread.)
 
 The Seff minimum is now resolved interior to the sweep.  The structure mirrors
 Kopparapu's panel by panel: F_IR falls to a flat asymptote once the atmosphere
