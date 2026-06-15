@@ -242,10 +242,18 @@ def plot(d):
     axa.set_ylim(2400, 6100)
     axa.set_xlabel(r'Effective flux incident on the planet  $S/S_0$')
     axa.set_ylabel(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
-    axa.set_title('(a)  HZ fluxes', loc='left', fontsize=10)
-    axa.grid(alpha=0.25, lw=0.5)
     axa.text(0.62, 3550, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
              ha='center', va='center', weight='bold')
+    # Boundary identity labelled directly on the plot (colour-matched leaders).
+    axa.annotate('Runaway greenhouse', xy=(1.06, 5300), xytext=(1.21, 5700),
+                 color=RUN, ha='left', va='center', fontsize=8.5,
+                 arrowprops=dict(arrowstyle='->', color=RUN, lw=0.7))
+    axa.annotate('Moist greenhouse', xy=(0.97, 4250), xytext=(1.21, 4750),
+                 color=MOIST, ha='left', va='center', fontsize=8.5,
+                 arrowprops=dict(arrowstyle='->', color=MOIST, lw=0.7))
+    axa.annotate('Maximum greenhouse', xy=(0.37, 5250), xytext=(0.52, 5750),
+                 color=MAX, ha='right', va='center', fontsize=8.5,
+                 arrowprops=dict(arrowstyle='->', color=MAX, lw=0.7))
 
     # ---- Panel (b): HZ distances — distance vs stellar mass ------------------
     axb.fill_betweenx(mass, d_moist, d_max, color=GRN, alpha=0.45, zorder=0)
@@ -262,21 +270,14 @@ def plot(d):
     axb.set_xticklabels(['0.03', '0.1', '0.3', '1.0', '2.0'])
     axb.set_xlabel('Distance [AU]')
     axb.set_ylabel(r'Stellar mass  [$M_\odot$]')
-    axb.set_title('(b)  HZ distances  (Baraffe et al. 1998, 5 Gyr)',
-                  loc='left', fontsize=10)
-    axb.grid(alpha=0.25, lw=0.5, which='both')
+    # HZ distances use the Baraffe et al. (1998) 5 Gyr isochrone (see caption/README).
 
-    # Combined legend: colour = boundary, line style = source.
-    handles = [Line2D([0], [0], color=RUN,   lw=2, label='Runaway greenhouse'),
-               Line2D([0], [0], color=MOIST, lw=2, label='Moist greenhouse'),
-               Line2D([0], [0], color=MAX,   lw=2, label='Maximum greenhouse'),
-               Line2D([0], [0], color='0.35', lw=2, ls='-',  label='ExoColumn'),
+    # Legend distinguishes source only (boundary identity is labelled on-curve).
+    handles = [Line2D([0], [0], color='0.35', lw=2, ls='-',  label='ExoColumn'),
                Line2D([0], [0], color='0.35', lw=2, ls='--', label='Kopparapu et al. 2013')]
-    axa.legend(handles=handles, fontsize=7.5, loc='lower left', framealpha=0.92)
+    axa.legend(handles=handles, fontsize=8, loc='lower left', framealpha=0.92)
 
-    fig.suptitle('ExoColumn habitable zone vs host star — '
-                 'Kopparapu (2013) Fig. 7 analogue (cool-half set)', fontsize=10)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.tight_layout()
     fig.savefig(FIG_PNG, dpi=300)
     fig.savefig(FIG_PDF)
     print(f"\nWrote: {FIG_PNG}\n       {FIG_PDF}")
