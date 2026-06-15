@@ -26,6 +26,14 @@ Usage (run once per core, with that core's binary on run/exocol.exe):
     CMP_SOLAR=bt-settl_7200_logg4.5_FeH0_n84.nc CMP_LABEL=n84 python3 tools/compare_7200_n68_n84.py
 then (no env vars) print the comparison table:
     python3 tools/compare_7200_n68_n84.py
+
+RESULT (2026-06-15, 7200 K F star, ExoRT current):
+  OLR is BIT-IDENTICAL between cores (profile-determined, not SED-dependent), so
+  the spectral-resolution effect is purely shortwave/albedo.  The coarser n68
+  binning under-resolves the hot F-star shortwave and UNDER-estimates the
+  planetary albedo by ~0.012-0.016 (n84 higher), raising S_eff by ~0.015-0.030
+  (~+2%) across Ts = 250-500 K.  Modest but systematic; the n68 HZ figures are
+  therefore conservative (slightly low S_eff) at the warm/F-star end.
 """
 
 import os
