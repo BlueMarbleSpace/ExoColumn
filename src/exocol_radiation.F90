@@ -138,9 +138,16 @@ contains
     real(r8), dimension(ext_nazm_tshadow) :: ext_TCx_obstruct
     real(r8), dimension(ext_nazm_tshadow) :: ext_TCz_obstruct
 
+    ! NH3 and CO are not modelled by ExoColumn.  The ExoRT aerad_driver interface
+    ! gained ext_NH3/ext_CO mass-mixing-ratio inputs (2024+ ExoRT); pass zero so
+    ! they contribute no opacity (radiatively identical to the prior interface).
+    real(r8), dimension(pver) :: nh3mmr, commr
+
     ext_cosz_horizon(:) = 0._r8
     ext_TCx_obstruct(:) = 0._r8
     ext_TCz_obstruct(:) = 0._r8
+    nh3mmr(:) = 0._r8
+    commr(:)  = 0._r8
 
     ! Argument order matches aerad_driver signature in exo_radiation_mod.F90:
     !   gases, clouds, pressure/temperature grid, albedos,
@@ -148,6 +155,7 @@ contains
     call aerad_driver( &
         h2ommr,   co2mmr,                                         &  ! H2O, CO2
         ch4mmr,   c2h6mmr,                                        &  ! CH4, C2H6
+        nh3mmr,   commr,                                          &  ! NH3, CO (zero; not modelled)
         h2mmr,    n2mmr,    o3mmr,   o2mmr,                       &  ! H2, N2, O3, O2
         cicewp,   cliqwp,   cfrc,                                  &  ! cloud IWP, LWP, fraction
         rei,      rel,                                             &  ! cloud particle radii
