@@ -111,6 +111,9 @@ TS_MAX  = float(os.environ.get('HZ_TS_MAX',  '2500'))
 TS_STEP = float(os.environ.get('HZ_TS_STEP', '5'))
 TS_VALUES = np.arange(TS_MIN, TS_MAX + TS_STEP, TS_STEP, dtype=float)   # K
 H2O_TCRIT = 647.1   # K, water critical point (saturated → supercritical dry base)
+# Window for the Simpson-Nakajima runaway-greenhouse S_eff (peak of the inner
+# branch, at ~300-330 K); excludes the high-Ts supercritical post-runaway rise.
+RUNAWAY_TS_LO, RUNAWAY_TS_HI = 280.0, 700.0
 # CAVEAT: the ExoRT n68 k-tables have a hardcoded T-grid ceiling of 500 K
 # (read-only radgrid.F90); above ~1600 K the deep layers use clamped opacity, so
 # the post-runaway OLR rise is qualitatively right but quantitatively extrapolated
@@ -530,11 +533,19 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     _wet = np.where(svmr >= MOIST_GH_VMR)[0]
     if _wet.size:
         exo_moist = float(seff[_wet[0]]); moist_ts = float(ts[_wet[0]])
-    if ts[0] <= H2O_TCRIT <= ts[-1]:
-        runaway_ts  = H2O_TCRIT
-        exo_runaway = float(np.interp(H2O_TCRIT, ts, seff))
+    # Runaway greenhouse = the Simpson-Nakajima PEAK of the inner-branch
+    # S_eff(Ts) (the maximum sustainable flux; ~300-330 K) — the flux above which
+    # no temperate solution exists.  Searched over the moist branch (Ts 280-700 K,
+    # below the supercritical post-runaway rise).  NB: sampling at Tc instead
+    # lands on the co2_vmr_total-depressed plateau (~1.06), which is BELOW the
+    # moist-GH edge and would invert the boundary ordering (see hz_figure7.py).
+    _rb = (ts >= RUNAWAY_TS_LO) & (ts <= RUNAWAY_TS_HI)
+    if np.any(_rb):
+        _ri = int(np.nanargmax(seff[_rb]))
+        runaway_ts  = float(ts[_rb][_ri])
+        exo_runaway = float(seff[_rb][_ri])
     print(f"  ExoColumn moist-GH Seff = {exo_moist:.3f} (Ts={moist_ts:.0f} K)"
-          f" ;  runaway Seff = {exo_runaway:.3f} (Tc={runaway_ts:.0f} K)")
+          f" ;  runaway Seff = {exo_runaway:.3f} (peak Ts={runaway_ts:.0f} K)")
 
     # BPS-continuum greenhouse-limit Seff.  The cold-start T/H2O profiles (hence
     # strat_vmr → moist_ts, and Tc) are continuum-independent, so the BPS limits
@@ -546,7 +557,7 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
         if np.isfinite(runaway_ts):
             bps_runaway = float(np.interp(runaway_ts, bts, bseff))
         print(f"  BPS       moist-GH Seff = {bps_moist:.3f} (Ts={moist_ts:.0f} K)"
-              f" ;  runaway Seff = {bps_runaway:.3f} (Tc={runaway_ts:.0f} K)")
+              f" ;  runaway Seff = {bps_runaway:.3f} (peak Ts={runaway_ts:.0f} K)")
 
     # Kopparapu+2013 reference data for the model-vs-model overlay (dashed grey).
     kopp = _load_kopp_sweep()
@@ -637,9 +648,9 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     # Kopparapu+2013 IHZ limits on their own (dashed) Seff curve, derived with the
     # same physical definitions used for ExoColumn: moist greenhouse where the
     # stratospheric H2O VMR (FH2O column) first reaches MOIST_GH_VMR (interpolated
-    # on Kopparapu's coarser 20 K grid), runaway greenhouse at the H2O critical
-    # temperature Tc.  Drawn as grey SQUARES (ExoColumn uses circles); each also
-    # sits on the dashed-vs-solid curve of its own model.
+    # on Kopparapu's coarser 20 K grid), runaway greenhouse at the Simpson-Nakajima
+    # PEAK of each model's own S_eff(Ts).  Drawn as grey SQUARES (ExoColumn uses
+    # circles); each also sits on the dashed-vs-solid curve of its own model.
     kopp_moist_seff = kopp_run_seff = np.nan
     if kopp is not None:
         kt, ksf, kfh = kopp['tgo'], kopp['seff'], kopp['fh2o']
@@ -651,9 +662,12 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
             kopp_moist_seff = float(np.interp(kopp_moist_ts, kt, ksf))
             ax_c.plot(kopp_moist_ts, kopp_moist_seff, 's', color=GREY, ms=3,
                       markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
-        if kt[0] <= H2O_TCRIT <= kt[-1]:
-            kopp_run_seff = float(np.interp(H2O_TCRIT, kt, ksf))
-            ax_c.plot(H2O_TCRIT, kopp_run_seff, 's', color=GREY, ms=3,
+        _kb = (kt >= RUNAWAY_TS_LO) & (kt <= RUNAWAY_TS_HI)
+        if np.any(_kb):
+            _ki = int(np.nanargmax(ksf[_kb]))
+            kopp_run_ts = float(kt[_kb][_ki])
+            kopp_run_seff = float(ksf[_kb][_ki])
+            ax_c.plot(kopp_run_ts, kopp_run_seff, 's', color=GREY, ms=3,
                       markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
 
     ax_c.set_ylabel('$S_{\\rm eff}$')
@@ -661,8 +675,8 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     ax_c.set_ylim(0.4, 1.8)
     # Label each limit (with the implied IHZ orbital distance d = 1/sqrt(Seff) [AU]),
     # giving both models' Seff: ExoColumn (circle, solid curve) and Kopparapu+2013
-    # (square, dashed curve).  The two limits are close in Ts (~350 vs ~647 K), so
-    # moist sits above its marker (arrow) and runaway just to the right of its own.
+    # (square, dashed curve).  Runaway (Nakajima peak, ~320 K) and moist (~345 K)
+    # now sit close together in Ts, so moist is annotated above and runaway below.
     # Lead each model's line with its plot-marker glyph (● circle = ExoColumn,
     # ■ square = Clima) so the label doubles as the marker key.  Same grey as the
     # plotted markers and text.
