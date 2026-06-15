@@ -76,10 +76,15 @@ outer = _load('hz_outer', 'reference/max_greenhouse/hz_outer.py')
 # --------------------------------------------------------------------------
 STARS = [
     ('M 2600 K', 'bt-settl_2600_logg4.5_FeH0_n68.nc', 2600, '#d62728'),
-    ('M 3700 K', 'bt-settl_3700_logg4.5_FeH0_n68.nc', 3700, '#e377c2'),
-    ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#ff7f0e'),
-    ('G 5780 K (Sun)', '',                            5780, '#2ca02c'),
+    ('M 3000 K', 'bt-settl_3000_logg4.5_FeH0_n68.nc', 3000, '#ff7f0e'),
+    ('M 3300 K', 'bt-settl_3300_logg4.5_FeH0_n68.nc', 3300, '#e6b800'),
+    ('M 3700 K', 'bt-settl_3700_logg4.5_FeH0_n68.nc', 3700, '#2ca02c'),
+    ('K 4000 K', 'bt-settl_4000_logg4.5_FeH0_n68.nc', 4000, '#17becf'),
+    ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#1f77b4'),
+    ('G 5780 K (Sun)', '',                            5780, '#9467bd'),
 ]
+# 3000 K ~ Proxima Cen; 3300 K ~ mid-M (AD Leo/GJ 1214); 4000 K ~ K7/M0.
+# (Curves are recoloured by Teff in plot(); the hex above is a fallback.)
 
 # Inner-edge surface-temperature grid (Kopparapu Fig 6 a/b span 200-2200 K).
 TS_MIN  = float(os.environ.get('HZ_TS_MIN',  '200'))
@@ -176,6 +181,14 @@ def plot(data):
     fig, ax = plt.subplots(2, 2, figsize=(9.0, 7.2))
     (a, b), (c, dax) = ax
     fig.patch.set_facecolor('white')
+
+    # Recolour the curves by Teff (cool = red ... warm = blue, Kopparapu style),
+    # so the gradient is readable for the full M->G ladder.
+    _rank = np.argsort(np.argsort([s['teff'] for s in data['stars']]))
+    _cmap = plt.get_cmap('turbo')
+    _n = max(len(_rank) - 1, 1)
+    for s, r in zip(data['stars'], _rank):
+        s['color'] = _cmap(0.92 - 0.82 * r / _n)
 
     for s in data['stars']:
         col = s['color']
