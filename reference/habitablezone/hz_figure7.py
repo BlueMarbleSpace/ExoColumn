@@ -261,20 +261,37 @@ def plot(d):
         axb.plot(dd, mass, marker=mk_, ls='-', color=col, lw=1.8, ms=6)
     for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
         axb.plot(np.sqrt(lk / kopp_seff(tk, bnd)), mk, '--', color=col, lw=1.3)
-    # Solar-system planets: the Sun's mass (1 Msun) at their orbital distances.
-    for _pn, _pd in [('Mercury', 0.387), ('Venus', 0.723),
-                     ('Earth', 1.000), ('Mars', 1.524)]:
-        axb.plot(_pd, 1.0, 'o', color='black', ms=5,
+    # Reference planetary systems: filled circles sized ~proportional to planet
+    # radius (diameter = MS_E * R/R_Earth), at the host-star mass and each
+    # planet's orbital distance.
+    MS_E = 9.0    # marker diameter [pt] for a 1 R_Earth planet
+    # Solar system (Sun, 1 Msun): (name, a[AU], R[R_Earth])
+    for _n, _a, _r in [('Mercury', 0.387, 0.383), ('Venus', 0.723, 0.949),
+                       ('Earth', 1.000, 1.000), ('Mars', 1.524, 0.532)]:
+        axb.plot(_a, 1.0, 'o', color='black', ms=MS_E * _r,
                  markeredgecolor='white', markeredgewidth=0.6, zorder=8)
-        axb.annotate(_pn, xy=(_pd, 1.0), xytext=(0, 7), textcoords='offset points',
+        axb.annotate(_n, xy=(_a, 1.0), xytext=(0, 8), textcoords='offset points',
                      ha='center', va='bottom', fontsize=7, color='black', zorder=8)
+    # TRAPPIST-1 (M = 0.0898 Msun, Teff 2566 K; Agol et al. 2021): planets b..h.
+    # Its mass matches our M2600 case, so e/f/g fall in the computed HZ strip.
+    T1M, T1C = 0.0898, '#6a3d9a'
+    for _n, _a, _r in [('b', 0.01154, 1.116), ('c', 0.01580, 1.097),
+                       ('d', 0.02227, 0.788), ('e', 0.02925, 0.920),
+                       ('f', 0.03853, 1.045), ('g', 0.04688, 1.129),
+                       ('h', 0.06193, 0.755)]:
+        axb.plot(_a, T1M, 'o', color=T1C, ms=MS_E * _r,
+                 markeredgecolor='white', markeredgewidth=0.5, zorder=9)
+        axb.annotate(_n, xy=(_a, T1M), xytext=(0, -9), textcoords='offset points',
+                     ha='center', va='top', fontsize=6, color=T1C, zorder=9)
+    axb.text(0.0145, 0.061, 'TRAPPIST-1', ha='center', va='top',
+             fontsize=7.5, color=T1C, zorder=9)
     axb.set_xscale('log'); axb.set_yscale('log')
-    axb.set_xlim(0.02, 2.2)
-    axb.set_ylim(0.07, 1.25)
+    axb.set_xlim(0.009, 2.2)
+    axb.set_ylim(0.055, 1.3)
     axb.set_yticks([0.1, 0.2, 0.3, 0.5, 0.7, 1.0])
     axb.set_yticklabels(['0.1', '0.2', '0.3', '0.5', '0.7', '1.0'])
-    axb.set_xticks([0.03, 0.1, 0.3, 1.0, 2.0])
-    axb.set_xticklabels(['0.03', '0.1', '0.3', '1.0', '2.0'])
+    axb.set_xticks([0.01, 0.03, 0.1, 0.3, 1.0, 2.0])
+    axb.set_xticklabels(['0.01', '0.03', '0.1', '0.3', '1.0', '2.0'])
     axb.set_xlabel('Distance [AU]')
     axb.set_ylabel(r'Stellar mass  [$M_\odot$]')
     # HZ distances use the Baraffe et al. (1998) 5 Gyr isochrone (see caption/README).
