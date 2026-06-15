@@ -17,9 +17,11 @@ Files generated (from <spec_dir> = ExoRT/source/src.n68equiv):
 
   calc_opd_mod.F90          k-table pressure CLAMP (unchanged behaviour) +
                             runtime MT_CKD <-> BPS H2O-continuum branch
-  radgrid.F90               public `use_bps_continuum` runtime flag and the
-                            BPS continuum filename
-  initialize_rad_mod_1D.F90 conditional read of bps_h20_continuum_n68.nc
+  radgrid.F90               public `use_bps_continuum` runtime flag, the BPS
+                            continuum filename, and the `solar_file_override`
+                            runtime stellar-spectrum selector
+  initialize_rad_mod_1D.F90 conditional read of bps_h20_continuum_n68.nc, plus
+                            honouring solar_file_override in initialize_solar
 
 Each patch is keyed to an explicit anchor string and asserts the anchor was
 found; any miss prints `ERROR: ...` and exits non-zero so the Makefile fails
@@ -158,6 +160,13 @@ RADGRID_BLOCK = (
     "  ! (bps_h20_continuum_n68.nc), for direct comparison with Kopparapu (2013).\n"
     "  logical :: use_bps_continuum = .false.\n"
     "  character(len=256), parameter :: kh2oself_bps_file = 'bps_h20_continuum_n68.nc'\n"
+    "\n"
+    "  ! ---- ExoColumn: runtime stellar-spectrum override ----------------------\n"
+    "  ! Set by exocol_driver from &exocol_nml::solar_file BEFORE initialize_solar.\n"
+    "  ! Empty (default) => use the compile-time exoplanet_mod::solar_file\n"
+    "  ! (G2V_SUN_n68.nc), bit-identical to stock behaviour.  Non-empty => load\n"
+    "  ! that n68-band file from data/solar/ instead (HZ multi-stellar sweeps).\n"
+    "  character(len=256) :: solar_file_override = ''\n"
 )
 
 
@@ -192,7 +201,26 @@ INIT_BLOCK = """
 """
 
 
+# initialize_solar builds the solar filename from exoplanet_mod::solar_file.
+# Swap that single line so a non-empty radgrid::solar_file_override (set at
+# runtime from &exocol_nml::solar_file) selects a different host-star spectrum.
+SOLAR_FNAME_OLD = (
+    "      filename = trim(exort_rootdir)//trim(dirsol)//trim(solar_file)"
+)
+SOLAR_FNAME_NEW = (
+    "      ! ExoColumn: honour runtime &exocol_nml::solar_file override (radgrid).\n"
+    "      ! Empty override => compile-time exoplanet_mod::solar_file (bit-identical).\n"
+    "      if (len_trim(solar_file_override) > 0) then\n"
+    "        filename = trim(exort_rootdir)//trim(dirsol)//trim(solar_file_override)\n"
+    "      else\n"
+    "        filename = trim(exort_rootdir)//trim(dirsol)//trim(solar_file)\n"
+    "      end if"
+)
+
+
 def patch_initialize(text):
+    text = replace_once(text, SOLAR_FNAME_OLD, SOLAR_FNAME_NEW,
+                        "initialize:solar-override")
     return insert_after_line(text, INIT_ANCHOR, INIT_BLOCK, "initialize:bps-read")[0]
 
 

@@ -28,7 +28,8 @@ PROGRAM exocol_driver
   use exo_init_ref,          only: init_ref
   use initialize_rad_mod_1D, only: initialize_kcoeff, initialize_solar, &
                                    initialize_radbuffer
-  use radgrid,               only: use_bps_continuum  ! MT_CKD<->BPS toggle
+  use radgrid,               only: use_bps_continuum, &  ! MT_CKD<->BPS toggle
+                                   solar_file_override     ! host-star selector
   use exo_model_specific,    only: init_model_specific
   use ppgrid,                only: pver, pverp
   use exocol_mod
@@ -36,7 +37,8 @@ PROGRAM exocol_driver
                                    cfg_input_file => input_file, &
                                    latent_heat_mode, flux_only, &
                                    esat_formula, h2o_eos, h2o_continuum, &
-                                   cold_trap_phase
+                                   cold_trap_phase, &
+                                   cfg_solar_file => solar_file
   use exocol_io,             only: read_initial_conditions, write_output
   use exocol_coldstart,      only: cold_start_init
   use exocol_rce_loop,       only: run_rce_loop
@@ -67,6 +69,10 @@ PROGRAM exocol_driver
   ! Select the H2O continuum model in the ExoRT radiation core.  Must be set
   ! before initialize_kcoeff (which conditionally reads the BPS continuum file).
   use_bps_continuum = (trim(h2o_continuum) == 'bps')
+  ! Select the host-star spectrum (empty => compile-time exoplanet_mod::solar_file
+  ! = G2V_SUN_n68.nc, bit-identical).  Read by initialize_solar below; set here
+  ! before the ExoRT init sequence so the SW band optimisation sees the right SED.
+  solar_file_override = trim(cfg_solar_file)
 
   ! ---- 1. Allocate column state ----
   call exocol_init()

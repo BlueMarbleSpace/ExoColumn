@@ -295,6 +295,18 @@ module exocol_config
   ! sampling-faithful overlay against clima_last.tab.
   real(r8),          public, save :: coldtrap_dT_offset = 0.0_r8
 
+  ! Host-star spectrum file in data/solar/ (n68-band SED: wav_low/wav_high/S0/
+  ! solarflux).  Empty (default) keeps the compile-time exoplanet_mod::solar_file
+  ! = 'G2V_SUN_n68.nc' → bit-identical to all prior results.  Set to e.g.
+  ! 'bt-settl_3700_logg4.5_FeH0_n68.nc' or 'BT_SETTL_interp_t3290_logg5.0_m0.0_
+  ! a0.0_n68.nc' to run a different host star (Kopparapu et al. 2013 HZ
+  ! multi-stellar sweeps).  Sets radgrid::solar_file_override before
+  ! initialize_solar; ExoRT renormalises the SED to shr_const_scon and
+  ! re-optimises the SW bands, so only the spectral SHAPE enters (the planet-
+  ! star distance is set separately by &exocol_nml::msdist).  Must be an
+  ! n68 file (ExoColumn compiles the n68equiv k-distribution).
+  character(len=256), public, save :: solar_file       = ''
+
   ! ---- &exocol_init (cold-start initial conditions; used when input_file = '') ----
   ! Public so exocol_coldstart can USE them with renames.  Names that collide
   ! with exocol_mod state variables (ts, coszrs, asdir, ...) must be renamed
@@ -380,7 +392,7 @@ contains
                                   h2o_inventory_bar, esat_formula, h2o_eos, &
                                   h2o_continuum, cold_trap_phase, &
                                   coldtrap_dT_offset, co2_vmr_total, &
-                                  co2_condense, cp_co2_tdep
+                                  co2_condense, cp_co2_tdep, solar_file
     namelist /exocol_init/        input_file, ts, t_strato, p_top, rh_init, &
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
@@ -550,6 +562,11 @@ contains
     case ('none');    write(*,'(a)') '  Ozone profile     : none (zero ozone)'
     end select
     write(*,'(a,f6.3,a)') '  Star distance     : msdist = ', msdist, ' AU'
+    if (len_trim(solar_file) > 0) then
+      write(*,'(3a)') '  Star spectrum     : ', trim(solar_file), ' (override)'
+    else
+      write(*,'(a)')  '  Star spectrum     : G2V_SUN_n68.nc (compile-time default)'
+    end if
     write(*,'(a,f6.2,a)') '  Slab thickness    : dz_slab = ', dz_slab, ' m'
     if (sw_zenith_quad) then
       write(*,'(a,i0,a)') '  Solar zenith      : ', sw_nquad, &

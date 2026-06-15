@@ -241,6 +241,7 @@ NML_TEMPLATE = """\
   ihz_profile    = .true.
   o3_profile     = 'none'
   msdist         = 1.0
+  solar_file     = '{solar_file}'
   h2o_eos        = '{h2o_eos}'
   h2o_continuum  = '{continuum}'
   cold_trap_phase = '{cold_trap}'
@@ -280,17 +281,20 @@ NML_TEMPLATE = """\
 
 # ---------------------------------------------------------------------------
 
-def run_one(ts, continuum='mtckd', trap_off=0.0):
+def run_one(ts, continuum='mtckd', trap_off=0.0, solar_file=''):
     """
     Run ExoColumn flux_only at surface temperature ts with the chosen H2O
     continuum ('mtckd' | 'bps').  trap_off > 0 samples the cold trap at
     T = t_strato + trap_off on the adiabat (Kopparapu grid emulation; used
     only for the panel-(d) profile re-runs — see KOPP_TSTAR_OFFSET).
+    solar_file selects the host-star n68 SED ('' => compile-time G2V_SUN_n68.nc,
+    the Sun); used by the multi-stellar Figure-6 sweep (hz_figure6.py).
     Returns dict with scalar diagnostics and profiles, or None on failure.
     """
     nml = NML_TEMPLATE.format(ts=ts, t_strato=T_STRATO, albedo=ALBEDO,
                               h2o_eos=H2O_EOS, continuum=continuum,
-                              cold_trap=COLD_TRAP_PHASE, trap_off=trap_off)
+                              cold_trap=COLD_TRAP_PHASE, trap_off=trap_off,
+                              solar_file=solar_file)
     orig = None
     if os.path.exists(NML_PATH):
         with open(NML_PATH) as f:
