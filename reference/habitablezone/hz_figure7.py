@@ -99,6 +99,33 @@ def baraffe_mass_lum(teff):
     return mass, 10.0 ** (0.4 * (MBOL_SUN - mbol))
 
 
+# --- Kopparapu et al. (2013) Table 3 parametric fit (their Eq. 2) ----------
+# S_eff = Seff_sun + a*T* + b*T*^2 + c*T*^3 + d*T*^4,  with T* = Teff - 5780 K.
+# Used to overlay their published boundaries as dashed comparison curves.
+KOPP_COEFFS = {  # (Seff_sun, a, b, c, d)
+    'runaway': (1.0512, 1.3242e-4, 1.5418e-8, -7.9895e-12, -1.8328e-15),
+    'moist':   (1.0140, 8.1774e-5, 1.7063e-9, -4.3241e-12, -6.6462e-16),
+    'maxgh':   (0.3438, 5.8942e-5, 1.6558e-9, -3.0045e-12, -5.2983e-16),
+}
+
+
+def kopp_seff(teff, boundary):
+    """Kopparapu (2013) Eq. (2) S_eff at the given boundary, for Teff array."""
+    s0, a, b, c, dd = KOPP_COEFFS[boundary]
+    t = np.asarray(teff, float) - 5780.0
+    return s0 + a * t + b * t**2 + c * t**3 + dd * t**4
+
+
+# Runaway-greenhouse S_eff = the MAXIMUM (Simpson-Nakajima) value of the
+# inner-branch S_eff(Ts) — the peak flux a saturated atmosphere can radiate
+# away before runaway.  Searched over the moist branch (Ts 280-700 K, the peak
+# is at ~300-320 K), below the supercritical-steam rise; matches the
+# reference/moist_runaway "runaway peak" definition.  (Sampling at the critical
+# point instead lands on the declining plateau and inverts the ordering vs the
+# moist-greenhouse edge under the co2_vmr_total convention.)
+RUNAWAY_TS_LO, RUNAWAY_TS_HI = 280.0, 700.0
+
+
 # Focused inner-edge Ts grid bracketing the moist-GH crossing (~350 K).
 TS_MIN  = float(os.environ.get('HZ7_TS_MIN',  '300'))
 TS_MAX  = float(os.environ.get('HZ7_TS_MAX',  '420'))
@@ -136,14 +163,21 @@ def sweep():
     inner = _load('hz_inner', 'reference/moist_runaway/hz_inner.py')
     fig6 = np.load(FIG6_CACHE)   # outer max-GH from the Figure-6 sweep
 
+    fig6_ts = fig6['ts']         # inner-edge Ts grid from the Figure-6 sweep
+
     teffs, colors, labels = [], [], []
-    seff_inner, ts_inner, seff_outer = [], [], []
+    seff_inner, ts_inner, seff_outer, seff_runaway = [], [], [], []
     for i, (label, sf, teff, color) in enumerate(STARS):
         # OUTER: max-greenhouse = minimum of the dense-CO2 S_eff sweep (cached).
         seff_o = fig6[f's{i}_seff_o']
         mg_out = float(np.nanmin(seff_o)) if np.any(np.isfinite(seff_o)) else np.nan
+        # RUNAWAY: peak of the inner-edge S_eff(Ts) curve (Fig-6 inner sweep).
+        # Star-independent profile -> same peak Ts, S_eff differs only via albedo.
+        seff_i_full = fig6[f's{i}_seff_i']
+        br = (fig6_ts >= RUNAWAY_TS_LO) & (fig6_ts <= RUNAWAY_TS_HI)
+        run_in = float(np.nanmax(seff_i_full[br]))
 
-        # INNER: focused Ts sweep for the moist-GH crossing.
+        # INNER (moist GH): focused Ts sweep for the 3e-3 crossing.
         print(f"\n=== {label} (inner moist-GH sweep) ===", flush=True)
         sv = np.full(len(TS_VALUES), np.nan)
         se = np.full(len(TS_VALUES), np.nan)
@@ -152,54 +186,70 @@ def sweep():
             if r is not None:
                 sv[j], se[j] = r['strat_vmr'], r['seff']
         ts_mg, mg_in = _moist_gh_seff(TS_VALUES, sv, se)
-        print(f"  moist-GH: Ts={ts_mg:.1f} K  S_eff(inner)={mg_in:.3f}   "
-              f"max-GH: S_eff(outer)={mg_out:.3f}", flush=True)
+        print(f"  moist-GH: Ts={ts_mg:.1f} K  S_eff={mg_in:.3f}   "
+              f"runaway-GH (peak): S_eff={run_in:.3f}   "
+              f"max-GH: S_eff={mg_out:.3f}", flush=True)
 
         teffs.append(teff); colors.append(color); labels.append(label)
-        seff_inner.append(mg_in); ts_inner.append(ts_mg); seff_outer.append(mg_out)
+        seff_inner.append(mg_in); ts_inner.append(ts_mg)
+        seff_outer.append(mg_out); seff_runaway.append(run_in)
 
     return dict(teff=np.array(teffs, float), color=np.array(colors),
                 label=np.array(labels), seff_inner=np.array(seff_inner),
-                ts_inner=np.array(ts_inner), seff_outer=np.array(seff_outer))
+                ts_inner=np.array(ts_inner), seff_outer=np.array(seff_outer),
+                seff_runaway=np.array(seff_runaway))
 
 
 def plot(d):
+    from matplotlib.lines import Line2D
     order = np.argsort(d['teff'])
     teff = d['teff'][order]
-    si = d['seff_inner'][order]
-    so = d['seff_outer'][order]
+    s_moist = d['seff_inner'][order]      # moist greenhouse (inner edge)
+    s_max   = d['seff_outer'][order]      # maximum greenhouse (outer edge)
+    if 'seff_runaway' in d:
+        s_run = np.asarray(d['seff_runaway'], float)[order]
+    else:                                  # fallback for an older cache
+        f6 = np.load(FIG6_CACHE); t6 = f6['ts']
+        br = (t6 >= RUNAWAY_TS_LO) & (t6 <= RUNAWAY_TS_HI)
+        s_run = np.array([np.nanmax(f6[f's{i}_seff_i'][br])
+                          for i in range(len(STARS))])[order]
 
     # Baraffe+1998 5 Gyr mass & luminosity -> HZ distances via Kopparapu Eq. (3).
     mass = np.array([baraffe_mass_lum(t)[0] for t in teff])
     lum  = np.array([baraffe_mass_lum(t)[1] for t in teff])
-    d_in  = np.sqrt(lum / si)   # inner (moist GH) distance [AU]
-    d_out = np.sqrt(lum / so)   # outer (max GH) distance [AU]
+    d_run, d_moist, d_max = (np.sqrt(lum / s) for s in (s_run, s_moist, s_max))
 
-    RED, BLUE, GRN = '#d62728', '#1f6feb', '#b8e6b8'
+    # Smooth Teff grid for the dashed Kopparapu (2013) Eq.(2)+Table-3 overlays.
+    tk = np.linspace(teff.min(), teff.max(), 120)
+    mk = np.array([baraffe_mass_lum(t)[0] for t in tk])
+    lk = np.array([baraffe_mass_lum(t)[1] for t in tk])
+
+    RUN, MOIST, MAX, GRN = '#ff7f0e', '#d62728', '#1f6feb', '#b8e6b8'
+    BNDS = [('runaway', RUN, '^'), ('moist', MOIST, 'o'), ('maxgh', MAX, 's')]
     fig, (axa, axb) = plt.subplots(1, 2, figsize=(11.0, 5.0))
     fig.patch.set_facecolor('white')
 
     # ---- Panel (a): HZ fluxes — S_eff vs Teff --------------------------------
-    axa.plot(si, teff, 'o-', color=RED, lw=1.8, ms=6)
-    axa.plot(so, teff, 's-', color=BLUE, lw=1.8, ms=6)
-    axa.fill_betweenx(teff, so, si, color=GRN, alpha=0.45, zorder=0)
+    axa.fill_betweenx(teff, s_max, s_moist, color=GRN, alpha=0.45, zorder=0)
+    for s, (_, col, mk_) in zip((s_run, s_moist, s_max), BNDS):
+        axa.plot(s, teff, marker=mk_, ls='-', color=col, lw=1.8, ms=6)
+    for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
+        axa.plot(kopp_seff(tk, bnd), tk, '--', color=col, lw=1.3)
     axa.set_xlim(1.25, 0.15)            # reversed: high flux (inner) on the left
     axa.set_ylim(2400, 6100)
     axa.set_xlabel(r'Effective flux incident on the planet  $S/S_0$')
     axa.set_ylabel(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
     axa.set_title('(a)  HZ fluxes', loc='left', fontsize=10)
     axa.grid(alpha=0.25, lw=0.5)
-    axa.text(si[-1] + 0.05, teff[-1] + 30, 'Inner edge\n(moist greenhouse)',
-             color=RED, fontsize=8.5, ha='left', va='bottom')
-    axa.text(so[-1] - 0.02, teff[-1] + 30, 'Outer edge\n(maximum greenhouse)',
-             color=BLUE, fontsize=8.5, ha='right', va='bottom')
-    axa.text(0.63, 3550, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
+    axa.text(0.62, 3550, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
              ha='center', va='center', weight='bold')
 
     # ---- Panel (b): HZ distances — distance vs stellar mass ------------------
-    axb.plot(d_in, mass, 'o-', color=RED, lw=1.8, ms=6)
-    axb.plot(d_out, mass, 's-', color=BLUE, lw=1.8, ms=6)
-    axb.fill_betweenx(mass, d_in, d_out, color=GRN, alpha=0.45, zorder=0)
+    axb.fill_betweenx(mass, d_moist, d_max, color=GRN, alpha=0.45, zorder=0)
+    for dd, (_, col, mk_) in zip((d_run, d_moist, d_max), BNDS):
+        axb.plot(dd, mass, marker=mk_, ls='-', color=col, lw=1.8, ms=6)
+    for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
+        axb.plot(np.sqrt(lk / kopp_seff(tk, bnd)), mk, '--', color=col, lw=1.3)
     axb.set_xscale('log'); axb.set_yscale('log')
     axb.set_xlim(0.02, 2.2)
     axb.set_ylim(0.07, 1.25)
@@ -212,10 +262,14 @@ def plot(d):
     axb.set_title('(b)  HZ distances  (Baraffe et al. 1998, 5 Gyr)',
                   loc='left', fontsize=10)
     axb.grid(alpha=0.25, lw=0.5, which='both')
-    axb.text(d_in[-1], mass[-1] * 1.04, 'inner', color=RED, fontsize=8.5,
-             ha='center', va='bottom')
-    axb.text(d_out[-1], mass[-1] * 1.04, 'outer', color=BLUE, fontsize=8.5,
-             ha='center', va='bottom')
+
+    # Combined legend: colour = boundary, line style = source.
+    handles = [Line2D([0], [0], color=RUN,   lw=2, label='Runaway greenhouse'),
+               Line2D([0], [0], color=MOIST, lw=2, label='Moist greenhouse'),
+               Line2D([0], [0], color=MAX,   lw=2, label='Maximum greenhouse'),
+               Line2D([0], [0], color='0.35', lw=2, ls='-',  label='ExoColumn'),
+               Line2D([0], [0], color='0.35', lw=2, ls='--', label='Kopparapu et al. 2013')]
+    axa.legend(handles=handles, fontsize=7.5, loc='lower left', framealpha=0.92)
 
     fig.suptitle('ExoColumn habitable zone vs host star — '
                  'Kopparapu (2013) Fig. 7 analogue (cool-half set)', fontsize=10)
@@ -223,10 +277,14 @@ def plot(d):
     fig.savefig(FIG_PNG, dpi=300)
     fig.savefig(FIG_PDF)
     print(f"\nWrote: {FIG_PNG}\n       {FIG_PDF}")
-    print("\nBaraffe 5 Gyr mapping + Eq.(3) distances:")
-    for t, m, l, di, do in zip(teff, mass, lum, d_in, d_out):
-        print(f"  Teff={t:5.0f} K  M={m:.3f} Msun  L/Lsun={l:.4g}  "
-              f"d_inner={di:.3f} AU  d_outer={do:.3f} AU")
+    print("\n  Teff   M[Msun] L/Lsun  | S_eff run/moist/max  | d[AU] run/moist/max"
+          "   (Kopp run/moist/max)")
+    for k, t in enumerate(teff):
+        kr, km, kx = (kopp_seff(t, b) for b in ('runaway', 'moist', 'maxgh'))
+        print(f"  {t:5.0f}  {mass[k]:.3f}  {lum[k]:.4g} | "
+              f"{s_run[k]:.3f}/{s_moist[k]:.3f}/{s_max[k]:.3f} | "
+              f"{d_run[k]:.3f}/{d_moist[k]:.3f}/{d_max[k]:.3f}"
+              f"   ({kr:.3f}/{km:.3f}/{kx:.3f})")
 
 
 def main():
