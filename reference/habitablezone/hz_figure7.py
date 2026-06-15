@@ -229,7 +229,7 @@ def plot(d):
 
     RUN, MOIST, MAX, GRN = '#ff7f0e', '#d62728', '#1f6feb', '#b8e6b8'
     BNDS = [('runaway', RUN, '^'), ('moist', MOIST, 'o'), ('maxgh', MAX, 's')]
-    fig, (axa, axb) = plt.subplots(1, 2, figsize=(11.0, 5.0))
+    fig, (axa, axb) = plt.subplots(2, 1, figsize=(7.5, 8.5))
     fig.patch.set_facecolor('white')
 
     # ---- Panel (a): HZ fluxes — S_eff vs Teff --------------------------------
@@ -261,6 +261,13 @@ def plot(d):
         axb.plot(dd, mass, marker=mk_, ls='-', color=col, lw=1.8, ms=6)
     for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
         axb.plot(np.sqrt(lk / kopp_seff(tk, bnd)), mk, '--', color=col, lw=1.3)
+    # Solar-system planets: the Sun's mass (1 Msun) at their orbital distances.
+    for _pn, _pd in [('Mercury', 0.387), ('Venus', 0.723),
+                     ('Earth', 1.000), ('Mars', 1.524)]:
+        axb.plot(_pd, 1.0, 'o', color='black', ms=5,
+                 markeredgecolor='white', markeredgewidth=0.6, zorder=8)
+        axb.annotate(_pn, xy=(_pd, 1.0), xytext=(0, 7), textcoords='offset points',
+                     ha='center', va='bottom', fontsize=7, color='black', zorder=8)
     axb.set_xscale('log'); axb.set_yscale('log')
     axb.set_xlim(0.02, 2.2)
     axb.set_ylim(0.07, 1.25)
