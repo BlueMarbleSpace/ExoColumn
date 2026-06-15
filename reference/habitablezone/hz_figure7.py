@@ -55,10 +55,13 @@ MOIST_GH_VMR = 3.0e-3   # Kopparapu Sec 3.1 moist-greenhouse stratospheric H2O V
 # Same star set / order as hz_figure6 (index-aligned with its cache).
 STARS = [
     ('M 2600 K', 'bt-settl_2600_logg4.5_FeH0_n68.nc', 2600, '#d62728'),
-    ('M 3700 K', 'bt-settl_3700_logg4.5_FeH0_n68.nc', 3700, '#e377c2'),
-    ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#ff7f0e'),
-    ('G 5780 K (Sun)', '',                            5780, '#2ca02c'),
-]
+    ('M 3000 K', 'bt-settl_3000_logg4.5_FeH0_n68.nc', 3000, '#ff7f0e'),
+    ('M 3300 K', 'bt-settl_3300_logg4.5_FeH0_n68.nc', 3300, '#e6b800'),
+    ('M 3700 K', 'bt-settl_3700_logg4.5_FeH0_n68.nc', 3700, '#2ca02c'),
+    ('K 4000 K', 'bt-settl_4000_logg4.5_FeH0_n68.nc', 4000, '#17becf'),
+    ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#1f77b4'),
+    ('G 5780 K (Sun)', '',                            5780, '#9467bd'),
+]  # must stay index-aligned with hz_figure6.py STARS (Fig-7 reads its cache)
 
 # --- Baraffe et al. (1998) solar-metallicity 5 Gyr isochrone --------------
 # Per Kopparapu (2013, p.12) the HZ distances use the Baraffe+1998
