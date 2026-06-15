@@ -245,13 +245,13 @@ def plot(d):
     axa.text(0.62, 3550, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
              ha='center', va='center', weight='bold')
     # Boundary identity labelled directly on the plot (colour-matched leaders).
-    axa.annotate('Runaway greenhouse', xy=(1.06, 5300), xytext=(1.21, 5700),
+    axa.annotate('Runaway greenhouse', xy=(1.08, 5550), xytext=(1.21, 5900),
                  color=RUN, ha='left', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=RUN, lw=0.7))
     axa.annotate('Moist greenhouse', xy=(0.97, 4250), xytext=(1.21, 4750),
                  color=MOIST, ha='left', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=MOIST, lw=0.7))
-    axa.annotate('Maximum greenhouse', xy=(0.37, 5250), xytext=(0.52, 5750),
+    axa.annotate('Maximum greenhouse', xy=(0.39, 5550), xytext=(0.52, 5900),
                  color=MAX, ha='right', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=MAX, lw=0.7))
 
