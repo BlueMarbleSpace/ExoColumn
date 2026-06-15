@@ -122,6 +122,7 @@ NML_TEMPLATE = """\
   cp_co2_tdep    = .true.
   o3_profile     = 'none'
   msdist         = 1.0
+  solar_file     = '{solar_file}'
   sw_zenith_quad = .true.
   sw_nquad       = 6
 /
@@ -150,14 +151,17 @@ NML_TEMPLATE = """\
 
 # ---------------------------------------------------------------------------
 
-def run_one(pco2_bar):
+def run_one(pco2_bar, solar_file=''):
     """Run ExoColumn flux_only at CO2 partial pressure pco2_bar [bar].
+    solar_file selects the host-star n68 SED ('' => compile-time G2V_SUN_n68.nc,
+    the Sun); used by the multi-stellar Figure-6 sweep (hz_figure6.py).
     Returns dict of scalar fluxes + the T(p) profile, or None on failure."""
     p_dry   = P_N2 + pco2_bar * 1.0e5           # dry surface pressure [Pa]
     co2_vmr = pco2_bar * 1.0e5 / p_dry          # dry-air mole fractions
     n2_vmr  = P_N2 / p_dry
     nml = NML_TEMPLATE.format(ts=TS, t_strato=T_STRATO, albedo=ALBEDO,
-                              p_dry=p_dry, co2_vmr=co2_vmr, n2_vmr=n2_vmr)
+                              p_dry=p_dry, co2_vmr=co2_vmr, n2_vmr=n2_vmr,
+                              solar_file=solar_file)
     orig = None
     if os.path.exists(NML_PATH):
         with open(NML_PATH) as f:
