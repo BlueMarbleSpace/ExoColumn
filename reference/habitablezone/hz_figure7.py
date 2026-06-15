@@ -60,7 +60,9 @@ STARS = [
     ('M 3700 K', 'bt-settl_3700_logg4.5_FeH0_n68.nc', 3700, '#2ca02c'),
     ('K 4000 K', 'bt-settl_4000_logg4.5_FeH0_n68.nc', 4000, '#17becf'),
     ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#1f77b4'),
+    ('K 4800 K', 'bt-settl_4800_logg4.5_FeH0_n68.nc', 4800, '#3b4cc0'),
     ('G 5780 K (Sun)', '',                            5780, '#9467bd'),
+    ('F 7200 K', 'bt-settl_7200_logg4.5_FeH0_n68.nc', 7200, '#7a0177'),
 ]  # must stay index-aligned with hz_figure6.py STARS (Fig-7 reads its cache)
 
 # --- Baraffe et al. (1998) solar-metallicity 5 Gyr isochrone --------------
@@ -94,8 +96,23 @@ _BAR_L19 = np.array([
 ])
 
 
-def baraffe_mass_lum(teff):
-    """(mass[Msun], L/Lsun) on the Baraffe+1998 5 Gyr [M/H]=0 isochrone."""
+# The Baraffe+1998 5 Gyr isochrone tops out at 1.0 Msun / ~5814 K.  Hotter stars
+# (the F 7200 K ~ 1.6 Msun) have left the main sequence by 5 Gyr, so the 5 Gyr
+# isochrone has no point for them; for those we fall back to PRESENT-DAY
+# main-sequence values (Pecaut & Mamajek 2013), (Teff[K], mass[Msun], logL).
+# This mixes a present-day MS point into an otherwise-5 Gyr panel for the warm
+# end — noted in the caption.  F0V = 7220 K.
+BARAFFE_TEFF_MAX = 5814.0
+_PM_HOT = np.array([[7220.0, 1.61, 0.86]])   # F0V (Pecaut & Mamajek 2013)
+
+
+def star_mass_lum(teff):
+    """(mass[Msun], L/Lsun) for the host star: Baraffe+1998 5 Gyr isochrone up to
+    5814 K, present-day MS (Pecaut & Mamajek 2013) above it."""
+    if teff > BARAFFE_TEFF_MAX:
+        m = float(np.interp(teff, _PM_HOT[:, 0], _PM_HOT[:, 1]))
+        ll = float(np.interp(teff, _PM_HOT[:, 0], _PM_HOT[:, 2]))
+        return m, 10.0 ** ll
     tab = _BAR_L19 if teff >= BARAFFE_TEFF_SPLIT else _BAR_L10
     mass = float(np.interp(teff, tab[:, 0], tab[:, 1]))
     mbol = float(np.interp(teff, tab[:, 0], tab[:, 2]))
@@ -218,14 +235,13 @@ def plot(d):
                           for i in range(len(STARS))])[order]
 
     # Baraffe+1998 5 Gyr mass & luminosity -> HZ distances via Kopparapu Eq. (3).
-    mass = np.array([baraffe_mass_lum(t)[0] for t in teff])
-    lum  = np.array([baraffe_mass_lum(t)[1] for t in teff])
+    mass = np.array([star_mass_lum(t)[0] for t in teff])
+    lum  = np.array([star_mass_lum(t)[1] for t in teff])
     d_run, d_moist, d_max = (np.sqrt(lum / s) for s in (s_run, s_moist, s_max))
 
-    # Smooth Teff grid for the dashed Kopparapu (2013) Eq.(2)+Table-3 overlays.
+    # Smooth Teff grid for the dashed Kopparapu (2013) Eq.(2)+Table-3 overlay in
+    # panel (a); panel (b) uses per-star points (avoids the G->F stellar gap).
     tk = np.linspace(teff.min(), teff.max(), 120)
-    mk = np.array([baraffe_mass_lum(t)[0] for t in tk])
-    lk = np.array([baraffe_mass_lum(t)[1] for t in tk])
 
     RUN, MOIST, MAX, GRN = '#ff7f0e', '#d62728', '#1f6feb', '#b8e6b8'
     BNDS = [('runaway', RUN, '^'), ('moist', MOIST, 'o'), ('maxgh', MAX, 's')]
@@ -234,64 +250,67 @@ def plot(d):
 
     # ---- Panel (a): HZ fluxes — S_eff vs Teff --------------------------------
     axa.fill_betweenx(teff, s_max, s_moist, color=GRN, alpha=0.45, zorder=0)
-    for s, (_, col, mk_) in zip((s_run, s_moist, s_max), BNDS):
-        axa.plot(s, teff, marker=mk_, ls='-', color=col, lw=1.8, ms=6)
+    for s, (_, col, _m) in zip((s_run, s_moist, s_max), BNDS):
+        axa.plot(s, teff, ls='-', color=col, lw=1.8)
     for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
         axa.plot(kopp_seff(tk, bnd), tk, '--', color=col, lw=1.3)
-    axa.set_xlim(1.25, 0.15)            # reversed: high flux (inner) on the left
-    axa.set_ylim(2300, 6100)
+    axa.set_xlim(1.40, 0.15)            # reversed: high flux (inner) on the left
+    axa.set_ylim(2300, 7500)
     axa.set_xlabel(r'Effective flux incident on the planet  $S/S_0$')
     axa.set_ylabel(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
-    axa.text(0.62, 3550, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
+    axa.text(0.60, 4700, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
              ha='center', va='center', weight='bold')
-    # Boundary identity labelled directly on the plot (colour-matched leaders).
-    axa.annotate('Runaway greenhouse', xy=(1.08, 5550), xytext=(1.21, 5900),
+    # Boundary identity labelled directly on the plot (colour-matched leaders);
+    # runaway/maximum above the F-star (7200 K) curve tops, moist below the curves.
+    axa.annotate('Runaway greenhouse', xy=(1.24, 6800), xytext=(1.36, 7300),
                  color=RUN, ha='left', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=RUN, lw=0.7))
     axa.annotate('Moist greenhouse', xy=(0.90, 2740), xytext=(1.03, 2470),
                  color=MOIST, ha='center', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=MOIST, lw=0.7))
-    axa.annotate('Maximum greenhouse', xy=(0.39, 5550), xytext=(0.52, 5900),
+    axa.annotate('Maximum greenhouse', xy=(0.47, 6800), xytext=(0.60, 7300),
                  color=MAX, ha='right', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=MAX, lw=0.7))
 
     # ---- Panel (b): HZ distances — distance vs stellar mass ------------------
-    axb.fill_betweenx(mass, d_moist, d_max, color=GRN, alpha=0.45, zorder=0)
-    for dd, (_, col, mk_) in zip((d_run, d_moist, d_max), BNDS):
-        axb.plot(dd, mass, marker=mk_, ls='-', color=col, lw=1.8, ms=6)
-    for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
-        axb.plot(np.sqrt(lk / kopp_seff(tk, bnd)), mk, '--', color=col, lw=1.3)
+    _fm = np.isfinite(mass)   # drop stars with no Baraffe 5 Gyr point (F 7200 K)
+    axb.fill_betweenx(mass[_fm], d_moist[_fm], d_max[_fm],
+                      color=GRN, alpha=0.45, zorder=0)
+    for dd, (_, col, _m) in zip((d_run, d_moist, d_max), BNDS):
+        axb.plot(dd[_fm], mass[_fm], ls='-', color=col, lw=1.8)
+    for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed, per-star)
+        axb.plot(np.sqrt(lum[_fm] / kopp_seff(teff[_fm], bnd)), mass[_fm],
+                 '--', color=col, lw=1.3)
     # Reference planetary systems: filled circles sized ~proportional to planet
     # radius (diameter = MS_E * R/R_Earth), at the host-star mass and each
     # planet's orbital distance.
-    MS_E = 9.0    # marker diameter [pt] for a 1 R_Earth planet
+    MS_E = 9.0          # marker diameter [pt] for a 1 R_Earth planet
+    PLANET_C = '0.3'    # dark grey for all planet markers + labels
     # Solar system (Sun, 1 Msun): (name, a[AU], R[R_Earth])
     for _n, _a, _r in [('Mercury', 0.387, 0.383), ('Venus', 0.723, 0.949),
                        ('Earth', 1.000, 1.000), ('Mars', 1.524, 0.532)]:
-        axb.plot(_a, 1.0, 'o', color='black', ms=MS_E * _r,
-                 markeredgecolor='white', markeredgewidth=0.6, zorder=8)
+        axb.plot(_a, 1.0, 'o', color=PLANET_C, ms=MS_E * _r, zorder=8)
         axb.annotate(_n, xy=(_a, 1.0), xytext=(0, 8), textcoords='offset points',
-                     ha='center', va='bottom', fontsize=7, color='black', zorder=8)
+                     ha='center', va='bottom', fontsize=7, color=PLANET_C, zorder=8)
     # TRAPPIST-1 (M = 0.0898 Msun, Teff 2566 K; Agol et al. 2021): planets b..h.
     # Its mass matches our M2600 case, so e/f/g fall in the computed HZ strip.
-    T1M, T1C = 0.0898, '#6a3d9a'
+    T1M = 0.0898
     for _n, _a, _r in [('b', 0.01154, 1.116), ('c', 0.01580, 1.097),
                        ('d', 0.02227, 0.788), ('e', 0.02925, 0.920),
                        ('f', 0.03853, 1.045), ('g', 0.04688, 1.129),
                        ('h', 0.06193, 0.755)]:
-        axb.plot(_a, T1M, 'o', color=T1C, ms=MS_E * _r,
-                 markeredgecolor='white', markeredgewidth=0.5, zorder=9)
+        axb.plot(_a, T1M, 'o', color=PLANET_C, ms=MS_E * _r, zorder=9)
         axb.annotate(_n, xy=(_a, T1M), xytext=(0, -9), textcoords='offset points',
-                     ha='center', va='top', fontsize=6, color=T1C, zorder=9)
-    axb.text(0.0145, 0.061, 'TRAPPIST-1', ha='center', va='top',
-             fontsize=7.5, color=T1C, zorder=9)
+                     ha='center', va='top', fontsize=6, color=PLANET_C, zorder=9)
+    axb.text(0.0145, 0.069, 'TRAPPIST-1', ha='center', va='top',
+             fontsize=7.5, color=PLANET_C, zorder=9)
     axb.set_xscale('log'); axb.set_yscale('log')
-    axb.set_xlim(0.009, 2.2)
-    axb.set_ylim(0.055, 1.3)
-    axb.set_yticks([0.1, 0.2, 0.3, 0.5, 0.7, 1.0])
-    axb.set_yticklabels(['0.1', '0.2', '0.3', '0.5', '0.7', '1.0'])
-    axb.set_xticks([0.01, 0.03, 0.1, 0.3, 1.0, 2.0])
-    axb.set_xticklabels(['0.01', '0.03', '0.1', '0.3', '1.0', '2.0'])
+    axb.set_xlim(0.009, 4.5)            # F-star outer edge reaches ~3.9 AU
+    axb.set_ylim(0.055, 1.9)            # F-star mass = 1.61 Msun
+    axb.set_yticks([0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 1.5])
+    axb.set_yticklabels(['0.1', '0.2', '0.3', '0.5', '0.7', '1.0', '1.5'])
+    axb.set_xticks([0.01, 0.03, 0.1, 0.3, 1.0, 3.0])
+    axb.set_xticklabels(['0.01', '0.03', '0.1', '0.3', '1.0', '3.0'])
     axb.set_xlabel('Distance [AU]')
     axb.set_ylabel(r'Stellar mass  [$M_\odot$]')
     # HZ distances use the Baraffe et al. (1998) 5 Gyr isochrone (see caption/README).

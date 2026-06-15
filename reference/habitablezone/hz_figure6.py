@@ -81,9 +81,12 @@ STARS = [
     ('M 3700 K', 'bt-settl_3700_logg4.5_FeH0_n68.nc', 3700, '#2ca02c'),
     ('K 4000 K', 'bt-settl_4000_logg4.5_FeH0_n68.nc', 4000, '#17becf'),
     ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#1f77b4'),
+    ('K 4800 K', 'bt-settl_4800_logg4.5_FeH0_n68.nc', 4800, '#3b4cc0'),
     ('G 5780 K (Sun)', '',                            5780, '#9467bd'),
+    ('F 7200 K', 'bt-settl_7200_logg4.5_FeH0_n68.nc', 7200, '#7a0177'),
 ]
-# 3000 K ~ Proxima Cen; 3300 K ~ mid-M (AD Leo/GJ 1214); 4000 K ~ K7/M0.
+# Kopparapu's 5 types now covered (F7200/G-Sun/K4800/M3700~3800/M2600) plus
+# infill. 3000 K ~ Proxima Cen; 3300 K ~ mid-M (AD Leo/GJ 1214); 4000 K ~ K7/M0.
 # (Curves are recoloured by Teff in plot(); the hex above is a fallback.)
 
 # Inner-edge surface-temperature grid (Kopparapu Fig 6 a/b span 200-2200 K).
@@ -239,7 +242,7 @@ def plot(data):
         y0 -= 0.032
 
     fig.suptitle('ExoColumn habitable-zone limits vs host star  '
-                 '(Kopparapu et al. 2013, Fig. 6 analogue; cool-half set)',
+                 '(Kopparapu et al. 2013, Fig. 6 analogue; F-G-K-M set)',
                  fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.97))
     fig.savefig(FIG_PNG, dpi=300)
