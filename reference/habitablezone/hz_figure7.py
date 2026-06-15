@@ -239,7 +239,7 @@ def plot(d):
     for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
         axa.plot(kopp_seff(tk, bnd), tk, '--', color=col, lw=1.3)
     axa.set_xlim(1.25, 0.15)            # reversed: high flux (inner) on the left
-    axa.set_ylim(2400, 6100)
+    axa.set_ylim(2300, 6100)
     axa.set_xlabel(r'Effective flux incident on the planet  $S/S_0$')
     axa.set_ylabel(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
     axa.text(0.62, 3550, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
@@ -248,8 +248,8 @@ def plot(d):
     axa.annotate('Runaway greenhouse', xy=(1.08, 5550), xytext=(1.21, 5900),
                  color=RUN, ha='left', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=RUN, lw=0.7))
-    axa.annotate('Moist greenhouse', xy=(0.97, 4250), xytext=(1.21, 4750),
-                 color=MOIST, ha='left', va='center', fontsize=8.5,
+    axa.annotate('Moist greenhouse', xy=(0.90, 2740), xytext=(1.03, 2470),
+                 color=MOIST, ha='center', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=MOIST, lw=0.7))
     axa.annotate('Maximum greenhouse', xy=(0.39, 5550), xytext=(0.52, 5900),
                  color=MAX, ha='right', va='center', fontsize=8.5,
@@ -272,10 +272,11 @@ def plot(d):
     axb.set_ylabel(r'Stellar mass  [$M_\odot$]')
     # HZ distances use the Baraffe et al. (1998) 5 Gyr isochrone (see caption/README).
 
-    # Legend distinguishes source only (boundary identity is labelled on-curve).
+    # Legend distinguishes source only (boundary identity is labelled on-curve);
+    # placed on panel (b) upper-left, which is empty (high mass + small distance).
     handles = [Line2D([0], [0], color='0.35', lw=2, ls='-',  label='ExoColumn'),
                Line2D([0], [0], color='0.35', lw=2, ls='--', label='Kopparapu et al. 2013')]
-    axa.legend(handles=handles, fontsize=8, loc='lower left', framealpha=0.92)
+    axb.legend(handles=handles, fontsize=8, loc='upper left', framealpha=0.92)
 
     fig.tight_layout()
     fig.savefig(FIG_PNG, dpi=300)
