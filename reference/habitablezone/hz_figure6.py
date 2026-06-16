@@ -83,9 +83,12 @@ STARS = [
     ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#1f77b4'),
     ('K 4800 K', 'bt-settl_4800_logg4.5_FeH0_n68.nc', 4800, '#3b4cc0'),
     ('G 5780 K (Sun)', '',                            5780, '#9467bd'),
-    ('F 7200 K', 'bt-settl_7200_logg4.5_FeH0_n68.nc', 7200, '#7a0177'),
 ]
-# Kopparapu's 5 types now covered (F7200/G-Sun/K4800/M3700~3800/M2600) plus
+# These are the n68-core stars (run by this script's sweep).  The F 7200 K star
+# is added SEPARATELY at n84 by hz_add_n84_stars.py (the n84 SED resolves its
+# shortwave better — n68 underestimates albedo/Seff ~2%).  Hotter A/B stars were
+# tried and dropped (unphysical albedo>1; see hz_add_n84_stars.py).
+# Kopparapu's 5 types are covered (F7200/G-Sun/K4800/M3700~3800/M2600) plus
 # infill. 3000 K ~ Proxima Cen; 3300 K ~ mid-M (AD Leo/GJ 1214); 4000 K ~ K7/M0.
 # (Curves are recoloured by Teff in plot(); the hex above is a fallback.)
 
