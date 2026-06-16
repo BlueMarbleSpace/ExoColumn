@@ -62,8 +62,8 @@ STARS = [
     ('K 4500 K', 'bt-settl_4500_logg4.5_FeH0_n68.nc', 4500, '#1f77b4'),
     ('K 4800 K', 'bt-settl_4800_logg4.5_FeH0_n68.nc', 4800, '#3b4cc0'),
     ('G 5780 K (Sun)', '',                            5780, '#9467bd'),
-    ('F 7200 K', 'bt-settl_7200_logg4.5_FeH0_n68.nc', 7200, '#7a0177'),
-]  # must stay index-aligned with hz_figure6.py STARS (Fig-7 reads its cache)
+]  # n68-core stars (index-aligned with hz_figure6.py); the F 7200 K star is
+   # added at n84 by hz_add_n84_stars.py (A/B hotter stars dropped, alpha>1).
 
 # --- Baraffe et al. (1998) solar-metallicity 5 Gyr isochrone --------------
 # Per Kopparapu (2013, p.12) the HZ distances use the Baraffe+1998
@@ -103,7 +103,16 @@ _BAR_L19 = np.array([
 # This mixes a present-day MS point into an otherwise-5 Gyr panel for the warm
 # end — noted in the caption.  F0V = 7220 K.
 BARAFFE_TEFF_MAX = 5814.0
-_PM_HOT = np.array([[7220.0, 1.61, 0.86]])   # F0V (Pecaut & Mamajek 2013)
+# Present-day MS sequence (Pecaut & Mamajek 2013) for the hot stars beyond the
+# Baraffe 5 Gyr range: (Teff[K], mass[Msun], logL).  F0V .. B2V.
+_PM_HOT = np.array([
+    [7220.0,  1.61, 0.86],    # F0V  (7200 K case)
+    [9700.0,  2.18, 1.58],    # A0V
+    [10400.0, 2.68, 1.80],    # B9.5V  (brackets the 10000 K case)
+    [17000.0, 5.40, 2.99],    # B3V
+    [18500.0, 6.10, 3.20],    # B2.5V
+    [20600.0, 7.30, 3.43],    # B2V   (brackets the 20000 K case)
+])
 
 
 def star_mass_lum(teff):
@@ -144,6 +153,27 @@ def kopp_seff(teff, boundary):
 # point instead lands on the declining plateau and inverts the ordering vs the
 # moist-greenhouse edge under the co2_vmr_total convention.)
 RUNAWAY_TS_LO, RUNAWAY_TS_HI = 280.0, 700.0
+
+# Main-sequence spectral-type boundaries, in Teff [K] (panel a) and mass [Msun]
+# (panel b), with the type letter for each band (M..A within the plotted range).
+SPT_TEFF_BOUNDS  = [3900., 5300., 6000., 7300.]
+SPT_TEFF_CENTERS = [3100., 4600., 5650., 6650., 7400.]
+SPT_MASS_BOUNDS  = [0.60, 0.88, 1.04, 1.70]   # F|A at 1.70 so F0V (1.61 Msun) reads F
+SPT_MASS_CENTERS = [0.182, 0.727, 0.957, 1.330, 1.797]
+SPT_LABELS = ['M', 'K', 'G', 'F', 'A']
+
+
+def add_spectral_axis(ax, bounds, centers, labels):
+    """Right-hand secondary y-axis: main-sequence spectral-type bands.  The type
+    letter sits at each band centre; short ticks mark the type boundaries."""
+    axr = ax.secondary_yaxis('right')
+    axr.set_yticks(centers)
+    axr.set_yticklabels(labels)
+    axr.set_yticks(bounds, minor=True)
+    axr.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())  # no numbers
+    axr.tick_params(axis='y', which='major', length=0)   # letters only, no mark
+    axr.tick_params(axis='y', which='minor', length=5)    # boundary ticks
+    axr.set_ylabel('Spectral type')
 
 
 # Focused inner-edge Ts grid bracketing the moist-GH crossing (~350 K).
@@ -271,6 +301,7 @@ def plot(d):
     axa.annotate('Maximum greenhouse', xy=(0.47, 6800), xytext=(0.60, 7300),
                  color=MAX, ha='right', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=MAX, lw=0.7))
+    add_spectral_axis(axa, SPT_TEFF_BOUNDS, SPT_TEFF_CENTERS, SPT_LABELS)
 
     # ---- Panel (b): HZ distances — distance vs stellar mass ------------------
     _fm = np.isfinite(mass)   # drop stars with no Baraffe 5 Gyr point (F 7200 K)
@@ -311,6 +342,7 @@ def plot(d):
     axb.set_yticklabels(['0.1', '0.2', '0.3', '0.5', '0.7', '1.0', '1.5'])
     axb.set_xticks([0.01, 0.03, 0.1, 0.3, 1.0, 3.0])
     axb.set_xticklabels(['0.01', '0.03', '0.1', '0.3', '1.0', '3.0'])
+    add_spectral_axis(axb, SPT_MASS_BOUNDS, SPT_MASS_CENTERS, SPT_LABELS)
     axb.set_xlabel('Distance [AU]')
     axb.set_ylabel(r'Stellar mass  [$M_\odot$]')
     # HZ distances use the Baraffe et al. (1998) 5 Gyr isochrone (see caption/README).
