@@ -614,6 +614,12 @@ contains
     o2mmr(:)   = mmr_dry(7)
 
     ! ---- 6. Hydrostatic heights ----
+    ! h2ommr is the moist specific humidity q; the factor (1+q/eps)/(1+q) is the
+    ! virtual-temperature scale-height correction.  It agrees with the surface
+    ! flux module's (1+0.608 q) form to O(q^2) (identical in the dilute Earth
+    ! limit) and is used identically here and in exocol_rce_loop::update_zint, so
+    ! the cold-start and time-stepped heights are consistent.  zint feeds only dz
+    ! (convective lapse-rate criteria, CAPE); the radiation works in pressure.
     zint(pverp) = 0._r8
     do k = pver, 1, -1
       zint(k) = zint(k+1) + (Rd / exo_g) * &

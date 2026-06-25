@@ -44,7 +44,7 @@ module exocol_config
 !                                            otherwise read the file (legacy path).
 !   ts               REAL       288.0        initial surface temperature [K]
 !   t_strato         REAL       200.0        stratospheric (isothermal) temp [K]
-!   p_top            REAL       1.0          TOA pressure [Pa]
+!   p_top            REAL       100.0        TOA pressure [Pa]
 !   rh_init          REAL       0.7          tropospheric relative humidity used
 !                                            to seed h2ommr (h2ommr = rh·qsat)
 !   coszrs           REAL       0.5          cosine of solar zenith angle
@@ -559,6 +559,7 @@ contains
     select case (trim(adjustl(o3_profile)))
     case ('uniform'); write(*,'(a)') '  Ozone profile     : uniform (from o3_vmr)'
     case ('earth');   write(*,'(a)') '  Ozone profile     : Earth mid-latitude climatology'
+    case ('rcemip');  write(*,'(a)') '  Ozone profile     : RCEMIP analytic (Wing 2018 / konrad)'
     case ('none');    write(*,'(a)') '  Ozone profile     : none (zero ozone)'
     end select
     write(*,'(a,f6.3,a)') '  Star distance     : msdist = ', msdist, ' AU'
