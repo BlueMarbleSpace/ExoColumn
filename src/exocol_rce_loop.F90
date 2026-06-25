@@ -531,7 +531,7 @@ contains
         ! ZM soft scheme: one relaxed pass, condensation, then one hard cleanup.
         ! f_zm = 1 - exp(-dt/τ_conv): fraction of instability removed this step.
         ! At dt >> τ_conv (cold start) f_zm → 1 (hard); near equilibrium where
-        ! dt_sub ≈ 0.06 d and τ_conv = 7200 s = 0.083 d, f_zm ≈ 0.51.
+        ! dt_sub ≈ 0.06 d and τ_conv = 3600 s = 0.042 d (ExoColumn default), f_zm ≈ 0.76.
         f_zm = 1.0_r8 - exp(-dt_sub_days / (tau_conv / SHR_CONST_CSEC))
         call convadj_zm(tmid, tint, h2ommr, zint, pint, pdel, &
                         cpdry_col, exo_g, ts, f_zm, cape_trigger, pver)
@@ -1134,6 +1134,10 @@ contains
 
   subroutine update_zint()
   ! ifx host-association workaround: explicit USE inside the contained subroutine.
+  ! h2ommr is the moist specific humidity q; the (1+q/eps)/(1+q) factor is the
+  ! virtual-temperature scale-height correction (matches exocol_coldstart's
+  ! heights and agrees with exocol_surface's (1+0.608 q) form to O(q^2)).  zint
+  ! feeds only dz (convective lapse-rate criteria, CAPE); radiation is in pressure.
     use exocol_mod, only: zint, tmid, pint, h2ommr, mwdry_col
     integer  :: k
     real(r8) :: R_gas, eps_wv
