@@ -85,7 +85,7 @@ troposphere). From the project root:
 
 ```bash
 source /opt/intel/oneapi/setvars.sh
-cd /hugespace/models/ExoColumn/build && make clean && make PVER=200
+cd /path/to/ExoColumn/build && make clean && make PVER=200
 ```
 
 ### Full re-sweep (~14 min, regenerates the cache + figure)
