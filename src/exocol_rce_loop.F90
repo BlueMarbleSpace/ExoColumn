@@ -112,17 +112,11 @@ module exocol_rce_loop
   ! (An earlier attempt keyed dt_outer on the NET tendency; that runs away —
   ! convection cancels radiation so net ΔT stays small while the column is still
   ! radiatively stiff, and the slab derails to a spurious cold attractor.)
-  ! See docs/resolution_independence.md.  With f_excl_mass = 0 (default) no layer
+  ! With f_excl_mass = 0 (default) no layer
   ! is excluded, so dt_outer = the bulk radiative CFL and N_sub = 1 — i.e. the
   ! reference single-explicit-step scheme; the scaffolding is dormant.
   real(r8), parameter :: f_excl_mass = 0.0_r8       ! column-mass fraction of stiffest layers excluded from dt_outer
   integer,  parameter :: nsub_max    = 2000         ! cap on radiation sub-steps
-
-  ! Throwaway diagnostic: when .true., the loop dumps the stiff-layer profile
-  ! and probes the radiative Jacobian (∂HR/∂T) once the stiff layer forms,
-  ! then stops.  Used to design the implicit-radiation solver.  Set .false.
-  ! for production.
-  logical, parameter :: diag_jacobian = .false.
 
   ! Cold-trap toggle (default on).  apply_stratospheric_coldtrap is now
   ! water-conservative (it sources its stratospheric water from the troposphere
@@ -347,14 +341,6 @@ contains
       toa_signed = SWDN(1) - SWUP(1) + LWDN(1) - LWUP(1)
       toa_flux   = abs(toa_signed)
       F_net_srf_rad = (SWDN(pverp) - SWUP(pverp)) + (LWDN(pverp) - LWUP(pverp))
-
-      ! ---- DIAGNOSTIC (throwaway): radiative stiffness + Jacobian probe ----
-      ! Fires once the stiff cold-point layer is well-formed, dumps the profile
-      ! and probes J=∂HR/∂T, then stops.  Remove after the resolution study.
-      if (diag_jacobian .and. it >= 100 .and. max_hr > 8.0_r8) then
-        call diagnose_radiative_stiffness(LWHR, SWHR, it)
-        stop 'diagnostic complete'
-      end if
 
       ! ---- 2. Outer (radiation) timestep — keyed to the BULK radiative CFL ----
       ! Size dt_outer so the per-step ΔT of the climatically-relevant (mass-
@@ -990,102 +976,6 @@ contains
       end do
     end if
   end subroutine apply_stratospheric_coldtrap
-
-  ! -----------------------------------------------------------------------
-  ! THROWAWAY DIAGNOSTIC: radiative stiffness + Jacobian structure probe
-  ! -----------------------------------------------------------------------
-
-  subroutine diagnose_radiative_stiffness(LWHR0, SWHR0, it_now)
-  ! Dump the current column profile and probe the radiative Jacobian
-  ! J(i,j) = ∂HR_i/∂T_j by +1 K finite difference at representative layers.
-  ! Writes iofiles/diag_profile.txt and iofiles/diag_jacobian.txt and prints a
-  ! console summary.  Purpose: measure where the stiff layer is and how far a
-  ! single-layer T perturbation's HR response spreads (the band half-width),
-  ! to decide whether a banded backward-Euler radiation solve is feasible/cheap.
-    use exocol_mod, only: tmid, pmid, h2ommr, pdel
-    use ppgrid,     only: pver, pverp
-    real(r8), intent(in) :: LWHR0(pver), SWHR0(pver)
-    integer,  intent(in) :: it_now
-
-    real(r8) :: HR0(pver), Jcol(pver)
-    real(r8) :: LWHR_p(pver), SWHR_p(pver)
-    real(r8) :: LWUP(pverp), LWDN(pverp), SWUP(pverp), SWDN(pverp)
-    real(r8) :: tsave, dTp, diagv, offmax, bandfrac
-    integer  :: k, j, ip, kstiff, ku, kl, u, bw
-    integer, parameter :: nprobe = 9
-    integer :: probes(nprobe)
-
-    HR0    = LWHR0 + SWHR0
-    kstiff = maxloc(abs(HR0), dim=1)
-    dTp    = 1.0_r8
-
-    ! --- profile dump ---
-    open(newunit=u, file='iofiles/diag_profile.txt', status='replace')
-    write(u,'(a)') '# k  pmid[Pa]  tmid[K]  h2ommr[kg/kg]  pdel[Pa]  LWHR  SWHR  absHR[K/day]'
-    do k = 1, pver
-      write(u,'(i5,7es15.6)') k, pmid(k), tmid(k), h2ommr(k), pdel(k), &
-                              LWHR0(k), SWHR0(k), abs(HR0(k))
-    end do
-    close(u)
-
-    ! Probe layers: cluster around the stiff layer + a few references.
-    probes = (/ max(1,kstiff-6), max(1,kstiff-2), max(1,kstiff-1), kstiff, &
-                min(pver,kstiff+1), min(pver,kstiff+2), min(pver,kstiff+6), &
-                max(1,kstiff/2), pver-1 /)
-
-    write(*,'(/,a)') '================ JACOBIAN DIAGNOSTIC ================'
-    write(*,'(a,i0,a,i0,a)') '  step=', it_now, '  pver=', pver, ''
-    write(*,'(a,i0,a,es12.4,a,f8.3)') '  stiff layer kstiff=', kstiff, &
-          '  pmid=', pmid(kstiff), ' Pa  HR=', HR0(kstiff)
-    write(*,'(a)') '  probe j   pmid[Pa]    diag J(j,j)[1/day]  band(|J|>5%diag)  max|offdiag|/|diag|'
-
-    open(newunit=u, file='iofiles/diag_jacobian.txt', status='replace')
-    write(u,'(a,i0)') '# kstiff=', kstiff
-    write(u,'(a)') '# columns: i  pmid[i]  then J(i,j) for each probe j'
-    write(u,'(a,9i14)') '# probe j list: ', (probes(ip), ip=1,nprobe)
-
-    block
-      real(r8) :: Jmat(pver, nprobe)
-      do ip = 1, nprobe
-        j        = probes(ip)
-        tsave    = tmid(j)
-        tmid(j)  = tmid(j) + dTp
-        call exocol_rad_tend(LWHR_p, SWHR_p, LWUP, LWDN, SWUP, SWDN)
-        tmid(j)  = tsave
-        Jcol     = ((LWHR_p + SWHR_p) - HR0) / dTp
-        Jmat(:,ip) = Jcol
-
-        ! band half-width: furthest layer from j with |J| > 5% of |diag|
-        diagv    = abs(Jcol(j))
-        bandfrac = 0.05_r8 * max(diagv, 1.0e-30_r8)
-        kl = j;  ku = j
-        do k = 1, pver
-          if (abs(Jcol(k)) > bandfrac) then
-            if (k < kl) kl = k
-            if (k > ku) ku = k
-          end if
-        end do
-        bw = max(j-kl, ku-j)
-        ! max off-diagonal magnitude relative to diagonal
-        offmax = 0._r8
-        do k = 1, pver
-          if (k /= j) offmax = max(offmax, abs(Jcol(k)))
-        end do
-        write(*,'(i9,es13.4,es16.4,i14,f20.4)') j, pmid(j), Jcol(j), bw, &
-              offmax / max(diagv,1.0e-30_r8)
-      end do
-
-      ! raw matrix dump
-      do k = 1, pver
-        write(u,'(i5,es14.5,9es14.5)') k, pmid(k), (Jmat(k,ip), ip=1,nprobe)
-      end do
-    end block
-    close(u)
-
-    write(*,'(a)') '  wrote iofiles/diag_profile.txt, iofiles/diag_jacobian.txt'
-    write(*,'(a,/)') '===================================================='
-    flush(6)
-  end subroutine diagnose_radiative_stiffness
 
   ! -----------------------------------------------------------------------
   ! Legacy fixed-RH closure (only invoked when moisture_scheme='fixed_rh')
