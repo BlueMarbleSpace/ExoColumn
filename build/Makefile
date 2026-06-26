@@ -42,14 +42,24 @@ else
   FC := $(USER_FC)
 endif
 
-# Compiler flags
+# Compiler flags + the .mod output-directory flag (vendor-specific: Intel uses
+# `-module <dir>`, gfortran uses `-J<dir>`; both also add <dir> to the module
+# search path).  BUILD_DIR is expanded lazily, so its later definition is fine.
 ifeq ($(FC),$(IFX))
-  FFLAGS = -O2 -traceback -fpe0
+  FFLAGS  = -O2 -traceback -fpe0
+  MODFLAG = -module $(BUILD_DIR)
 else ifeq ($(FC),gfortran)
-  FFLAGS = -O2 -fbacktrace -ffpe-trap=invalid,zero,overflow -cpp
+  # -fallow-argument-mismatch / -fallow-invalid-boz: tolerate the legacy
+  # CESM-lineage interface looseness in the ExoRT source (scalar/array netcdf
+  # wrappers, BOZ bit patterns in infnan.F90) that modern gfortran rejects but
+  # ifx accepts.  ExoRT is read-only, so these are handled via flags.
+  FFLAGS  = -O2 -fbacktrace -ffpe-trap=invalid,zero,overflow -cpp \
+            -fallow-argument-mismatch -fallow-invalid-boz -fno-range-check
+  MODFLAG = -J$(BUILD_DIR)
 else
   # Fallback: assume ifort-compatible flags
-  FFLAGS = -O2 -traceback -fpe0
+  FFLAGS  = -O2 -traceback -fpe0
+  MODFLAG = -module $(BUILD_DIR)
 endif
 
 # --- ExoRT source directories -------------------------------------------------
@@ -162,11 +172,11 @@ ALL_SRCS = $(EXORT_SRCS) $(EXCOL_SRCS)
 
 # Build target
 # Compile from $(SRC_DIR) so that ExoRT's input.F90 can resolve its relative
-# include 'netcdf.inc' path.  -module redirects generated .mod files back to
+# include 'netcdf.inc' path.  $(MODFLAG) redirects generated .mod files back to
 # build/.  All source paths are absolute so the CWD change is transparent.
 exocol.exe: $(ALL_SRCS)
 	cd $(SRC_DIR) && $(FC) $(FFLAGS) $(INC_NETCDF) -I$(MISC_DIR) \
-	  -module $(BUILD_DIR) -o $(BUILD_DIR)/$@ $(ALL_SRCS) $(LIB_NETCDF)
+	  $(MODFLAG) -o $(BUILD_DIR)/$@ $(ALL_SRCS) $(LIB_NETCDF)
 	@mkdir -p ../run
 	mv -f $(BUILD_DIR)/$@ ../run/
 	@echo "Built ../run/exocol.exe"
