@@ -37,7 +37,7 @@
 # here in ExoColumn so /models/ExoRT remains untouched: the build generates
 # src/exoplanet_mod.F90 from ExoRT's source with this value substituted in,
 # and compiles the local copy instead.
-# Default: 70 (60 log-spaced upper layers + 10 near-surface layers).
+# Default: 70 (pure log-spaced from p_top to ps).
 # Recompile (make clean && make) after changing.
 #
 # PVER = 70

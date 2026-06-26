@@ -20,16 +20,16 @@ source /opt/intel/oneapi/setvars.sh
 # 1. NetCDF-C (required by NetCDF-Fortran)
 wget https://github.com/Unidata/netcdf-c/archive/refs/tags/v4.9.2.tar.gz
 tar xf v4.9.2.tar.gz && cd netcdf-c-4.9.2
-CC=icx ./configure --prefix=/hugespace/local/netcdf-ifx --disable-dap --disable-byterange
+CC=icx ./configure --prefix=/opt/netcdf --disable-dap --disable-byterange
 make -j$(nproc) && make install && cd ..
 
 # 2. NetCDF-Fortran
 wget https://github.com/Unidata/netcdf-fortran/archive/refs/tags/v4.6.1.tar.gz
 tar xf v4.6.1.tar.gz && cd netcdf-fortran-4.6.1
 FC=ifx CC=icx \
-  CPPFLAGS=-I/hugespace/local/netcdf-ifx/include \
-  LDFLAGS=-L/hugespace/local/netcdf-ifx/lib \
-  ./configure --prefix=/hugespace/local/netcdf-ifx
+  CPPFLAGS=-I/opt/netcdf/include \
+  LDFLAGS=-L/opt/netcdf/lib \
+  ./configure --prefix=/opt/netcdf
 make -j$(nproc) && make install
 ```
 
@@ -74,7 +74,7 @@ A `make clean && make PVER=N` is required after changing because every ExoRT sta
 The executable must be invoked from the **project root** so ExoRT can resolve its data file paths:
 
 ```bash
-cd /hugespace/models/ExoColumn
+cd /path/to/ExoColumn
 run/exocol.exe
 ```
 
