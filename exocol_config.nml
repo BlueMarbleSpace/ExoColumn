@@ -44,7 +44,7 @@
   ! sbm, prognostic, o3='rcemip', coszrs=0.5, msdist=1.0, argon in dry-air
   ! composition (mwdry 28.97, cpdry 1004), PVER=70 log-spaced grid.
   ! Local sensitivity ~ -120 K per unit albedo near α=0.27.
-  ! (For o3='earth' the calibrated value is 0.2873 — see exocol_config.nml.earth_a2873.)
+  ! (For o3='earth' the calibrated value is 0.2873 — see presets/exocol_config.nml.earth_a2873.)
   asdir      =   0.2736
   asdif      =   0.2736
   aldir      =   0.2736

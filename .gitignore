@@ -33,5 +33,10 @@ __pycache__/
 src/calc_opd_mod.F90
 src/radgrid.F90
 src/initialize_rad_mod_1D.F90
-tools/absco-ref_wv-mt-ckd.nc
-tools/lbl_sw_benchmark_ts300.npz
+
+# Regenerable tool outputs (diagnostic plots + LBL/data caches).  The tools/*.py
+# scripts that produce these are tracked; the heavy/regenerable outputs are not.
+tools/*.png
+tools/*.pdf
+tools/*.npz
+tools/*.nc
