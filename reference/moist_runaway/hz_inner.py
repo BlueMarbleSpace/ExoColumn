@@ -268,6 +268,7 @@ NML_TEMPLATE = """\
   aldif      = {albedo:.4f}
 /
 &exocol_composition
+  ps       = {ps_pa:.6e}
   n2_vmr   = 0.99967
   o2_vmr   = 0.0
   ar_vmr   = 0.0
@@ -284,7 +285,7 @@ NML_TEMPLATE = """\
 
 # ---------------------------------------------------------------------------
 
-def run_one(ts, continuum='mtckd', trap_off=0.0, solar_file=''):
+def run_one(ts, continuum='mtckd', trap_off=0.0, solar_file='', n2_bar=1.0):
     """
     Run ExoColumn flux_only at surface temperature ts with the chosen H2O
     continuum ('mtckd' | 'bps').  trap_off > 0 samples the cold trap at
@@ -292,12 +293,16 @@ def run_one(ts, continuum='mtckd', trap_off=0.0, solar_file=''):
     only for the panel-(d) profile re-runs — see KOPP_TSTAR_OFFSET).
     solar_file selects the host-star n68 SED ('' => compile-time G2V_SUN_n68.nc,
     the Sun); used by the multi-stellar Figure-6 sweep (hz_figure6.py).
-    Returns dict with scalar diagnostics and profiles, or None on failure.
+    n2_bar is the dry N2 background partial pressure [bar] (default 1.0 =
+    Earth); the planetary-mass sweep (reference/planet_mass) scales it with
+    mass via Kopparapu (2014) Eq. (3).  With variable_ps the surface pressure
+    is ps = n2_bar*1bar + esat(Ts).  Returns a dict of scalar diagnostics and
+    profiles, or None on failure.
     """
     nml = NML_TEMPLATE.format(ts=ts, t_strato=T_STRATO, albedo=ALBEDO,
                               h2o_eos=H2O_EOS, continuum=continuum,
                               cold_trap=COLD_TRAP_PHASE, trap_off=trap_off,
-                              solar_file=solar_file)
+                              solar_file=solar_file, ps_pa=n2_bar * 1.0e5)
     orig = None
     if os.path.exists(NML_PATH):
         with open(NML_PATH) as f:
@@ -344,7 +349,7 @@ def run_one(ts, continuum='mtckd', trap_off=0.0, solar_file=''):
         # (ps − p_dry)/ps.  CLIMA's profiles include z = 0; without this point
         # our plotted curves start at the lowest midpoint (~200 m), which at
         # Ts = 280–300 K reads ~5–10% dry of the surface value.
-        sfc_vmr = (ps - P_DRY) / ps
+        sfc_vmr = (ps - n2_bar * P_DRY) / ps
         if 0.0 < sfc_vmr < 1.0:
             zmid_km = np.concatenate([zmid_km, [0.0]])
             h2o_vmr = np.concatenate([h2o_vmr, [sfc_vmr]])

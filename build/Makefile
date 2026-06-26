@@ -87,6 +87,14 @@ BUILD_DIR   = $(abspath .)
 #
 PVER ?= 70
 
+# Surface gravity [m/s^2].  ExoRT bakes this in as the compile-time parameter
+# exo_g (-> SHR_CONST_G), used by the radiation core's column-amount calc
+# (coldens = pdel/g) and by ExoColumn's cold-start adiabat/hydrostatic heights.
+# Defaults to Earth (9.80616) so the generated file is value-identical and the
+# default build is bit-for-bit unchanged.  Override for non-Earth gravity, e.g.
+# the planetary-mass HZ runs (reference/planet_mass):  make PVER=200 EXO_G=17.93
+EXO_G ?= 9.80616
+
 # Generate sys_rootdir.F90 with the local EXORT_ROOT path, replacing ExoRT's
 # hardcoded machine-specific path.  Runs on every make invocation (fast).
 # The generated file is machine-specific and is not committed to version control.
@@ -94,9 +102,12 @@ $(shell printf 'module sys_rootdir\n  implicit none\n  public\n  character(len=2
   "$(EXORT_ROOT)" > $(EXCOL_DIR)/sys_rootdir.F90)
 
 # Generate src/exoplanet_mod.F90 from ExoRT's source with our chosen exo_pver
-# value.  Matches the (single) uncommented `exo_pver = N` line and rewrites it;
-# commented variants are left alone.  ExoRT's file is preserved.
-$(shell sed -E 's|^([[:space:]]*integer[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_pver[[:space:]]*=[[:space:]]*)[0-9]+.*|\1$(PVER)  ! set by ExoColumn build (PVER=$(PVER))|' \
+# and exo_g values.  Each substitution matches the (single) uncommented
+# `exo_pver = N` / `exo_g = X` line and rewrites it; commented variants are left
+# alone.  ExoRT's file is preserved.
+$(shell sed -E \
+  -e 's|^([[:space:]]*integer[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_pver[[:space:]]*=[[:space:]]*)[0-9]+.*|\1$(PVER)  ! set by ExoColumn build (PVER=$(PVER))|' \
+  -e 's|^([[:space:]]*real\(r8\)[[:space:]]*,[[:space:]]*parameter[[:space:]]*::[[:space:]]*exo_g[[:space:]]*=[[:space:]]*)[0-9.]+.*|\1$(EXO_G)  ! set by ExoColumn build (EXO_G=$(EXO_G))|' \
   $(SRC_DIR)/exoplanet_mod.F90 > $(EXCOL_DIR)/exoplanet_mod.F90)
 
 # Generate local copies of three n68equiv source files via patch_exort.py:
