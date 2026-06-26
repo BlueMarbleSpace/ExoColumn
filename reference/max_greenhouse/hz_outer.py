@@ -151,14 +151,18 @@ NML_TEMPLATE = """\
 
 # ---------------------------------------------------------------------------
 
-def run_one(pco2_bar, solar_file=''):
+def run_one(pco2_bar, solar_file='', n2_bar=1.0):
     """Run ExoColumn flux_only at CO2 partial pressure pco2_bar [bar].
     solar_file selects the host-star n68 SED ('' => compile-time G2V_SUN_n68.nc,
     the Sun); used by the multi-stellar Figure-6 sweep (hz_figure6.py).
-    Returns dict of scalar fluxes + the T(p) profile, or None on failure."""
-    p_dry   = P_N2 + pco2_bar * 1.0e5           # dry surface pressure [Pa]
+    n2_bar is the N2 background partial pressure [bar] (default 1.0 = Earth);
+    the planetary-mass sweep (reference/planet_mass) scales it with mass via
+    Kopparapu (2014) Eq. (3).  Returns dict of scalar fluxes + the T(p)
+    profile, or None on failure."""
+    p_n2    = n2_bar * 1.0e5                     # N2 background pressure [Pa]
+    p_dry   = p_n2 + pco2_bar * 1.0e5           # dry surface pressure [Pa]
     co2_vmr = pco2_bar * 1.0e5 / p_dry          # dry-air mole fractions
-    n2_vmr  = P_N2 / p_dry
+    n2_vmr  = p_n2 / p_dry
     nml = NML_TEMPLATE.format(ts=TS, t_strato=T_STRATO, albedo=ALBEDO,
                               p_dry=p_dry, co2_vmr=co2_vmr, n2_vmr=n2_vmr,
                               solar_file=solar_file)
