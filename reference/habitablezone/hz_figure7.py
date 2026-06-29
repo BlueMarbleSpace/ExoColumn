@@ -54,6 +54,9 @@ MOIST_GH_VMR = 3.0e-3   # Kopparapu Sec 3.1 moist-greenhouse stratospheric H2O V
 
 # Same star set / order as hz_figure6 (index-aligned with its cache).
 STARS = [
+    ('M 2000 K', 'btsettl_T2000_g4.5_m0.0_n68.nc',    2000, '#800026'),
+    ('M 2200 K', 'btsettl_T2200_g4.5_m0.0_n68.nc',    2200, '#a50f15'),
+    ('M 2400 K', 'btsettl_T2400_g4.5_m0.0_n68.nc',    2400, '#cb181d'),
     ('M 2600 K', 'bt-settl_2600_logg4.5_FeH0_n68.nc', 2600, '#d62728'),
     ('M 3000 K', 'bt-settl_3000_logg4.5_FeH0_n68.nc', 3000, '#ff7f0e'),
     ('M 3300 K', 'bt-settl_3300_logg4.5_FeH0_n68.nc', 3300, '#e6b800'),
@@ -271,7 +274,10 @@ def plot(d):
 
     # Smooth Teff grid for the dashed Kopparapu (2013) Eq.(2)+Table-3 overlay in
     # panel (a); panel (b) uses per-star points (avoids the G->F stellar gap).
-    tk = np.linspace(teff.min(), teff.max(), 120)
+    # The Kopparapu parametric fit is stated valid only for 2600-7200 K, so the
+    # dashed overlay is capped at 2600 K even though our curves run down to 2000 K.
+    KOPP_TEFF_FLOOR = 2600.0
+    tk = np.linspace(max(KOPP_TEFF_FLOOR, teff.min()), teff.max(), 120)
 
     RUN, MOIST, MAX, GRN = '#ff7f0e', '#d62728', '#1f6feb', '#b8e6b8'
     BNDS = [('runaway', RUN, '^'), ('moist', MOIST, 'o'), ('maxgh', MAX, 's')]
@@ -285,7 +291,7 @@ def plot(d):
     for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed)
         axa.plot(kopp_seff(tk, bnd), tk, '--', color=col, lw=1.3)
     axa.set_xlim(1.40, 0.15)            # reversed: high flux (inner) on the left
-    axa.set_ylim(2300, 7500)
+    axa.set_ylim(1900, 7500)            # extended to the 2000 K BT-Settl floor
     axa.set_xlabel(r'Effective flux incident on the planet  $S/S_0$')
     axa.set_ylabel(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
     axa.text(0.60, 4700, 'Habitable\nzone', color='#2f7d2f', fontsize=9.5,
@@ -309,8 +315,9 @@ def plot(d):
                       color=GRN, alpha=0.45, zorder=0)
     for dd, (_, col, _m) in zip((d_run, d_moist, d_max), BNDS):
         axb.plot(dd[_fm], mass[_fm], ls='-', color=col, lw=1.8)
+    _km = _fm & (teff >= 2600.0)   # Kopparapu fit valid 2600-7200 K -> capped
     for bnd, col, _ in BNDS:                      # Kopparapu 2013 (dashed, per-star)
-        axb.plot(np.sqrt(lum[_fm] / kopp_seff(teff[_fm], bnd)), mass[_fm],
+        axb.plot(np.sqrt(lum[_km] / kopp_seff(teff[_km], bnd)), mass[_km],
                  '--', color=col, lw=1.3)
     # Reference planetary systems: filled circles sized ~proportional to planet
     # radius (diameter = MS_E * R/R_Earth), at the host-star mass and each

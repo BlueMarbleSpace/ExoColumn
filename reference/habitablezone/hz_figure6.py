@@ -75,6 +75,9 @@ outer = _load('hz_outer', 'reference/max_greenhouse/hz_outer.py')
 # Colours follow Kopparapu's convention: M red -> K orange -> G green.
 # --------------------------------------------------------------------------
 STARS = [
+    ('M 2000 K', 'btsettl_T2000_g4.5_m0.0_n68.nc',    2000, '#800026'),
+    ('M 2200 K', 'btsettl_T2200_g4.5_m0.0_n68.nc',    2200, '#a50f15'),
+    ('M 2400 K', 'btsettl_T2400_g4.5_m0.0_n68.nc',    2400, '#cb181d'),
     ('M 2600 K', 'bt-settl_2600_logg4.5_FeH0_n68.nc', 2600, '#d62728'),
     ('M 3000 K', 'bt-settl_3000_logg4.5_FeH0_n68.nc', 3000, '#ff7f0e'),
     ('M 3300 K', 'bt-settl_3300_logg4.5_FeH0_n68.nc', 3300, '#e6b800'),
