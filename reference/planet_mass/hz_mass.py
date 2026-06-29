@@ -122,6 +122,9 @@ def cache_path(m):
 # Index-/order-aligned with hz_figure6/7's n68 ladder.
 # --------------------------------------------------------------------------
 STARS = [
+    ('M 2000 K',       'btsettl_T2000_g4.5_m0.0_n68.nc',    2000),
+    ('M 2200 K',       'btsettl_T2200_g4.5_m0.0_n68.nc',    2200),
+    ('M 2400 K',       'btsettl_T2400_g4.5_m0.0_n68.nc',    2400),
     ('M 2600 K',       'bt-settl_2600_logg4.5_FeH0_n68.nc', 2600),
     ('M 3000 K',       'bt-settl_3000_logg4.5_FeH0_n68.nc', 3000),
     ('M 3300 K',       'bt-settl_3300_logg4.5_FeH0_n68.nc', 3300),
@@ -140,6 +143,16 @@ STARS = [
 # A/B hotter stars give unphysical albedo>1 and are excluded.
 F_STAR = ('F 7200 K', 'bt-settl_7200_logg4.5_FeH0_n84.nc', 7200)
 N84_SPEC_DIR = '/models/ExoRT/source/src.n84equiv'
+
+# Ultra-cool BT-Settl stars (n68 core/SED) extending the ladder below 2600 K.
+# These are the leading entries of STARS; the `addcool` driver mode runs ONLY
+# these and merges into existing per-mass caches (no full re-sweep), mirroring
+# the F-star `addf` workflow.  The 2600 K point is unchanged (kept in STARS).
+COOL_STARS = [
+    ('M 2000 K', 'btsettl_T2000_g4.5_m0.0_n68.nc', 2000),
+    ('M 2200 K', 'btsettl_T2200_g4.5_m0.0_n68.nc', 2200),
+    ('M 2400 K', 'btsettl_T2400_g4.5_m0.0_n68.nc', 2400),
+]
 
 # Mass curve colours (Kopparapu+2014 convention: 0.1 blue, 1 green, 5 red).
 MASS_COLOR = {0.1: '#1f77b4', 1.0: '#2ca02c', 5.0: '#d62728'}
@@ -254,6 +267,48 @@ def add_f_star(m):
     print(f"  merged F 7200 K into {cache_path(m)}", flush=True)
 
 
+def add_cool_stars(m):
+    """Run the ultra-cool stars (COOL_STARS, n68 core/SED) for mass m on the
+    CURRENTLY BUILT n68 binary (which must be compiled at this mass's gravity)
+    and merge them into the per-mass cache.  Same runaway/max-GH definitions as
+    sweep_one_mass; idempotent (drops any existing entry with the same label)."""
+    inner = _load('hz_inner', 'reference/moist_runaway/hz_inner.py')
+    outer = _load('hz_outer', 'reference/max_greenhouse/hz_outer.py')
+    n2 = n2_bar_of_mass(m)
+    if not os.path.exists(cache_path(m)):
+        raise FileNotFoundError(
+            f"No base cache {cache_path(m)} — run the n68 sweep first.")
+    z = dict(np.load(cache_path(m), allow_pickle=True))
+    te_arr, lab_arr = np.asarray(z['teff']), np.asarray(z['label'])
+    run_arr, max_arr = np.asarray(z['seff_runaway']), np.asarray(z['seff_maxgh'])
+    for label, sf, te in COOL_STARS:
+        print(f"\n=== ADD COOL  M = {m:g} M_E   p_N2 = {n2:.4f} bar  "
+              f"[{sf}] ===", flush=True)
+        si = np.full(len(TS_RUNAWAY), np.nan)
+        for j, ts in enumerate(TS_RUNAWAY):
+            r = inner.run_one(ts, solar_file=sf, n2_bar=n2)
+            if r is not None:
+                si[j] = r['seff']
+        run_pk = float(np.nanmax(si)) if np.any(np.isfinite(si)) else np.nan
+        so = np.full(len(PCO2_VALUES), np.nan)
+        for j, pc in enumerate(PCO2_VALUES):
+            r = outer.run_one(pc, solar_file=sf, n2_bar=n2)
+            if r is not None:
+                so[j] = r['seff']
+        max_gh = float(np.nanmin(so)) if np.any(np.isfinite(so)) else np.nan
+        print(f"  {label:16s} Teff={te:5d} K   runaway Seff={run_pk:.3f}   "
+              f"max-GH Seff={max_gh:.3f}", flush=True)
+        keep = lab_arr != label    # idempotent: drop a prior entry for this star
+        te_arr = np.append(te_arr[keep], te)
+        lab_arr = np.append(lab_arr[keep], label)
+        run_arr = np.append(run_arr[keep], run_pk)
+        max_arr = np.append(max_arr[keep], max_gh)
+    np.savez(cache_path(m), mass=z['mass'], g=z['g'], n2_bar=z['n2_bar'],
+             teff=te_arr, label=lab_arr,
+             seff_runaway=run_arr, seff_maxgh=max_arr)
+    print(f"  merged {len(COOL_STARS)} cool stars into {cache_path(m)}", flush=True)
+
+
 def sweep_one_mass(m):
     """Run the inner (runaway) + outer (max-GH) multi-stellar sweep for mass m
     on the CURRENTLY BUILT binary (which must have been compiled at this mass's
@@ -348,7 +403,9 @@ def plot():
                     ha='center', va='bottom', fontsize=8, color='0.25', zorder=8)
 
     ax.set_xlim(2.0, 0.2)            # reversed: high flux (inner) on the left
-    ax.set_ylim(2600, 7200)
+    ax.set_ylim(2000, 7200)          # extended to the 2000 K BT-Settl floor
+    # NB: the dashed Kopparapu+2014 overlay (tk above) stays capped at 2600 K,
+    # the stated lower validity bound of their parametric fit.
     ax.set_xlabel(r'Effective flux incident on the planet  $S/S_0$')
     ax.set_ylabel(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
 
@@ -395,6 +452,8 @@ def main(argv):
         sweep_one_mass(float(argv[2]))
     elif cmd == 'addf1':
         add_f_star(float(argv[2]))
+    elif cmd == 'addcool1':
+        add_cool_stars(float(argv[2]))
     elif cmd == 'plot':
         plot()
     elif cmd == 'all':
@@ -410,6 +469,16 @@ def main(argv):
         for m in MASSES:
             build_binary_n84(m)
             add_f_star(m)
+        restore_earth()
+        plot()
+    elif cmd == 'addcool':
+        # Append the ultra-cool stars (COOL_STARS, n68 core) to each per-mass
+        # cache, then restore the default n68 Earth binary and re-plot.  Run
+        # AFTER the n68 sweep (`all`) has produced the base caches.  Each mass is
+        # rebuilt at its own gravity (compile-time), like `all`.
+        for m in MASSES:
+            build_binary(m)
+            add_cool_stars(m)
         restore_earth()
         plot()
     else:
