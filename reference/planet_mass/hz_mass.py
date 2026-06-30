@@ -157,6 +157,25 @@ COOL_STARS = [
 # Mass curve colours (Kopparapu+2014 convention: 0.1 blue, 1 green, 5 red).
 MASS_COLOR = {0.1: '#1f77b4', 1.0: '#2ca02c', 5.0: '#d62728'}
 
+# Main-sequence spectral-type bands on the Teff axis (same mapping as
+# hz_figure7.py's top panel; topmost plotted type is F, A omitted).
+SPT_TEFF_BOUNDS  = [3900., 5300., 6000.]
+SPT_TEFF_CENTERS = [3100., 4600., 5650., 6650.]
+SPT_LABELS = ['M', 'K', 'G', 'F']
+
+
+def add_spectral_axis(ax, bounds, centers, labels):
+    """Right-hand secondary y-axis: main-sequence spectral-type bands.  The type
+    letter sits at each band centre; short ticks mark the type boundaries."""
+    axr = ax.secondary_yaxis('right')
+    axr.set_yticks(centers)
+    axr.set_yticklabels(labels)
+    axr.set_yticks(bounds, minor=True)
+    axr.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())  # no numbers
+    axr.tick_params(axis='y', which='major', length=0)   # letters only, no mark
+    axr.tick_params(axis='y', which='minor', length=5)    # boundary ticks
+    axr.set_ylabel('Spectral type')
+
 # Runaway (Simpson-Nakajima) peak bracket: the inner-edge Seff(Ts) maximum sits
 # at Ts ~ 300-330 K; sample 280-440 K finely enough to resolve it.
 TS_RUNAWAY = np.arange(280.0, 440.0 + 1e-6,
@@ -408,6 +427,7 @@ def plot():
     # the stated lower validity bound of their parametric fit.
     ax.set_xlabel(r'Effective flux incident on the planet  $S/S_0$')
     ax.set_ylabel(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
+    add_spectral_axis(ax, SPT_TEFF_BOUNDS, SPT_TEFF_CENTERS, SPT_LABELS)
 
     # Legends: mass identity (colours) + source key (solid/dashed).
     leg1 = ax.legend(loc='lower left', fontsize=8.5, title='Inner edge (runaway)',
