@@ -159,11 +159,12 @@ RUNAWAY_TS_LO, RUNAWAY_TS_HI = 280.0, 700.0
 
 # Main-sequence spectral-type boundaries, in Teff [K] (panel a) and mass [Msun]
 # (panel b), with the type letter for each band (M..A within the plotted range).
-SPT_TEFF_BOUNDS  = [3900., 5300., 6000., 7300.]
-SPT_TEFF_CENTERS = [3100., 4600., 5650., 6650., 7400.]
-SPT_MASS_BOUNDS  = [0.60, 0.88, 1.04, 1.70]   # F|A at 1.70 so F0V (1.61 Msun) reads F
-SPT_MASS_CENTERS = [0.182, 0.727, 0.957, 1.330, 1.797]
-SPT_LABELS = ['M', 'K', 'G', 'F', 'A']
+# Topmost plotted type is F (the 7200 K / 1.61 Msun host); the A band is omitted.
+SPT_TEFF_BOUNDS  = [3900., 5300., 6000.]
+SPT_TEFF_CENTERS = [3100., 4600., 5650., 6650.]
+SPT_MASS_BOUNDS  = [0.60, 0.88, 1.04]
+SPT_MASS_CENTERS = [0.182, 0.727, 0.957, 1.330]
+SPT_LABELS = ['M', 'K', 'G', 'F']
 
 
 def add_spectral_axis(ax, bounds, centers, labels):
@@ -324,27 +325,46 @@ def plot(d):
     # planet's orbital distance.
     MS_E = 9.0          # marker diameter [pt] for a 1 R_Earth planet
     PLANET_C = '0.3'    # dark grey for all planet markers + labels
-    # Solar system (Sun, 1 Msun): (name, a[AU], R[R_Earth])
-    for _n, _a, _r in [('Mercury', 0.387, 0.383), ('Venus', 0.723, 0.949),
-                       ('Earth', 1.000, 1.000), ('Mars', 1.524, 0.532)]:
+    # Solar system (Sun, 1 Msun): (a[AU], R[R_Earth]) — markers only, one group
+    # label (individual planet names omitted).
+    for _a, _r in [(0.387, 0.383), (0.723, 0.949), (1.000, 1.000), (1.524, 0.532)]:
         axb.plot(_a, 1.0, 'o', color=PLANET_C, ms=MS_E * _r, zorder=8)
-        axb.annotate(_n, xy=(_a, 1.0), xytext=(0, 8), textcoords='offset points',
-                     ha='center', va='bottom', fontsize=7, color=PLANET_C, zorder=8)
+    axb.text(0.70, 1.30, 'Solar System', ha='center', va='bottom',
+             fontsize=7.5, color=PLANET_C, zorder=8)
     # TRAPPIST-1 (M = 0.0898 Msun, Teff 2566 K; Agol et al. 2021): planets b..h.
     # Its mass matches our M2600 case, so e/f/g fall in the computed HZ strip.
     T1M = 0.0898
-    for _n, _a, _r in [('b', 0.01154, 1.116), ('c', 0.01580, 1.097),
-                       ('d', 0.02227, 0.788), ('e', 0.02925, 0.920),
-                       ('f', 0.03853, 1.045), ('g', 0.04688, 1.129),
-                       ('h', 0.06193, 0.755)]:
+    for _a, _r in [(0.01154, 1.116), (0.01580, 1.097), (0.02227, 0.788),
+                   (0.02925, 0.920), (0.03853, 1.045), (0.04688, 1.129),
+                   (0.06193, 0.755)]:
         axb.plot(_a, T1M, 'o', color=PLANET_C, ms=MS_E * _r, zorder=9)
-        axb.annotate(_n, xy=(_a, T1M), xytext=(0, -9), textcoords='offset points',
-                     ha='center', va='top', fontsize=6, color=PLANET_C, zorder=9)
     axb.text(0.0145, 0.069, 'TRAPPIST-1', ha='center', va='top',
              fontsize=7.5, color=PLANET_C, zorder=9)
+    # Tidal-lock radius (Kasting, Whitmire & Reynolds 1993, Eq. 10, all-CGS):
+    #   r_T = 0.027 (P0 t / Q)^(1/6) M^(1/3)  [cm],
+    # with their adopted P0 = 13.5 hr, t = 4.5 Gyr, Q = 100 -> r_T(1 Msun)=0.459 AU
+    # (Mercury, 0.39 AU, sits just inside it, as the paper notes).  Planets to the
+    # LEFT of this dotted line are expected to be tidally locked.
+    _P0 = 13.5 * 3600.0          # original rotation period [s]
+    _TAGE = 4.5e9 * 3.15576e7    # 4.5 Gyr [s]
+    _Q = 100.0
+    _MSUN_G = 1.989e33           # solar mass [g]
+    _AU_CM = 1.495979e13
+    _mg = np.geomspace(0.055, 1.9, 100)
+    _rT = 0.027 * (_P0 * _TAGE / _Q) ** (1.0 / 6.0) \
+        * (_mg * _MSUN_G) ** (1.0 / 3.0) / _AU_CM
+    axb.plot(_rT, _mg, ls=':', color='0.35', lw=1.5, zorder=3)
     axb.set_xscale('log'); axb.set_yscale('log')
     axb.set_xlim(0.009, 4.5)            # F-star outer edge reaches ~3.9 AU
     axb.set_ylim(0.055, 1.9)            # F-star mass = 1.61 Msun
+    # On-curve label for the tidal-lock line, rotated to match it in display space.
+    _il = int(np.argmin(np.abs(_mg - 0.42)))
+    _p1 = axb.transData.transform((_rT[_il], _mg[_il]))
+    _p2 = axb.transData.transform((_rT[_il + 6], _mg[_il + 6]))
+    _ang = np.degrees(np.arctan2(_p2[1] - _p1[1], _p2[0] - _p1[0]))
+    axb.text(_rT[_il], _mg[_il], 'Tidal lock radius  ', rotation=_ang,
+             rotation_mode='anchor', ha='right', va='bottom',
+             fontsize=7.5, color='0.35', zorder=4)
     axb.set_yticks([0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 1.5])
     axb.set_yticklabels(['0.1', '0.2', '0.3', '0.5', '0.7', '1.0', '1.5'])
     axb.set_xticks([0.01, 0.03, 0.1, 0.3, 1.0, 3.0])

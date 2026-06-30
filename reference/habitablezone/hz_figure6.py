@@ -191,13 +191,19 @@ def plot(data):
     (a, b), (c, dax) = ax
     fig.patch.set_facecolor('white')
 
-    # Recolour the curves by Teff (cool = red ... warm = blue, Kopparapu style),
-    # so the gradient is readable for the full M->G ladder.
-    _rank = np.argsort(np.argsort([s['teff'] for s in data['stars']]))
-    _cmap = plt.get_cmap('turbo')
-    _n = max(len(_rank) - 1, 1)
-    for s, r in zip(data['stars'], _rank):
-        s['color'] = _cmap(0.92 - 0.82 * r / _n)
+    # Colour the curves continuously by Teff (cool = red ... warm = blue,
+    # Kopparapu style) and key them with a single colorbar (added below) rather
+    # than per-curve labels.  A linear Normalize on Teff makes the colorbar a
+    # faithful Teff axis; the turbo segment is truncated to avoid the near-black
+    # extremes.
+    from matplotlib.colors import Normalize, LinearSegmentedColormap
+    import matplotlib.cm as mcm
+    teffs = np.array([s['teff'] for s in data['stars']], float)
+    norm = Normalize(vmin=teffs.min(), vmax=teffs.max())
+    cmap = LinearSegmentedColormap.from_list(
+        'hz_teff', plt.get_cmap('turbo')(np.linspace(0.92, 0.10, 256)))
+    for s in data['stars']:
+        s['color'] = cmap(norm(s['teff']))
 
     for s in data['stars']:
         col = s['color']
@@ -233,24 +239,19 @@ def plot(data):
     for axx in (a, b, c, dax):
         axx.grid(alpha=0.25, lw=0.5)
 
-    # Direct on-curve colour labels (Kopparapu house style, no legend box).
-    for s in data['stars']:
-        col, lab = s['color'], s['label']
-        yb = _med(s['seff_i'])
-        if np.any(np.isfinite(yb)):
-            k = np.where(np.isfinite(yb))[0][len(np.where(np.isfinite(yb))[0]) // 2]
-            b.text(ts[k], yb[k], '  ' + lab, color=col, fontsize=8,
-                   va='bottom', ha='left')
-    # one compact key on panel (a) too, top-left, as text
-    y0 = 0.38
-    for s in data['stars']:
-        a.text(250, y0, s['label'], color=s['color'], fontsize=8, va='top')
-        y0 -= 0.032
+    # Single Teff colorbar on the right (replaces the per-curve labels).
+    sm = mcm.ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
 
     fig.suptitle('ExoColumn habitable-zone limits vs host star  '
                  '(Kopparapu et al. 2013, Fig. 6 analogue; F-G-K-M set)',
                  fontsize=10)
-    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.subplots_adjust(left=0.07, right=0.87, top=0.93, bottom=0.07,
+                        wspace=0.26, hspace=0.30)
+    cax = fig.add_axes((0.895, 0.10, 0.018, 0.80))
+    cb = fig.colorbar(sm, cax=cax)
+    cb.set_label(r'Stellar effective temperature  $T_{\rm eff}$  [K]')
+    cb.set_ticks([2000, 3000, 4000, 5000, 6000, 7000])
     fig.savefig(FIG_PNG, dpi=300)
     fig.savefig(FIG_PDF)
     print(f"Wrote: {FIG_PNG}\n       {FIG_PDF}")
