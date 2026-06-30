@@ -402,7 +402,7 @@ def plot():
         ax.annotate(nm, xy=(s, 5780), xytext=(0, 7), textcoords='offset points',
                     ha='center', va='bottom', fontsize=8, color='0.25', zorder=8)
 
-    ax.set_xlim(2.0, 0.2)            # reversed: high flux (inner) on the left
+    ax.set_xlim(1.40, 0.15)          # reversed; matches Fig. 7 top-panel S/S0 range
     ax.set_ylim(2000, 7200)          # extended to the 2000 K BT-Settl floor
     # NB: the dashed Kopparapu+2014 overlay (tk above) stays capped at 2600 K,
     # the stated lower validity bound of their parametric fit.
