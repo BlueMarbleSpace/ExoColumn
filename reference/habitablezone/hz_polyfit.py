@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""
+hz_polyfit.py  —  Parametric habitable-zone boundary fit from ExoColumn.
+
+Kopparapu et al. (2013, 2014) distilled their HZ calculations into a compact,
+reusable parametrisation: the effective stellar flux at each HZ boundary as a
+quartic in stellar effective temperature,
+
+    S_eff(T_eff) = S_eff_sun + a*T* + b*T*^2 + c*T*^3 + d*T*^4 ,   T* = T_eff - 5780 K,
+
+with the corresponding orbital distance recovered from
+
+    d = sqrt( (L/L_sun) / S_eff )  AU.
+
+This script fits that exact form to the ExoColumn HZ limits computed in
+hz_figure7.py (cached in hz_figure7.npz) for the three radiatively-determined
+boundaries the model resolves:
+
+    runaway greenhouse  (inner, S_eff at T_c = 647 K runaway onset)
+    moist greenhouse    (inner, stratospheric H2O VMR reaches 3e-3)
+    maximum greenhouse  (outer, S_eff minimum of the dense-CO2 sweep)
+
+The empirical "recent Venus" and "early Mars" limits of Kopparapu et al. are
+solar-system-evidence boundaries, not radiative-transfer results, so they are
+outside ExoColumn's scope and are not fit here.
+
+Outputs (written next to this script):
+  * hz_coefficients.txt  — machine-readable coefficient table (the deliverable
+                           others reuse: drop-in replacement for Kopparapu's
+                           Table 3 with the ExoColumn radiation core).
+  * hz_polyfit.pdf/.png  — S_eff(T_eff) data + fitted quartics, with residuals.
+
+No model runs: pure post-processing of hz_figure7.npz.  Re-run after the HZ
+sweep cache changes.
+"""
+
+import os
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+HERE    = os.path.dirname(os.path.abspath(__file__))
+CACHE   = os.path.join(HERE, "hz_figure7.npz")
+OUT_TXT = os.path.join(HERE, "hz_coefficients.txt")
+OUT_TEX = os.path.join(HERE, "hz_coefficients.tex")
+OUT_PDF = os.path.join(HERE, "hz_polyfit.pdf")
+OUT_PNG = os.path.join(HERE, "hz_polyfit.png")
+
+T_SUN = 5780.0  # K — Kopparapu reference temperature (T* = T_eff - T_SUN)
+
+# Boundaries to fit: key in the cache, display label, plot colour.
+LIMITS = [
+    ("seff_runaway", "Runaway greenhouse", "#d62728"),
+    ("seff_inner",   "Moist greenhouse",   "#ff7f0e"),
+    ("seff_outer",   "Maximum greenhouse", "#1f77b4"),
+]
+
+
+def fit_quartic(teff, seff):
+    """Fit S_eff = S0 + a*T* + b*T*^2 + c*T*^3 + d*T*^4 (T* = teff - 5780).
+
+    Returns (coeffs, rms) where coeffs = [S0, a, b, c, d] (ascending power) so
+    that coeffs follows the Kopparapu Table-3 column order directly.
+    """
+    tstar = teff - T_SUN
+    # np.polyfit returns highest-power first; flip to ascending [S0, a, b, c, d].
+    p_desc = np.polyfit(tstar, seff, 4)
+    coeffs = p_desc[::-1]
+    resid = seff - np.polyval(p_desc, tstar)
+    rms = float(np.sqrt(np.mean(resid**2)))
+    return coeffs, rms, resid
+
+
+def seff_of(coeffs, teff):
+    tstar = teff - T_SUN
+    return np.polyval(coeffs[::-1], tstar)
+
+
+def main():
+    d = np.load(CACHE, allow_pickle=True)
+    teff = np.asarray(d["teff"], dtype=float)
+    order = np.argsort(teff)
+    teff = teff[order]
+    tmin, tmax = float(teff.min()), float(teff.max())
+
+    results = []
+    for key, label, color in LIMITS:
+        seff = np.asarray(d[key], dtype=float)[order]
+        coeffs, rms, resid = fit_quartic(teff, seff)
+        results.append(dict(key=key, label=label, color=color,
+                            seff=seff, coeffs=coeffs, rms=rms, resid=resid))
+
+    # ----------------------------------------------------------------- table
+    lines = []
+    lines.append("# ExoColumn habitable-zone boundary coefficients")
+    lines.append("#")
+    lines.append("#   S_eff(T_eff) = S_eff_sun + a*T* + b*T*^2 + c*T*^3 + d*T*^4")
+    lines.append("#   T* = T_eff - 5780 K")
+    lines.append(f"#   valid range: T_eff = {tmin:.0f} - {tmax:.0f} K")
+    lines.append("#   distance:  d = sqrt( (L/L_sun) / S_eff )  AU")
+    lines.append("#")
+    lines.append("# Fit to ExoColumn (ExoRT n68equiv radiation core); same functional")
+    lines.append("# form as Kopparapu et al. (2013,2014) Table 3, for direct substitution.")
+    lines.append("#")
+    hdr = f"# {'boundary':<20s} {'S_eff_sun':>13s} {'a':>14s} {'b':>14s} {'c':>14s} {'d':>14s} {'rms':>10s}"
+    lines.append(hdr)
+    for r in results:
+        c = r["coeffs"]
+        lines.append(f"  {r['label']:<20s} {c[0]:13.6f} {c[1]:14.6e} "
+                     f"{c[2]:14.6e} {c[3]:14.6e} {c[4]:14.6e} {r['rms']:10.2e}")
+    table = "\n".join(lines) + "\n"
+    with open(OUT_TXT, "w") as f:
+        f.write(table)
+    print(table)
+    print(f"wrote {OUT_TXT}")
+
+    # ------------------------------------------------- LaTeX deluxetable frag
+    def tex_sci(x):
+        """Format a coefficient as m\\times10^{e} for an AASTeX cell."""
+        if x == 0.0:
+            return "0"
+        e = int(np.floor(np.log10(abs(x))))
+        m = x / 10.0**e
+        return f"${m:.4f}\\times10^{{{e}}}$"
+
+    tl = []
+    tl.append("% Auto-generated by reference/habitablezone/hz_polyfit.py -- do not edit by hand.")
+    tl.append("\\begin{deluxetable*}{lrrrrr}")
+    tl.append("\\tablecaption{}")  # caption written by the author
+    tl.append("\\tablehead{")
+    tl.append("  \\colhead{HZ boundary} & \\colhead{$S_{\\rm eff,\\odot}$} &")
+    tl.append("  \\colhead{$a$} & \\colhead{$b$} & \\colhead{$c$} & \\colhead{$d$}")
+    tl.append("}")
+    tl.append("\\startdata")
+    for i, r in enumerate(results):
+        c = r["coeffs"]
+        end = " \\\\" if i < len(results) - 1 else ""
+        tl.append(f"{r['label']} & {c[0]:.4f} & {tex_sci(c[1])} & {tex_sci(c[2])} & "
+                  f"{tex_sci(c[3])} & {tex_sci(c[4])}{end}")
+    tl.append("\\enddata")
+    tl.append("\\tablecomments{$S_{\\rm eff}(T_{\\rm eff}) = S_{\\rm eff,\\odot} + a\\,T_\\star "
+              "+ b\\,T_\\star^2 + c\\,T_\\star^3 + d\\,T_\\star^4$, with "
+              f"$T_\\star = T_{{\\rm eff}} - 5780$~K, valid for $T_{{\\rm eff}} = {tmin:.0f}"
+              f"-{tmax:.0f}$~K.}}")
+    tl.append("\\label{tab:hz_coeff}")
+    tl.append("\\end{deluxetable*}")
+    with open(OUT_TEX, "w") as f:
+        f.write("\n".join(tl) + "\n")
+    print(f"wrote {OUT_TEX}")
+
+    # ---------------------------------------------------------------- figure
+    plt.rcParams.update({"font.size": 9, "axes.linewidth": 0.8,
+                         "figure.facecolor": "white", "savefig.facecolor": "white"})
+    fig = plt.figure(figsize=(7.0, 4.5))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], hspace=0.08)
+    ax = fig.add_subplot(gs[0])
+    axr = fig.add_subplot(gs[1], sharex=ax)
+
+    tgrid = np.linspace(tmin, tmax, 400)
+    for r in results:
+        ax.plot(tgrid, seff_of(r["coeffs"], tgrid), "-", color=r["color"], lw=1.6,
+                zorder=2)
+        ax.plot(teff, r["seff"], "o", color=r["color"], ms=4.5, mec="white",
+                mew=0.6, zorder=3, label=r["label"])
+        axr.plot(teff, r["resid"] * 1e3, "o-", color=r["color"], ms=3.5, lw=0.8)
+
+    # Sun marker reference line.
+    for a in (ax, axr):
+        a.axvline(T_SUN, color="0.7", lw=0.7, ls=":", zorder=0)
+    ax.text(T_SUN, ax.get_ylim()[1], " Sun", color="0.5", va="top", ha="left",
+            fontsize=7.5)
+
+    ax.set_ylabel(r"Effective stellar flux  $S_{\rm eff}$  ($S_\odot$)")
+    ax.legend(frameon=False, fontsize=8, loc="center left")
+    ax.tick_params(labelbottom=False)
+    ax.set_ylim(0, None)
+
+    axr.axhline(0, color="0.7", lw=0.7)
+    axr.set_ylabel(r"$\Delta S_{\rm eff}$" "\n" r"(10$^{-3}\,S_\odot$)", fontsize=8)
+    axr.set_xlabel(r"Stellar effective temperature  $T_{\rm eff}$  (K)")
+    axr.set_xlim(tmin - 100, tmax + 100)
+
+    fig.savefig(OUT_PDF, bbox_inches="tight")
+    fig.savefig(OUT_PNG, dpi=200, bbox_inches="tight")
+    print(f"wrote {OUT_PDF}\nwrote {OUT_PNG}")
+
+
+if __name__ == "__main__":
+    main()

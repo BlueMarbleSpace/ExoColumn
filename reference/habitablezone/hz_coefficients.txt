@@ -1,0 +1,14 @@
+# ExoColumn habitable-zone boundary coefficients
+#
+#   S_eff(T_eff) = S_eff_sun + a*T* + b*T*^2 + c*T*^3 + d*T*^4
+#   T* = T_eff - 5780 K
+#   valid range: T_eff = 2000 - 7200 K
+#   distance:  d = sqrt( (L/L_sun) / S_eff )  AU
+#
+# Fit to ExoColumn (ExoRT n68equiv radiation core); same functional
+# form as Kopparapu et al. (2013,2014) Table 3, for direct substitution.
+#
+# boundary                 S_eff_sun              a              b              c              d        rms
+  Runaway greenhouse        1.101534   9.414425e-05   7.365202e-09  -2.577216e-12  -4.603675e-16   1.16e-03
+  Moist greenhouse          1.087977   9.562399e-05   5.450699e-09  -3.703225e-12  -5.935071e-16   7.95e-04
+  Maximum greenhouse        0.394700   7.523164e-05   3.431762e-09  -3.352086e-12  -5.684352e-16   7.49e-04
