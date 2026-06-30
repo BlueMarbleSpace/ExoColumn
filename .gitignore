@@ -40,3 +40,7 @@ tools/*.png
 tools/*.pdf
 tools/*.npz
 tools/*.nc
+
+# conv_sensitivity raw per-scheme model output (intermediate; the .npz cache
+# drives the figure and CONV_REPLOT=1, a full re-run regenerates these).
+reference/earth/conv_sensitivity/
