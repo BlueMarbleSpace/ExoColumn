@@ -150,12 +150,15 @@ def kopp_seff(teff, boundary):
 
 # Runaway-greenhouse S_eff = the MAXIMUM (Simpson-Nakajima) value of the
 # inner-branch S_eff(Ts) — the peak flux a saturated atmosphere can radiate
-# away before runaway.  Searched over the moist branch (Ts 280-700 K, the peak
-# is at ~300-320 K), below the supercritical-steam rise; matches the
-# reference/moist_runaway "runaway peak" definition.  (Sampling at the critical
-# point instead lands on the declining plateau and inverts the ordering vs the
-# moist-greenhouse edge under the co2_vmr_total convention.)
-RUNAWAY_TS_LO, RUNAWAY_TS_HI = 280.0, 700.0
+# away before runaway.  Searched over the moist branch (Ts 280-440 K, the peak
+# is at ~300-340 K), below the supercritical-steam rise.  The upper bound is
+# 440 K (NOT 700 K) to stay consistent with reference/planet_mass/hz_mass.py's
+# runaway definition: for the hot F 7200 K star the supercritical branch begins
+# by ~600 K, so a 700 K bracket would grab the supercritical climb (Seff~1.35 at
+# 680 K) instead of the SN knee (~1.24), making the 1 M_E runaway curve disagree
+# between the two figures.  Cooler stars are unaffected (their curve declines
+# after the ~320 K peak; supercritical onset is ~1750 K).
+RUNAWAY_TS_LO, RUNAWAY_TS_HI = 280.0, 440.0
 
 # Main-sequence spectral-type boundaries, in Teff [K] (panel a) and mass [Msun]
 # (panel b), with the type letter for each band (M..A within the plotted range).
