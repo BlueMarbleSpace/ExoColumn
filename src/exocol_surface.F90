@@ -62,7 +62,8 @@ module exocol_surface
 contains
 
   subroutine compute_surface_fluxes(mode, ts, t_bot, q_bot, p_bot, za, p0, z0, &
-                                    mwdry, cpdry, wind_speed, C_D, LE, SH, C_out)
+                                    mwdry, cpdry, wind_speed, C_D, LE, SH, C_out, &
+                                    evap_on)
   ! Surface latent and sensible heat fluxes at the slab-atmosphere interface.
     character(len=*), intent(in)  :: mode        ! 'mos' or 'bulk'
     real(r8), intent(in)  :: ts          ! surface (slab) temperature [K]
@@ -79,10 +80,16 @@ contains
     real(r8), intent(out) :: LE          ! latent heat flux            [W/m²]
     real(r8), intent(out) :: SH          ! sensible heat flux          [W/m²]
     real(r8), intent(out) :: C_out       ! exchange coefficient used   [-]
+    logical, intent(in), optional :: evap_on  ! surface evaporation on? (default .true.)
+                                              ! .false. = dry land surface (LE forced 0)
 
+    logical  :: do_evap
     real(r8) :: Rd, eps_wv, kap, rho_a
     real(r8) :: es_surf, qsat_surf, L_surf, theta_a, theta_s
     real(r8) :: sv_s, sv_a, Ria, C
+
+    do_evap = .true.
+    if (present(evap_on)) do_evap = evap_on
 
     Rd      = SHR_CONST_RGAS / mwdry
     eps_wv  = SHR_CONST_MWWV / mwdry
@@ -117,6 +124,10 @@ contains
       LE = rho_a * L_surf * C * wind_speed * (qsat_surf - q_bot)
       SH = rho_a * cpdry  * C * wind_speed * (theta_s - theta_a)
     end if
+
+    ! Dry land surface: no water to evaporate, so no latent heat flux.  Sensible
+    ! heat exchange is unaffected.
+    if (.not. do_evap) LE = 0._r8
 
     C_out = C
 

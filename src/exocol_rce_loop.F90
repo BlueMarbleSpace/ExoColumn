@@ -63,7 +63,7 @@ module exocol_rce_loop
   use ppgrid,          only: pver, pverp
   use exocol_mod
   use exocol_radiation, only: exocol_rad_tend
-  use exocol_config,    only: conv_scheme, moisture_scheme, wind_speed, C_D, &
+  use exocol_config,    only: conv_scheme, moisture_scheme, wind_speed, C_D, surface_water, &
                               cfg_dz_slab => dz_slab, tau_conv, cape_trigger, &
                               rh_sbm, surface_flux, z0_rough
   use exocol_convadj,   only: convadj_dry, convadj_surface, convadj_moist, &
@@ -435,7 +435,7 @@ contains
         call compute_surface_fluxes(surface_flux, ts, tmid(pver), h2ommr(pver), &
                                     pmid(pver), za_bot, p0_sfc, z0_rough, &
                                     mwdry_col, cpdry_col, wind_speed, C_D, &
-                                    LE, SH, C_drag_diag)
+                                    LE, SH, C_drag_diag, evap_on=surface_water)
 
         ! Slab budget (semi-implicit Planck)
         if (prognostic) then
