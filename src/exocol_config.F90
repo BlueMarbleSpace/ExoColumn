@@ -142,6 +142,18 @@ module exocol_config
   character(len=32), public, save :: surface_flux    = 'mos'
   real(r8),          public, save :: z0_rough        = 3.21e-5_r8  ! roughness length [m] (Frierson)
 
+  ! Surface water availability for evaporation (latent heat).
+  !   .true.  (default) : ocean/wet surface — the surface evaporates at the
+  !            saturation humidity qsat(Ts), giving the latent heat flux LE used
+  !            by the moist Earth-like reference (bit-identical to prior results).
+  !   .false.           : dry land surface — evaporation is suppressed (LE = 0);
+  !            the surface exchanges only SENSIBLE heat with the atmosphere.
+  !            Required for a genuinely dry column (e.g. dry CO2): with a wet
+  !            surface the slab loses LE = ρ·L·C·U·qsat(Ts) to "evaporation" that
+  !            a moisture_scheme='off' column then discards, an energy sink that
+  !            prevents radiative-convective equilibrium.
+  logical,           public, save :: surface_water   = .true.
+
   ! Latent-heat treatment in the moist adiabat / condensation / surface ledger.
   !   'phase_aware' (default) : L_v above 273.16 K, L_sub (sublimation) below.
   !   'fixed_vap'             : fixed liquid L_v at all T, matching konrad's
@@ -386,7 +398,7 @@ contains
                                   wind_speed, C_D, msdist, dz_slab, &
                                   tau_conv, cape_trigger, rh_sbm, &
                                   latent_heat_mode, &
-                                  surface_flux, z0_rough, &
+                                  surface_flux, z0_rough, surface_water, &
                                   sw_zenith_quad, sw_nquad, &
                                   flux_only, variable_ps, ihz_profile, &
                                   h2o_inventory_bar, esat_formula, h2o_eos, &
@@ -555,6 +567,8 @@ contains
     case ('off')
       write(*,'(a)') '  Moisture scheme   : off (h2ommr frozen at input)'
     end select
+    if (.not. surface_water) &
+      write(*,'(a)') '  Surface water     : OFF (dry land — no evaporation, LE=0)'
 
     select case (trim(adjustl(o3_profile)))
     case ('uniform'); write(*,'(a)') '  Ozone profile     : uniform (from o3_vmr)'
