@@ -74,10 +74,11 @@ limits, \citealt{leconte2013}); applications to observed systems
 (\citealt{quintana2014, dressing2015, angladaescude2016, gillon2017}); and
 critiques of the concept (\citealt{moore2017, tasker2017, zsom2015}).]
 
-[One-dimensional radiative--convective equilibrium (RCE) models are the standard
-tool for computing habitable-zone (HZ) limits (Kasting et al. 1993; Kopparapu
-et al. 2013, 2014). ExoColumn pairs a conventional RCE column with the ExoRT
-correlated-$k$ radiation package used by the ExoCAM GCM, so its 1-D radiation is
+[One-dimensional radiative--convective equilibrium (RCE) models \citep{manabe1967}
+are the standard tool for computing habitable-zone (HZ) limits
+\citep{kasting1993, kopparapu2013, kopparapu2014}. ExoColumn pairs a conventional
+RCE column with the ExoRT correlated-$k$ radiation package used by the ExoCAM GCM
+\citep{wolftoon2015, wolf2022}, so its 1-D radiation is
 consistent with 3-D simulations. This paper documents the model and validates it
 against (i) modern Earth, (ii) line-by-line (LBL) radiative-transfer benchmarks,
 and (iii) the Kopparapu et al. (2013, 2014) HZ limits, then provides updated HZ
@@ -86,12 +87,12 @@ boundary coefficients (Table~\ref{tab:hz_coeff}) for community use.]
 \section{The ExoColumn model} \label{sec:model}
 %% TODO
 [ExoColumn is a 1-D RCE model that calls ExoRT's \texttt{aerad\_driver}
-radiation routine directly (the same correlated-$k$ core as ExoCAM), using the
+radiation routine directly (the same correlated-$k$ core as ExoCAM; \citealt{wolf2022}), using the
 n68equiv 68-band scheme. Vertical grid: default 70 layers, log-spaced from
 $p_{\rm top}$ to the surface; layer count is a compile-time constant. Convection
-(default): simplified Betts--Miller (SBM; Frierson 2007), relaxing temperature to
+(default): simplified Betts--Miller (SBM; \citealt{frierson2007}), relaxing temperature to
 the moist adiabat and humidity to a reference RH (0.7); four other schemes are
-selectable. Surface turbulent fluxes: simplified Monin--Obukhov (Frierson 2006)
+selectable. Surface turbulent fluxes: simplified Monin--Obukhov \citep{frierson2006}
 with the drag coefficient referenced at a fixed 10 m height (resolution-
 independent, $C\approx10^{-3}$), paired with a surface-coupled mixed layer --- no
 separate boundary-layer scheme. Water vapour is prognostic, with a cold-point
@@ -99,20 +100,20 @@ separate boundary-layer scheme. Water vapour is prognostic, with a cold-point
 ($H_{\rm slab}=4.1\times10^{7}\,{\rm J\,m^{-2}\,K^{-1}}$ for a 10 m layer) evolved
 with semi-implicit Planck damping. Adaptive CFL timestep $\in[10^{-4},1]$ day
 with $\Delta T_{\rm target}=1$ K. Optional physics, all default-off (results
-bit-identical when off): IAPWS-95 non-ideal steam EOS (Wagner \& Pru\ss\ 2002)
-with the Kasting (1988) non-ideal moist adiabat; the BPS/Wolf H$_2$O continuum;
+bit-identical when off): IAPWS-95 non-ideal steam EOS \citep{wagner2002}
+with the \citet{kasting1988} non-ideal moist adiabat; the BPS/Wolf H$_2$O continuum;
 and CO$_2$ condensation with $T$-dependent $c_p$ for the outer HZ. The model is
 Fortran; ExoRT is used unmodified.]
 
 \section{Earth validation} \label{sec:earth}
 %% TODO
-[Modern-Earth cold start (1 bar N$_2$/O$_2$/Ar, 400 ppm CO$_2$, RCEMIP O$_3$),
+[Modern-Earth cold start (1 bar N$_2$/O$_2$/Ar, 400 ppm CO$_2$, RCEMIP O$_3$; \citealt{wing2018}),
 surface albedo calibrated to $T_s=288$ K. The equilibrium is insensitive to the
 convective closure: holding all else fixed and swapping SBM for the fixed
-6.5 K km$^{-1}$ (Manabe) and RH-weighted moist-adiabat schemes shifts $T_s$ by
+6.5 K km$^{-1}$ \citep{manabe1967} and RH-weighted moist-adiabat schemes shifts $T_s$ by
 only $+1.5$ and $+2.2$ K (the Zhang--McFarlane soft scheme runs $+7.5$ K warmer).
 The cold-point minimum ($\approx$204 K) is $\sim$7 K warmer than konrad's RRTMG
-($\approx$197 K), attributable to ExoRT-n68equiv vs RRTMG radiation differences.]
+\citep{kluft2019} ($\approx$197 K), attributable to ExoRT-n68equiv vs RRTMG radiation differences.]
 
 \begin{figure}[ht!]
 \centering
@@ -130,7 +131,7 @@ Standard Atmosphere 1976 (dotted).]}
 \section{Radiative-transfer benchmarks} \label{sec:lbl}
 %% TODO
 [Independent LBL check of the ExoRT n68equiv core (built with a
-numba Lorentz$\times\chi$ code: Perrin--Hartmann 1989 $\chi$-factor plus
+numba Lorentz$\times\chi$ code: \citet{perrin1989} $\chi$-factor plus
 HITRAN-2024 CO$_2$--CO$_2$ CIA). The dense-CO$_2$ window OLR is governed by the
 CO$_2$ far-wing/$\chi$ treatment and spans a wide envelope; ExoRT lands inside
 it, near CLIMA. Both correlated-$k$ cores are LBL-grade (F$_{\rm IR}$ within 1\%,
@@ -154,7 +155,7 @@ far wings, not by CIA (negligible there in both HITRAN and ExoRT).]}
 %% TODO
 [Inner-edge sweep for a Sun-like star using the non-ideal (IAPWS-95) steam EOS;
 the figure compares the default MT\_CKD continuum, the BPS continuum, and CLIMA.
-OLR asymptotes to the Simpson--Nakajima limit $\approx$295 W m$^{-2}$ (Kopparapu
+OLR asymptotes to the Simpson--Nakajima limit \citep{nakajima1992} $\approx$295 W m$^{-2}$ (Kopparapu
 291; 1.3\% high). With MT\_CKD: moist-greenhouse limit $S_{\rm eff}=1.087$
 ($d=0.959$ AU) and runaway-greenhouse limit $S_{\rm eff}=1.101$ ($d=0.953$ AU);
 the BPS continuum lowers these to 1.074/1.093 and CLIMA gives 1.016/1.060. The
@@ -202,7 +203,7 @@ Dashed/markers = Kopparapu (2013).]}
 \section{Habitable-zone limits across stellar spectral types} \label{sec:stellar}
 %% TODO
 [HZ limits computed for nine host stars spanning F (7200 K) through G (5780 K,
-Sun), K (4000--4800 K), and M (2600--3700 K), using BT-Settl SEDs (the cool-star
+Sun), K (4000--4800 K), and M (2600--3700 K), using BT-Settl SEDs \citep{allard2012} (the cool-star
 set is extended down to 2000 K). The host SED enters the cold-start column only
 through albedo, so the moist-greenhouse limit falls at a star-independent
 $T_s=344$ K and only $S_{\rm eff}$ differs between stars. The fitted boundary
@@ -232,7 +233,7 @@ HZ to lower $S_{\rm eff}$.]}
 \caption{[HZ boundaries vs stellar effective temperature (analogue of Kopparapu
 et al. 2013, Fig. 7). Top: $S_{\rm eff}$ at the moist- and maximum-greenhouse
 limits vs $T_{\rm eff}$. Bottom: corresponding orbital distance vs stellar mass
-from $d=\sqrt{(L/L_\odot)/S_{\rm eff}}$, using the Baraffe et al. (1998) 5 Gyr
+from $d=\sqrt{(L/L_\odot)/S_{\rm eff}}$, using the \citet{baraffe1998} 5 Gyr
 solar-metallicity isochrone (the F star anchored to the present-day main
 sequence). Solar System and TRAPPIST-1 planets shown for reference. Dashed =
 Kopparapu (2013).]}
