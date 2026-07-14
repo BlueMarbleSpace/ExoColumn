@@ -120,7 +120,7 @@ Fortran; ExoRT is used unmodified.]
 \section{Earth validation} \label{sec:earth}
 %% TODO
 [Modern-Earth cold start (1 bar N$_2$/O$_2$/Ar, 400 ppm CO$_2$, RCEMIP O$_3$; \citealt{wing2018}),
-surface albedo calibrated to $T_s=288$ K. The equilibrium is insensitive to the
+surface albedo calibrated to $T_s=288$ K (Figure~\ref{fig:earth_rce}). The equilibrium is insensitive to the
 convective closure: holding all else fixed and swapping SBM for the fixed
 6.5 K km$^{-1}$ \citep{manabe1967} and RH-weighted moist-adiabat schemes shifts $T_s$ by
 only $+1.5$ and $+2.2$ K (the Zhang--McFarlane soft scheme \citep{zhang1995} runs $+7.5$ K warmer).
@@ -146,7 +146,7 @@ Standard Atmosphere 1976 (dotted).]}
 numba Lorentz$\times\chi$ code: \citet{perrin1989} $\chi$-factor plus
 HITRAN-2024 CO$_2$--CO$_2$ CIA). The dense-CO$_2$ window OLR is governed by the
 CO$_2$ far-wing/$\chi$ treatment and spans a wide envelope; ExoRT lands inside
-it, near CLIMA. Both correlated-$k$ cores are LBL-grade (F$_{\rm IR}$ within 1\%,
+it, near CLIMA (Figure~\ref{fig:lbl}). Both correlated-$k$ cores are LBL-grade (F$_{\rm IR}$ within 1\%,
 SW albedo within 0.0002 of LBL), so the model-to-Kopparapu offsets quantified
 later are CLIMA-2013 ingredient differences, not radiation-core errors.]
 
@@ -166,7 +166,7 @@ far wings, not by CIA (negligible there in both HITRAN and ExoRT).]}
 \section{The inner edge of the habitable zone} \label{sec:inner}
 %% TODO
 [Inner-edge sweep for a Sun-like star using the non-ideal (IAPWS-95) steam EOS;
-the figure compares the default MT\_CKD continuum, the BPS continuum, and CLIMA.
+Figure~\ref{fig:hz_inner} compares the default MT\_CKD continuum, the BPS continuum, and CLIMA.
 OLR asymptotes to the Simpson--Nakajima limit \citep{nakajima1992} $\approx$295 W m$^{-2}$ (Kopparapu
 291; 1.3\% high). With MT\_CKD: moist-greenhouse limit $S_{\rm eff}=1.087$
 ($d=0.959$ AU) and runaway-greenhouse limit $S_{\rm eff}=1.101$ ($d=0.953$ AU);
@@ -192,7 +192,7 @@ and runaway-greenhouse ($S_{\rm eff}=1.101$, 0.953 AU) limits are marked
 \section{The outer edge of the habitable zone} \label{sec:outer}
 %% TODO
 [Maximum-greenhouse (outer-edge) CO$_2$ sweep, 1--34.7 bar, for a Sun-like star,
-with CO$_2$ condensation and $T$-dependent $c_p$ enabled. Maximum greenhouse at
+with CO$_2$ condensation and $T$-dependent $c_p$ enabled (Figure~\ref{fig:hz_outer}). Maximum greenhouse at
 $S_{\rm eff}=0.395$ ($p_{\rm CO_2}=8.9$ bar, $d=1.59$ AU) vs Kopparapu 0.343
 ($\approx$7 bar, 1.70 AU); ours is the more conservative (closer-in) outer bound,
 pushed high by the dense-CO$_2$ radiation offset (albedo converges onto
@@ -218,11 +218,11 @@ Dashed/markers = Kopparapu (2013).]}
 Sun), K (4000--4800 K), and M (2600--3700 K), using BT-Settl SEDs \citep{allard2012} (the cool-star
 set is extended down to 2000 K). The host SED enters the cold-start column only
 through albedo, so the moist-greenhouse limit falls at a star-independent
-$T_s=344$ K and only $S_{\rm eff}$ differs between stars. The fitted boundary
+$T_s=344$ K and only $S_{\rm eff}$ differs between stars (Figure~\ref{fig:hz_fig6}). The fitted boundary
 coefficients (Table~\ref{tab:hz_coeff}) reproduce the Kopparapu quartic form
 $S_{\rm eff}=S_{\rm eff,\odot}+a\,T_\star+b\,T_\star^2+c\,T_\star^3+d\,T_\star^4$
 ($T_\star=T_{\rm eff}-5780$ K) and fit the model results to RMS $\sim10^{-3}\,
-S_\odot$ over 2000--7200 K; they are a drop-in replacement for Kopparapu's
+S_\odot$ over 2000--7200 K (Figure~\ref{fig:hz_fig7}); they are a drop-in replacement for Kopparapu's
 Table 3 with the ExoColumn radiation core ($S_{\rm eff,\odot}=1.10$, 1.09, and
 0.39 for the runaway-, moist-, and maximum-greenhouse limits).]
 
@@ -259,7 +259,7 @@ Kopparapu (2013).]}
 
 \section{Dependence on planetary mass} \label{sec:mass}
 %% TODO
-[HZ vs $T_{\rm eff}$ for 0.1, 1, and 5 $M_\oplus$. Mass sets surface gravity
+[HZ vs $T_{\rm eff}$ for 0.1, 1, and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}). Mass sets surface gravity
 ($g=g_\oplus M^{0.375}\Rightarrow$ 4.14, 9.81, 17.93 m s$^{-2}$) and N$_2$
 inventory ($p_{\rm N_2}=1\,{\rm bar}\,M^{0.75}\Rightarrow$ 0.18, 1.0, 3.34 bar);
 gravity is set at compile time. Inner (runaway) $S_{\rm eff}$ at the Sun:
