@@ -204,11 +204,10 @@ _cl = read_clima(CLIMA) if os.path.isfile(CLIMA) else None
 # Figure layout
 # ---------------------------------------------------------------------------
 fig = plt.figure(figsize=FIGSIZE)
-fig.suptitle("ExoColumn Earth reference case", fontsize=15, fontweight="bold")
 
 gs = gridspec.GridSpec(2, 2, figure=fig,
                        hspace=0.28, wspace=0.30,
-                       top=0.91, bottom=0.06, left=0.08, right=0.97)
+                       top=0.96, bottom=0.06, left=0.08, right=0.97)
 ax_T  = fig.add_subplot(gs[0, 0])
 ax_fl = fig.add_subplot(gs[0, 1])
 ax_hr = fig.add_subplot(gs[1, 0])
