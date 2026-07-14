@@ -69,7 +69,7 @@ Calculations by \citet{kasting1993} suggested that previous models lacked the ne
 The value in HZ studies is their operationalization in the search for life. The boundaries of the \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014} HZ provide constraints on the orbital distances at which a tectonically-active planet could maintain surface liquid water around a given star, which can provide a basis for choosing specific targets to observe with large ground- and space-based telescopes. The HZ concept does not categorically rule out the possibility of life existing in other places (for example, on the icy moons of outer planets), and likewise it is also incorrect to presume that a planet within its host stars HZ must inevitably be ``inhabited.'' 
 
 The HZ concept has been widely utilized since its inception and has motivated numerous applications of the concept. A non-comprehensive list of examples includes: 
-HZ calculations for dry and land-dominated planets; \citep{abe2011}; hydrogen-dominated greenhouse worlds beyond the classical HZ \citep[e.g.,][]{pierrehumbert2011, ramirez2017}; three-dimensional climate modeling calculations of the inner-edge limits \citep[e.g.,][]{leconte2013,kopparapu2016inner}; occurrence rate calculations for habitable exoplanets \citep[e.g.,][]{kopparapu2013revised,dressing2015,bryson2021occurrence}; characterization of observed exoplanet systems \citep[e.g.,][]{quintana2014, angladaescude2016, gillon2017}; and critiques of the HZ concept (\citealt{moore2017, tasker2017, zsom2015}).]
+HZ calculations for dry and land-dominated planets; \citep{abe2011}; hydrogen-dominated greenhouse worlds beyond the classical HZ \citep[e.g.,][]{pierrehumbert2011, ramirez2017}; three-dimensional climate modeling calculations of the inner-edge limits \citep[e.g.,][]{leconte2013,kopparapu2016inner}; occurrence rate calculations for habitable exoplanets \citep[e.g.,][]{kopparapu2013revised,dressing2015,bryson2021occurrence}; characterization of observed exoplanet systems \citep[e.g.,][]{quintana2014, angladaescude2016, gillon2017}; and critiques of the HZ concept (\citealt{moore2017, tasker2017, zsom2015}).
 
 The \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014} lineage of models (hereafter referred to as \texttt{Clima}) continue to serve as reference HZ boundaries for guiding observations and for comparing against computationally expensive three-dimensional models. However, no independent validation study of these HZ limits have been conducted, using a comparable radiative-convective equilibrium (RCE) climate model. Although RCE models have a long history in the study of Earth's climate \citep[e.g.,][]{manabe1967}, the \texttt{Clima} lineage has been the only RCE model with the extended capabilities of studying moist atmospheres near the inner edge of the HZ and dense CO$_2$ atmospheres at the outer edge of the HZ.
 
@@ -112,14 +112,22 @@ These modules are activated only for the corresponding inner- and outer-edge
 calculations described below.]
 
 \subsection{Earth validation} \label{sec:earth}
-%% TODO
-[Modern-Earth cold start (1 bar N$_2$/O$_2$/Ar, 400 ppm CO$_2$, RCEMIP O$_3$; \citealt{wing2018}),
-surface albedo calibrated to $T_s=288$ K (Figure~\ref{fig:earth_rce}). The equilibrium is insensitive to the
-convective closure: holding all else fixed and swapping SBM for the fixed
-6.5 K km$^{-1}$ \citep{manabe1967} and RH-weighted moist-adiabat schemes shifts $T_s$ by
-only $+1.5$ and $+2.2$ K (the Zhang--McFarlane soft scheme \citep{zhang1995} runs $+7.5$ K warmer).
-The cold-point minimum ($\approx$204 K) is $\sim$7 K warmer than konrad's RRTMG
-\citep{kluft2019, mlawer1997} ($\approx$197 K), attributable to ExoRT-n68equiv vs RRTMG radiation differences.]
+[We first validate \texttt{ExoColumn} against modern Earth. The column is
+initialized from a cold start with a 1 bar background of N$_2$, O$_2$, and Ar,
+400 ppm CO$_2$, and the RCEMIP ozone profile \citep{wing2018}, and the surface
+albedo is calibrated so that the equilibrium surface temperature reaches the
+observed global-mean value of $T_s=288$ K. The resulting temperature profile,
+radiative fluxes, heating rates, and water-vapor distribution are shown in
+Figure~\ref{fig:earth_rce}, alongside the konrad RCE model \citep{kluft2019} and a
+\texttt{Clima} calculation for comparison. The equilibrium is insensitive to the
+choice of convective closure: holding all other settings fixed and replacing SBM
+with the fixed 6.5 K\,km$^{-1}$ lapse-rate scheme \citep{manabe1967} or the
+relative-humidity-weighted moist-adiabat scheme shifts $T_s$ by only $+1.5$ and
+$+2.2$ K, respectively, while the Zhang--McFarlane scheme \citep{zhang1995} runs
+$+7.5$ K warmer. The cold-point temperature minimum ($\approx$204 K) is about 7 K
+warmer than that of konrad's RRTMG radiation core \citep{kluft2019, mlawer1997}
+($\approx$197 K), which we attribute to differences between the \texttt{ExoRT}
+n68equiv and RRTMG radiative-transfer schemes.]
 
 \begin{figure}[ht!]
 \centering
@@ -135,14 +143,21 @@ Standard Atmosphere 1976 (dotted).]}
 \end{figure}
 
 \subsection{Radiative-transfer benchmarks} \label{sec:lbl}
-%% TODO
-[Independent LBL check of the ExoRT n68equiv core (built with a
-numba Lorentz$\times\chi$ code: \citet{perrin1989} $\chi$-factor plus
-HITRAN-2024 CO$_2$--CO$_2$ CIA). The dense-CO$_2$ window OLR is governed by the
-CO$_2$ far-wing/$\chi$ treatment and spans a wide envelope; ExoRT lands inside
-it, near CLIMA (Figure~\ref{fig:lbl}). Both correlated-$k$ cores are LBL-grade (F$_{\rm IR}$ within 1\%,
-SW albedo within 0.0002 of LBL), so the model-to-Kopparapu offsets quantified
-later are CLIMA-2013 ingredient differences, not radiation-core errors.]
+[To confirm that the \texttt{ExoRT} n68equiv radiation core is accurate in the
+regimes relevant to the HZ, we compare it against independent line-by-line (LBL)
+radiative-transfer calculations. The LBL reference is built with a custom
+Lorentz$\times\chi$ code that combines the \citet{perrin1989} sub-Lorentzian
+$\chi$-factor for the CO$_2$ far line wings with HITRAN-2024 CO$_2$--CO$_2$
+collision-induced absorption (CIA). Figure~\ref{fig:lbl} compares the outgoing
+longwave radiation (OLR) for an inner-HZ-like column and a dense-CO$_2$ outer-HZ
+column. In the dense-CO$_2$ case the window OLR is controlled by the treatment of
+the CO$_2$ far wings and $\chi$-factor and spans a wide envelope; both
+\texttt{ExoRT} and \texttt{Clima} fall inside this envelope and close to one
+another. Across both cases the two correlated-$k$ cores are LBL-grade --- the
+infrared flux agrees with the LBL reference to within 1\% and the shortwave (SW)
+albedo to within 0.0002 --- so the offsets relative to \citet{kopparapu2013} that
+we quantify below arise from differences in the \texttt{Clima} 2013-era model
+ingredients rather than from errors in either radiation core.]
 
 \begin{figure*}[ht!]
 \centering
@@ -158,16 +173,21 @@ far wings, not by CIA (negligible there in both HITRAN and ExoRT).]}
 \end{figure*}
 
 \section{The inner edge of the habitable zone} \label{sec:inner}
-%% TODO
-[Inner-edge sweep for a Sun-like star using the non-ideal (IAPWS-95) steam EOS;
-Figure~\ref{fig:hz_inner} compares the default MT\_CKD continuum, the BPS continuum, and CLIMA.
-OLR asymptotes to the Simpson--Nakajima limit \citep{nakajima1992} $\approx$295 W m$^{-2}$ (Kopparapu
-291; 1.3\% high). With MT\_CKD: moist-greenhouse limit $S_{\rm eff}=1.087$
-($d=0.959$ AU) and runaway-greenhouse limit $S_{\rm eff}=1.101$ ($d=0.953$ AU);
-the BPS continuum lowers these to 1.074/1.093 and CLIMA gives 1.016/1.060. The
-residual $S_{\rm eff}$ offset vs CLIMA is near-IR shortwave H$_2$O absorption
-(our albedo plateau 0.211 vs CLIMA's 0.193), consistent with the LBL
-decomposition in Section~\ref{sec:lbl}; the OLR itself matches to 1.3\%.]
+[We locate the inner edge of the HZ by warming a Sun-like planet through a
+sequence of surface temperatures using the non-ideal IAPWS-95 steam equation of
+state. Figure~\ref{fig:hz_inner} shows the resulting OLR, planetary albedo, and
+effective stellar flux $S_{\rm eff}$ as functions of surface temperature for the
+default MT\_CKD continuum, the BPS continuum, and \texttt{Clima}. As the surface
+warms and the atmosphere becomes water-dominated, the OLR asymptotes to the
+Simpson--Nakajima radiation limit \citep{nakajima1992} of $\approx$295 W\,m$^{-2}$,
+1.3\% above the \citet{kopparapu2013} value of 291 W\,m$^{-2}$. With the MT\_CKD
+continuum we find a moist-greenhouse limit at $S_{\rm eff}=1.087$ ($d=0.959$ AU)
+and a runaway-greenhouse limit at $S_{\rm eff}=1.101$ ($d=0.953$ AU); the BPS
+continuum lowers these to 1.074 and 1.093, while \texttt{Clima} gives 1.016 and
+1.060. The residual offset in $S_{\rm eff}$ relative to \texttt{Clima} is driven
+by near-infrared shortwave absorption by water vapor --- our albedo plateau is
+0.211 versus \texttt{Clima}'s 0.193 --- consistent with the LBL decomposition of
+Section~\ref{sec:lbl}, since the OLR itself matches to within 1.3\%.]
 
 \begin{figure*}[ht!]
 \centering
@@ -184,16 +204,21 @@ and runaway-greenhouse ($S_{\rm eff}=1.101$, 0.953 AU) limits are marked
 \end{figure*}
 
 \section{The outer edge of the habitable zone} \label{sec:outer}
-%% TODO
-[Maximum-greenhouse (outer-edge) CO$_2$ sweep, 1--34.7 bar, for a Sun-like star,
-with CO$_2$ condensation and $T$-dependent $c_p$ enabled (Figure~\ref{fig:hz_outer}). Maximum greenhouse at
-$S_{\rm eff}=0.395$ ($p_{\rm CO_2}=8.9$ bar, $d=1.59$ AU) vs Kopparapu 0.343
-($\approx$7 bar, 1.70 AU); ours is the more conservative (closer-in) outer bound,
-pushed high by the dense-CO$_2$ radiation offset (albedo converges onto
-Kopparapu's by 35 bar). Caveat: above 10 bar the $k$-coefficient pressure lookup
-is clamped at the table top (ExoRT extrapolates beyond its grid), freezing
-pressure broadening at its 10 bar value while CIA/continuum use the true
-pressure.]
+[We locate the outer edge of the HZ from the maximum-greenhouse limit, sweeping
+the CO$_2$ partial pressure from 1 to 34.7 bar for a Sun-like star with CO$_2$
+condensation and a temperature-dependent CO$_2$ specific heat enabled
+(Figure~\ref{fig:hz_outer}). The maximum greenhouse --- the minimum stellar flux
+that a dense CO$_2$ atmosphere can tolerate before CO$_2$ condensation and
+Rayleigh scattering overwhelm the greenhouse warming --- occurs at
+$S_{\rm eff}=0.395$ ($p_{\rm CO_2}=8.9$ bar, $d=1.59$ AU), compared with the
+\citet{kopparapu2013} value of 0.343 ($\approx$7 bar, 1.70 AU). Our limit is thus
+the more conservative, placing the outer edge somewhat closer to the star; the
+difference is driven by the dense-CO$_2$ radiation offset, and the planetary
+albedo converges onto that of \citet{kopparapu2013} by 35 bar. We note one
+caveat: above 10 bar the correlated-$k$ pressure lookup is clamped at the top of
+the \texttt{ExoRT} pressure table (beyond which \texttt{ExoRT} would extrapolate
+its coefficients), which freezes the pressure broadening at its 10 bar value
+while the CIA and continuum opacities continue to use the true pressure.]
 
 \begin{figure}[ht!]
 \centering
@@ -207,18 +232,22 @@ Dashed/markers = Kopparapu (2013).]}
 \end{figure}
 
 \section{Habitable-zone limits across stellar spectral types} \label{sec:stellar}
-%% TODO
-[HZ limits computed for nine host stars spanning F (7200 K) through G (5780 K,
-Sun), K (4000--4800 K), and M (2600--3700 K), using BT-Settl SEDs \citep{allard2012} (the cool-star
-set is extended down to 2000 K). The host SED enters the cold-start column only
-through albedo, so the moist-greenhouse limit falls at a star-independent
-$T_s=344$ K and only $S_{\rm eff}$ differs between stars (Figure~\ref{fig:hz_fig6}). The fitted boundary
-coefficients (Table~\ref{tab:hz_coeff}) reproduce the Kopparapu quartic form
+[We next compute the HZ limits for nine host stars spanning spectral types F
+(7200 K) through G (5780 K, the Sun), K (4000--4800 K), and M (2600--3700 K),
+using BT-Settl spectral energy distributions (SEDs) \citep{allard2012}, with the
+cool-star set extended down to 2000 K. Because the host SED enters the cold-start
+column only through the planetary albedo, the moist-greenhouse limit occurs at a
+star-independent surface temperature of $T_s=344$ K, and only the corresponding
+$S_{\rm eff}$ varies between stars (Figure~\ref{fig:hz_fig6}). We fit the
+resulting boundaries to the quartic form of \citet{kopparapu2013},
 $S_{\rm eff}=S_{\rm eff,\odot}+a\,T_\star+b\,T_\star^2+c\,T_\star^3+d\,T_\star^4$
-($T_\star=T_{\rm eff}-5780$ K) and fit the model results to RMS $\sim10^{-3}\,
-S_\odot$ over 2000--7200 K (Figure~\ref{fig:hz_fig7}); they are a drop-in replacement for Kopparapu's
-Table 3 with the ExoColumn radiation core ($S_{\rm eff,\odot}=1.10$, 1.09, and
-0.39 for the runaway-, moist-, and maximum-greenhouse limits).]
+with $T_\star=T_{\rm eff}-5780$ K, obtaining a fit to the model results with a
+root-mean-square residual of $\sim10^{-3}\,S_\odot$ over 2000--7200 K
+(Figure~\ref{fig:hz_fig7}). The resulting coefficients (Table~\ref{tab:hz_coeff})
+are a drop-in replacement for Table 3 of \citet{kopparapu2013} evaluated with the
+\texttt{ExoColumn} radiation core, with $S_{\rm eff,\odot}=1.10$, 1.09, and 0.39
+for the runaway-greenhouse, moist-greenhouse, and maximum-greenhouse limits,
+respectively.]
 
 \begin{figure*}[ht!]
 \centering
@@ -252,15 +281,19 @@ Kopparapu (2013).]}
 \input{../reference/habitablezone/hz_coefficients.tex}
 
 \subsection{Dependence on planetary mass} \label{sec:mass}
-%% TODO
-[HZ vs $T_{\rm eff}$ for 0.1, 1, and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}). Mass sets surface gravity
-($g=g_\oplus M^{0.375}\Rightarrow$ 4.14, 9.81, 17.93 m s$^{-2}$) and N$_2$
-inventory ($p_{\rm N_2}=1\,{\rm bar}\,M^{0.75}\Rightarrow$ 0.18, 1.0, 3.34 bar);
-gravity is set at compile time. Inner (runaway) $S_{\rm eff}$ at the Sun:
-1.041 / 1.102 / 1.161 for 0.1 / 1 / 5 $M_\oplus$, vs Kopparapu (2014)
-0.990 / 1.107 / 1.188 --- the 1 $M_\oplus$ case matches and the mass ordering
-(higher gravity $\to$ thinner column $\to$ HZ farther in) is reproduced, with a
-somewhat compressed spread.]
+[Finally, we examine how the HZ limits depend on planetary mass, computing the
+boundaries as a function of stellar effective temperature for planets of 0.1, 1,
+and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}), following \citet{kopparapu2014}.
+Planetary mass sets both the surface gravity ($g=g_\oplus M^{0.375}$, giving
+4.14, 9.81, and 17.93 m\,s$^{-2}$) and the N$_2$ inventory
+($p_{\rm N_2}=1\,{\rm bar}\,M^{0.75}$, giving 0.18, 1.0, and 3.34 bar); in
+\texttt{ExoColumn} the surface gravity is a compile-time parameter. At the Sun,
+the inner-edge (runaway-greenhouse) $S_{\rm eff}$ is 1.041, 1.102, and 1.161 for
+the 0.1, 1, and 5 $M_\oplus$ planets, compared with 0.990, 1.107, and 1.188 from
+\citet{kopparapu2014}. The 1 $M_\oplus$ case matches closely, and the mass
+ordering --- higher gravity yields a thinner column and shifts the HZ farther in
+--- is reproduced, although with a somewhat compressed spread across the mass
+range.]
 
 \begin{figure}[ht!]
 \centering
@@ -275,25 +308,39 @@ lies $\sim$5--6\% above the 2013 fit used in Fig.~\ref{fig:hz_fig7}).]}
 \end{figure}
 
 \section{Discussion} \label{sec:discussion}
-%% TODO
-[Limitations and offsets, quantified. (1) Cloud-free 1-D column. (2) The inner-HZ
-$S_{\rm eff}$ runs $\approx$1.08--1.09 vs Kopparapu's 1.02--1.06; the LBL
-benchmarks (Section~\ref{sec:lbl}) show both radiation cores are LBL-grade, so
-this is the CLIMA-2013 ingredients (BPS near-IR continuum, $k$-distribution),
-not a core error --- it is near-IR shortwave H$_2$O absorption (albedo 0.211 vs
-0.193). (3) Surface-coupling resolution sensitivity $\sim$2 K in $T_s$.
-(4) Cold-point warm bias $\approx204$ vs $\approx197$ K (ExoRT n68equiv vs
-RRTMG). (5) Dense-CO$_2$ ($>$10 bar) $k$-table pressure extrapolation clamped.
-Net effect: ExoColumn's HZ is conservative --- inner edge slightly farther in,
-outer edge slightly closer in, than Kopparapu's.]
+[Several limitations and systematic offsets of the present calculations are worth
+noting. First, \texttt{ExoColumn} is a cloud-free one-dimensional column, so it
+omits the radiative effects of clouds and any horizontal transport. Second, our
+inner-edge $S_{\rm eff}$ runs somewhat high, $\approx$1.08--1.09 versus
+\citet{kopparapu2013}'s 1.02--1.06; the LBL benchmarks of Section~\ref{sec:lbl}
+show that both radiation cores are LBL-grade, so this offset reflects differences
+in the \texttt{Clima} 2013-era ingredients (the BPS near-infrared continuum and
+$k$-distribution) rather than an error in either core, and is specifically
+attributable to near-infrared shortwave absorption by water vapor (albedo 0.211
+versus 0.193). Third, the surface-coupling scheme introduces a residual
+resolution sensitivity of $\sim$2 K in $T_s$. Fourth, the cold-point temperature
+carries a warm bias ($\approx$204 versus $\approx$197 K), attributable to the
+\texttt{ExoRT} n68equiv versus RRTMG radiation difference noted in
+Section~\ref{sec:earth}. Fifth, for dense CO$_2$ atmospheres ($>$10 bar) the
+correlated-$k$ pressure lookup is clamped at the top of the pressure table. The
+net effect of these offsets is that \texttt{ExoColumn}'s HZ is conservative
+relative to \citet{kopparapu2013,kopparapu2014}: the inner edge lies slightly
+farther from the star and the outer edge slightly closer in.]
 
 \section{Summary and conclusions} \label{sec:summary}
-%% TODO
-[ExoColumn is a fast 1-D RCE model with ExoCAM-consistent (ExoRT) radiation,
-validated against modern Earth ($T_s=287.84$ K), LBL benchmarks (LBL-grade in
-both LW and SW), and the Kopparapu HZ limits across F--M stars and 0.1--5
-$M_\oplus$. We provide updated, ready-to-use HZ boundary coefficients
-(Table~\ref{tab:hz_coeff}).]
+[We have presented \texttt{ExoColumn}, a fast one-dimensional radiative-convective
+equilibrium model whose radiation is provided by the same \texttt{ExoRT}
+correlated-$k$ core used in the \texttt{ExoCAM} three-dimensional model
+\citep{wolf2022}. We validated the model against modern Earth (reproducing
+$T_s=287.84$ K), against line-by-line radiative-transfer benchmarks (finding both
+correlated-$k$ cores to be LBL-grade in the longwave and shortwave), and against
+the \citet{kopparapu2013,kopparapu2014} HZ limits across F- through M-type stars
+and planetary masses from 0.1 to 5 $M_\oplus$. The independent \texttt{ExoColumn}
+calculations broadly reproduce the \texttt{Clima} HZ boundaries, and where they
+differ the offsets are small and traceable to specific model ingredients. As a
+practical deliverable, we provide updated, ready-to-use HZ boundary coefficients
+(Table~\ref{tab:hz_coeff}) evaluated with the \texttt{ExoColumn} radiation
+core.]
 
 %% ============================================================
 %% Back matter
