@@ -132,13 +132,18 @@ n68equiv and RRTMG radiative-transfer schemes.]
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.8\textwidth]{reference/earth/earth_rce.pdf}
-\caption{[Modern-Earth RCE. Panels: (a) temperature profile, (b) radiative
-fluxes, (c) heating rates, (d) water vapour. ExoColumn (surface albedo 0.2736)
-gives $T_s=287.84$ K, cold-point minimum $\approx204$ K, latent/sensible heat
-fluxes 68.0/16.4 W m$^{-2}$ (Bowen ratio 0.24), and precipitation
-2.35 mm day$^{-1}$; converged in 2107 steps ($\approx$1000 model days) to a TOA
-imbalance $<0.1$ W m$^{-2}$. Compared with konrad (RRTMG), CLIMA, and the US
-Standard Atmosphere 1976 (dotted).]}
+\caption{[Modern-Earth radiative--convective equilibrium computed with
+\texttt{ExoColumn}. The four panels show (a) the temperature profile, (b) the
+upward and downward longwave and shortwave radiative fluxes, (c) the longwave,
+shortwave, and net heating rates, and (d) the water-vapor mixing ratio, all
+against pressure. With a calibrated surface albedo of 0.2736, \texttt{ExoColumn}
+reaches an equilibrium surface temperature $T_s=287.84$ K and a cold-point
+minimum of $\approx$204 K, with latent and sensible heat fluxes of 68.0 and
+16.4 W\,m$^{-2}$ (Bowen ratio 0.24) and a precipitation rate of
+2.35 mm\,day$^{-1}$; the run converges in 2107 steps ($\approx$1000 model days) to
+a top-of-atmosphere (TOA) flux imbalance below 0.1 W\,m$^{-2}$. For comparison we
+overplot the konrad RCE model (RRTMG radiation), a \texttt{Clima} calculation, and
+the US Standard Atmosphere 1976 (USSA-1976; dotted).]}
 \label{fig:earth_rce}
 \end{figure}
 
@@ -162,13 +167,18 @@ ingredients rather than from errors in either radiation core.]
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=\textwidth]{reference/max_greenhouse/lbl_olr_benchmark_2panel.pdf}
-\caption{[LBL validation of the ExoRT n68equiv core. Left: inner-HZ-like column
-($T_s=300$ K). Right: outer-HZ dense-CO$_2$ column (8.87 bar). Grey = LBL
-reference, black = n68 band averages, red = ExoRT, green = CLIMA (2013-era and
-Wolf 2016). For the dense-CO$_2$ window the OLR ranges from $\approx$44 (pure
-Lorentz) to $\approx$92 W m$^{-2}$ (PH89 $\chi$); ExoRT (75.5) and CLIMA
-(69--72) both sit inside this envelope. The window spread is set by the CO$_2$
-far wings, not by CIA (negligible there in both HITRAN and ExoRT).]}
+\caption{[Line-by-line (LBL) validation of the \texttt{ExoRT} n68equiv radiation
+core. The left panel shows an inner-HZ-like column ($T_s=300$ K) and the right
+panel an outer-HZ dense-CO$_2$ column (8.87 bar). Curves are the LBL reference
+(grey), the n68 band averages (black), \texttt{ExoRT} (red), and \texttt{Clima}
+(green; both the 2013-era and Wolf 2016 continuum configurations). In the
+dense-CO$_2$ window the outgoing longwave radiation (OLR) ranges from
+$\approx$44 W\,m$^{-2}$ for a pure-Lorentz line shape to $\approx$92 W\,m$^{-2}$
+for the \citet{perrin1989} $\chi$-factor; \texttt{ExoRT} (75.5 W\,m$^{-2}$) and
+\texttt{Clima} (69--72 W\,m$^{-2}$) both lie inside this envelope. The spread
+across the window is set by the treatment of the CO$_2$ far wings rather than by
+collision-induced absorption (CIA), which is negligible there in both the HITRAN
+data and \texttt{ExoRT}.]}
 \label{fig:lbl}
 \end{figure*}
 
@@ -192,14 +202,16 @@ Section~\ref{sec:lbl}, since the OLR itself matches to within 1.3\%.]
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=\textwidth]{reference/moist_runaway/hz_inner_nonideal.pdf}
-\caption{[Inner edge of the HZ for a Sun-like star (analogue of Kopparapu et al.
-2013, Fig. 3). Panels (a)--(c): OLR, planetary albedo, and effective stellar
-flux $S_{\rm eff}$ vs surface temperature for the MT\_CKD (default) and BPS
-continua and CLIMA; panel (d): H$_2$O volume mixing ratio profiles (altitude vs
-VMR) at $T_s$ = 320, 340, 360 K. OLR caps near the Simpson--Nakajima limit
-($\approx$295 W m$^{-2}$); the moist-greenhouse ($S_{\rm eff}=1.087$, 0.959 AU)
-and runaway-greenhouse ($S_{\rm eff}=1.101$, 0.953 AU) limits are marked
-(MT\_CKD). Dashed/markers = Kopparapu/CLIMA (2013) data.]}
+\caption{[Inner edge of the HZ for a Sun-like star, an analogue of Figure 3 of
+\citet{kopparapu2013}. Panels (a)--(c) show the outgoing longwave radiation (OLR),
+planetary albedo, and effective stellar flux $S_{\rm eff}$ as functions of surface
+temperature for the MT\_CKD (default) and BPS continua and for \texttt{Clima};
+panel (d) shows the H$_2$O volume mixing ratio (VMR) profiles (altitude versus
+VMR) at $T_s=320$, 340, and 360 K. The OLR saturates near the Simpson--Nakajima
+limit ($\approx$295 W\,m$^{-2}$), and the moist-greenhouse ($S_{\rm eff}=1.087$,
+$d=0.959$ AU) and runaway-greenhouse ($S_{\rm eff}=1.101$, $d=0.953$ AU) limits
+for the MT\_CKD continuum are marked. Dashed curves and markers show the
+\citet{kopparapu2013} \texttt{Clima} data.]}
 \label{fig:hz_inner}
 \end{figure*}
 
@@ -223,11 +235,12 @@ while the CIA and continuum opacities continue to use the true pressure.]
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.45\textwidth]{reference/max_greenhouse/hz_outer.pdf}
-\caption{[Outer edge of the HZ for a Sun-like star (analogue of Kopparapu et al.
-2013, Fig. 5): effective stellar flux $S_{\rm eff}$ vs CO$_2$ partial pressure
-over a 1--34.7 bar sweep. The maximum-greenhouse limit (minimum $S_{\rm eff}$)
-is $0.395$ at 8.9 bar ($d=1.59$ AU); Kopparapu's is 0.343 at $\approx$7 bar.
-Dashed/markers = Kopparapu (2013).]}
+\caption{[Outer edge of the HZ for a Sun-like star, an analogue of Figure 5 of
+\citet{kopparapu2013}: effective stellar flux $S_{\rm eff}$ as a function of
+CO$_2$ partial pressure over a 1--34.7 bar sweep. The maximum-greenhouse limit
+(the minimum $S_{\rm eff}$) is 0.395 at 8.9 bar ($d=1.59$ AU); the corresponding
+\citet{kopparapu2013} value is 0.343 at $\approx$7 bar. Dashed curves and markers
+show the \citet{kopparapu2013} data.]}
 \label{fig:hz_outer}
 \end{figure}
 
@@ -252,26 +265,28 @@ respectively.]
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=0.95\textwidth]{reference/habitablezone/hz_figure6.pdf}
-\caption{[HZ limits across stellar type (analogue of Kopparapu et al. 2013,
-Fig. 6): planetary albedo and effective stellar flux $S_{\rm eff}$ vs (top)
-surface temperature and (bottom) CO$_2$ partial pressure, for nine host stars
-from M (2600 K) to F (7200 K). Maximum-greenhouse $S_{\rm eff}$ rises from 0.239
-(M, 2600 K) through 0.395 (G, Sun) to 0.497 (F, 7200 K): cooler, redder stars
-have lower albedo (more near-IR absorption), warming the column and shifting the
-HZ to lower $S_{\rm eff}$.]}
+\caption{[HZ limits across stellar type, an analogue of Figure 6 of
+\citet{kopparapu2013}: planetary albedo and effective stellar flux $S_{\rm eff}$
+as functions of (top) surface temperature and (bottom) CO$_2$ partial pressure,
+for nine host stars ranging from M (2600 K) to F (7200 K). The maximum-greenhouse
+$S_{\rm eff}$ rises from 0.239 (M, 2600 K) through 0.395 (G, the Sun) to 0.497
+(F, 7200 K): cooler, redder stars have lower planetary albedo owing to increased
+near-infrared absorption, which warms the column and shifts the HZ to lower
+$S_{\rm eff}$.]}
 \label{fig:hz_fig6}
 \end{figure*}
 
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.65\textwidth]{reference/habitablezone/hz_figure7.pdf}
-\caption{[HZ boundaries vs stellar effective temperature (analogue of Kopparapu
-et al. 2013, Fig. 7). Top: $S_{\rm eff}$ at the moist- and maximum-greenhouse
-limits vs $T_{\rm eff}$. Bottom: corresponding orbital distance vs stellar mass
-from $d=\sqrt{(L/L_\odot)/S_{\rm eff}}$, using the \citet{baraffe1998} 5 Gyr
-solar-metallicity isochrone (the F star anchored to the present-day main
-sequence). Solar System and TRAPPIST-1 planets shown for reference. Dashed =
-Kopparapu (2013).]}
+\caption{[HZ boundaries as a function of stellar effective temperature, an
+analogue of Figure 7 of \citet{kopparapu2013}. The top panel shows $S_{\rm eff}$
+at the moist- and maximum-greenhouse limits versus $T_{\rm eff}$. The bottom panel
+shows the corresponding orbital distance versus stellar mass, obtained from
+$d=\sqrt{(L/L_\odot)/S_{\rm eff}}$ using the \citet{baraffe1998} 5 Gyr
+solar-metallicity isochrone (with the F star anchored to the present-day main
+sequence). The Solar System and TRAPPIST-1 planets are shown for reference, and
+dashed curves show the \citet{kopparapu2013} boundaries.]}
 \label{fig:hz_fig7}
 \end{figure}
 
@@ -298,12 +313,14 @@ range.]
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.7\textwidth]{reference/planet_mass/hz_mass.pdf}
-\caption{[HZ dependence on planet mass (analogue of Kopparapu et al. 2014,
-Fig. 3): HZ limits vs stellar effective temperature for 0.1, 1, and 5 $M_\oplus$
-planets, which differ in surface gravity (4.14/9.81/17.93 m s$^{-2}$) and N$_2$
-inventory (0.18/1.0/3.34 bar). Inner-edge (runaway) $S_{\rm eff}$ at the Sun is
-1.041/1.102/1.161. Dashed = Kopparapu (2014) Eq. 4 (note: the 2014 runaway fit
-lies $\sim$5--6\% above the 2013 fit used in Fig.~\ref{fig:hz_fig7}).]}
+\caption{[Dependence of the HZ on planetary mass, an analogue of Figure 3 of
+\citet{kopparapu2014}: HZ limits as a function of stellar effective temperature
+for 0.1, 1, and 5 $M_\oplus$ planets, which differ in surface gravity (4.14, 9.81,
+and 17.93 m\,s$^{-2}$) and N$_2$ inventory (0.18, 1.0, and 3.34 bar). The
+inner-edge (runaway-greenhouse) $S_{\rm eff}$ at the Sun is 1.041, 1.102, and
+1.161, respectively. Dashed curves show the \citet{kopparapu2014} Equation 4; note
+that the 2014 runaway fit lies $\sim$5--6\% above the 2013 fit used in
+Figure~\ref{fig:hz_fig7}.]}
 \label{fig:hz_mass}
 \end{figure}
 
