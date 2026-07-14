@@ -36,12 +36,12 @@
 %% [Co-authors added per request. Affiliations are my best guess -- please
 %% verify/replace, and add ORCIDs and \email{} addresses as appropriate.]
 \author[0000-0002-7188-1648]{Eric T. Wolf}
-\affiliation{[Laboratory for Atmospheric and Space Physics, University of Colorado Boulder, Boulder, CO, USA]}
-\email{[add email]}
+\affiliation{Laboratory for Atmospheric and Space Physics, University of Colorado Boulder, Boulder, CO, USA}
+\email{eric.wolf@colorado.edu}
 
 \author[0000-0002-5893-2471]{Ravi K. Kopparapu}
-\affiliation{[NASA Goddard Space Flight Center, Greenbelt, MD, USA]}
-\email{[add email]}
+\affiliation{NASA Goddard Space Flight Center, Greenbelt, MD, USA}
+\email{ravikumar.kopparapu@nasa.gov}
 
 %% Additional authors go here.
 
@@ -64,39 +64,25 @@ Earth is the only planet in the Solar System with liquid water on its surface, a
 
 The region around a star where life can survive has been termed the ``habitable zone'' (HZ). Estimates by \citet{Dole2007HabitableMan} found an optimistic HZ between 0.725--1.24\,AU, due to the use of a simplified representation of a thin atmosphere with fixed surface albedo. Calculations by \citet{hart1979} were the first to consider the increasing luminosity of host star during its main sequence phase, which produced a ``continuously habitable zone'' (CHZ) in which life could avoid a runaway greenhouse at the inner edge and runaway glaciation at the outer edge. \citet{hart1979} found a narrow CHZ range of 0.95--1.01\,AU for the solar system, and a non-existent CHZ for stars later than K0, which would imply that habitable exoplanets may be rare and limited to Sun-like stars. 
 
-Calculations by \citet{kasting1993} suggested that previous models lacked the negative stabilizing feedback on Earth's climate that arises from the carbonate-silicate cycle, in which the long-term abundance of atmospheric CO2 is regulated by temperature-dependent weathering with crustal rocks \citep{walker1981negative}. The \citet{kasting1993} model gave a conservative estimate of the CHZ as 0.95--1.67\,AU, with the inner edge at moist greenhouse limit where water is lost to space and the outer edge at the maximum greenhouse limit for a CO$_2$ atmosphere. \citet{kasting1993} also noted that the CHZ is wider for K- and M-type stars due to their slower main sequence evolution; however, later type stars are also prone to synchronous rotation. Updates to the \citet{kasting1993} model by \citet{kopparapu2013,kopparapu2014} revised the CHZ for the Solar System to 0.99--1.70\,AU, with Earth residing closer to the innermost edge.
+Calculations by \citet{kasting1993} suggested that previous models lacked the negative stabilizing feedback on Earth's climate that arises from the carbonate-silicate cycle, in which the long-term abundance of atmospheric CO2 is regulated by temperature-dependent weathering with crustal rocks \citep{walker1981negative}. The \citet{kasting1993} model gave a conservative estimate of the CHZ as 0.95--1.67\,AU, with the inner edge at moist greenhouse limit where water is lost to space and the outer edge at the maximum greenhouse limit for a CO$_2$ atmosphere. \citet{kasting1993} also noted that the CHZ is wider for K- and M-type stars due to their slower main sequence evolution; however, later type stars are also prone to synchronous rotation. Updates to the \citet{kasting1993} model by \citet{kopparapu2013,kopparapu2014} revised the CHZ for the Solar System to 0.99--1.70\,AU, with Earth residing closer to the innermost edge. The key insight from these HZ studies is that tectonically-active terrestrial planets with a means of recycling volatiles (e.g., by a carbonate-silicate cycle) can include self-regulating negative feedback that can maintain habitable conditions despite a brightening host star. If such processes operate on some terrestrial exoplanets, then this implies that habitable exoplanets may be common and may occur around various stellar types.
 
+The value in HZ studies is their operationalization in the search for life. The boundaries of the \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014} HZ provide constraints on the orbital distances at which a tectonically-active planet could maintain surface liquid water around a given star, which can provide a basis for choosing specific targets to observe with large ground- and space-based telescopes. The HZ concept does not categorically rule out the possibility of life existing in other places (for example, on the icy moons of outer planets), and likewise it is also incorrect to presume that a planet within its host stars HZ must inevitably be ``inhabited.'' 
 
+The HZ concept has been widely utilized since its inception and has motivated numerous applications of the concept. A non-comprehensive list of examples includes: 
+HZ calculations for dry and land-dominated planets; \citep{abe2011}; hydrogen-dominated greenhouse worlds beyond the classical HZ \citep[e.g.,][]{pierrehumbert2011, ramirez2017}; three-dimensional climate modeling calculations of the inner-edge limits \citep[e.g.,][]{leconte2013,kopparapu2016inner}; occurrence rate calculations for habitable exoplanets \citep[e.g.,][]{kopparapu2013revised,dressing2015,bryson2021occurrence}; characterization of observed exoplanet systems \citep[e.g.,][]{quintana2014, angladaescude2016, gillon2017}; and critiques of the HZ concept (\citealt{moore2017, tasker2017, zsom2015}).]
 
+The \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014} lineage of models (hereafter referred to as \texttt{Clima}) continue to serve as reference HZ boundaries for guiding observations and for comparing against computationally expensive three-dimensional models. However, no independent validation study of these HZ limits have been conducted, using a comparable radiative-convective equilibrium (RCE) climate model. Although RCE models have a long history in the study of Earth's climate \citep[e.g.,][]{manabe1967}, the \texttt{Clima} lineage has been the only RCE model with the extended capabilities of studying moist atmospheres near the inner edge of the HZ and dense CO$_2$ atmospheres at the outer edge of the HZ.
 
-
-
-
-
-
-
-%% TODO
-
-
-%% [New second paragraph -- citation scaffolding only; narrative to be written.]
-[HZ developments since \citet{kasting1993}: extensions of the concept (dry/land
-planets, \citealt{abe2011}; H$_2$-greenhouse worlds beyond the classical HZ,
-\citealt{pierrehumbert2011, ramirez2017}; 3-D runaway-greenhouse inner-edge
-limits, \citealt{leconte2013}); applications to observed systems
-(\citealt{quintana2014, dressing2015, angladaescude2016, gillon2017}); and
-critiques of the concept (\citealt{moore2017, tasker2017, zsom2015}).]
-
-[One-dimensional radiative--convective equilibrium (RCE) models \citep{manabe1967}
-are the standard tool for computing habitable-zone (HZ) limits
-\citep{kasting1993, kopparapu2013, kopparapu2014}. ExoColumn pairs a conventional
-RCE column with the ExoRT correlated-$k$ radiation package used by the ExoCAM GCM
-\citep{wolftoon2015, wolf2022}, so its 1-D radiation is
-consistent with 3-D simulations. This paper documents the model and validates it
-against (i) modern Earth, (ii) line-by-line (LBL) radiative-transfer benchmarks,
-and (iii) the Kopparapu et al. (2013, 2014) HZ limits, then provides updated HZ
-boundary coefficients (Table~\ref{tab:hz_coeff}) for community use.]
+In this paper we present the \texttt{ExoColumn} RCE model, which was designed to have the same functionality as \texttt{Clima}. \texttt{ExoColumn} includes an independently-developed RCE column model, which is paired with the \texttt{ExoRT} correlated-$k$ radiation package used by the \texttt{ExoCAM} three-dimensional model \citep{wolf2022}. This design choice will enable future hierarchical comparisons between one-dimensional \texttt{ExoColumn} and three-dimensional \texttt{ExoCAM}, with the \texttt{ExoRT} radiative transfer core remaining identical. One-dimensional RCE models also remain valuable tools for exoplanet science, as they can provide more rapid exploration of a large parameter space than is feasible for more computationally expensive models. In the present paper, we present a description of \texttt{ExoColumn}, which is intended as a validation of previous HZ studies with \texttt{Clima} and a demonstration of the model's capabilities for subsequent studies. We first tune the model to present-day Earth conditions and compare the radiative transfer against line-by-line benchmarks (\S\ref{sec:model}). We perform calculations for the inner (\S\ref{sec:inner}) and outer (\S\ref{sec:outer}) edges of the HZ, following the same model configuration as \citep{kopparapu2013,kopparapu2014}. We show HZ limits across spectral types (\S\ref{sec:stellar}) and provide updated HZ boundary coefficients (Table~\ref{tab:hz_coeff}) for community use. 
 
 \section{The ExoColumn model} \label{sec:model}
+
+
+
+
+
+
+
 %% TODO
 [ExoColumn is a 1-D RCE model that calls ExoRT's \texttt{aerad\_driver}
 radiation routine directly (the same correlated-$k$ core as ExoCAM; \citealt{wolf2022}), using the
@@ -117,7 +103,7 @@ with the \citet{kasting1988} non-ideal moist adiabat; the BPS/Wolf H$_2$O contin
 and CO$_2$ condensation with $T$-dependent $c_p$ for the outer HZ. The model is
 Fortran; ExoRT is used unmodified.]
 
-\section{Earth validation} \label{sec:earth}
+\subsection{Earth validation} \label{sec:earth}
 %% TODO
 [Modern-Earth cold start (1 bar N$_2$/O$_2$/Ar, 400 ppm CO$_2$, RCEMIP O$_3$; \citealt{wing2018}),
 surface albedo calibrated to $T_s=288$ K (Figure~\ref{fig:earth_rce}). The equilibrium is insensitive to the
@@ -140,7 +126,7 @@ Standard Atmosphere 1976 (dotted).]}
 \label{fig:earth_rce}
 \end{figure}
 
-\section{Radiative-transfer benchmarks} \label{sec:lbl}
+\subsection{Radiative-transfer benchmarks} \label{sec:lbl}
 %% TODO
 [Independent LBL check of the ExoRT n68equiv core (built with a
 numba Lorentz$\times\chi$ code: \citet{perrin1989} $\chi$-factor plus
@@ -257,7 +243,7 @@ Kopparapu (2013).]}
 %% regenerated on each run, so rewrite them in the script (not the .tex) or here.
 \input{../reference/habitablezone/hz_coefficients.tex}
 
-\section{Dependence on planetary mass} \label{sec:mass}
+\subsection{Dependence on planetary mass} \label{sec:mass}
 %% TODO
 [HZ vs $T_{\rm eff}$ for 0.1, 1, and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}). Mass sets surface gravity
 ($g=g_\oplus M^{0.375}\Rightarrow$ 4.14, 9.81, 17.93 m s$^{-2}$) and N$_2$
@@ -310,7 +296,7 @@ This paper is dedicated to Jim Kasting. This material is based on work performed
 \end{acknowledgments}
 
 %\facilities{}
-%\software{}
+\software{\texttt{ExoColumn} \citep[][]{}, Matplotlib \citep{Hunter2007}, Claude Code \citep[Opus 4.8,][]{anthropic2026opus48}}
 
 %\appendix
 %\section{} \label{sec:appendix}
