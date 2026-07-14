@@ -82,7 +82,20 @@ In this paper we present the \texttt{ExoColumn} RCE model, which was designed to
 The default convection scheme is simplified Betts--Miller (SBM; \citealt{betts1986, bettsmiller1986, frierson2007}), which relaxes the temperature profile toward a moist adiabat and humidity toward a reference relative humidity (0.7). Other convection schemes are also selectable: dry convective adjustment \citep{manabe1964}, Manabe-Wetherald moist adjustment schemes \citep{manabe1967}, and the Zhang--McFarlane scheme
 \citep{zhang1995}. \texttt{ExoColumn} has no separate boundary-layer scheme; instead, surface turbulent fluxes use a simplified Monin--Obukhov formulation \citep{frierson2006} with a resolution-independent value of the drag coefficient ($C\approx10^{-3}$), referenced at a fixed 10\,m height, which is paired with a surface-coupled mixed layer. Water vapor is prognostic and calculated with the Clausius-Clapeyron relation. \texttt{ExoColumn} also implements a stratospheric ``cold trap'' intended to represent statospheric drying due to the Brewer--Dobson cycle. The model calculates the cold-point tropopause as the level of minimum saturation mixing ratio, so that an ascending parcel's water vapor is reduced to this value at the tropopause and conserved on its continued ascent into the stratosphere. 
 
-[The surface is a slab ocean
+[\texttt{ExoColumn} is initialized either from a cold start or from an input
+profile. In a cold start the column is built on a log-spaced pressure grid from
+$p_{\rm top}$ to the surface pressure $p_s$: the initial temperature is set by
+integrating a moist adiabat upward from the surface temperature $T_s$, capped at
+an isothermal stratosphere at $T_{\rm strato}$; water vapor is set to
+$\mathrm{RH}_{\rm init}\,q_{\rm sat}$ in the troposphere (and dried above); and
+the dry gases are well-mixed. Alternatively, the initial state is read from a
+stored profile. The temperature profile is then advanced toward
+radiative--convective equilibrium by time-marching: at each step \texttt{ExoRT}
+returns the longwave and shortwave radiative heating rates for the current
+profile, which are applied to the layer temperatures together with the surface
+sensible- and latent-heat sources in the lowest layer, after which the convective
+adjustment restores the column to a lapse-rate-stable, sub-saturated state. The
+surface is a slab ocean
 ($H_{\rm slab}=4.1\times10^{7}\,{\rm J\,m^{-2}\,K^{-1}}$ for a 10 m layer) whose
 temperature is evolved with semi-implicit Planck damping: the surface upward
 longwave emission $\sigma T_s^4$ is linearized about the current temperature and
@@ -95,7 +108,15 @@ themselves remain explicit. The column is marched to equilibrium with an
 adaptive time step set by a Courant--Friedrichs--Lewy (CFL) stability limit: each
 step is sized so that the largest radiative temperature tendency in the column
 produces a change of at most $\Delta T_{\rm target}=1$ K, with the resulting step
-clamped to the range $[10^{-4},1]$ day.]
+clamped to the range $[10^{-4},1]$ day. The model is considered converged when
+either of two criteria is met: (i) radiative equilibrium, in which the
+column-maximum longwave-plus-shortwave heating rate falls below
+$0.01$ K\,day$^{-1}$ and the net top-of-atmosphere (TOA) flux below
+$0.1$ W\,m$^{-2}$; or (ii) profile stability, in which the time-mean changes over
+successive 100-day windows fall below fixed thresholds
+($\max|\Delta T|<1$ K in the temperature profile, $|\Delta T_s|<0.02$ K at the
+surface, and $\max|\Delta q|<5\times10^{-4}$ kg\,kg$^{-1}$ in water vapor) while
+the window-mean TOA flux stays below $0.1$ W\,m$^{-2}$.]
 
 [Optional physics, all default-off (results
 bit-identical when off): IAPWS-95 non-ideal steam EOS \citep{wagner2002}
