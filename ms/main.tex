@@ -92,10 +92,24 @@ First, the surface upward longwave emission $\sigma T_s^4$ is linearized about t
 \end{equation}
 where $F_{net}^{srf}$ is the net surface radiative flux, $LE$ is the latent heat flux, and $SE$ is the sensible heat flux. This is intended to damp temperature overshoots and keep the slab energy budget stable at large time steps The column is marched to equilibrium with an adaptive time step set by a Courant--Friedrichs--Lewy (CFL) stability limit. Each step is sized so that the largest radiative temperature tendency in the column produces a change of at most $\Delta T_{\rm target}=1$ K, with the resulting step restricted to the range $\Delta t\ = [10^{-4},1]$ day. The model is considered converged when either of two criteria is met. \textit{Radiative equilibrium convergence} occurs when the column maximum sum of longwave plus shortwave heating falls below $0.01$ K\,day$^{-1}$ and the net top-of-atmosphere (TOA) flux falls below $0.1$ W\,m$^{-2}$. \textit{Profile stability convergence} occurs when the changes in time-mean profiles over successive 100-day windows fall below fixed thresholds ($\max|\Delta T|<1$ K in the temperature profile, $|\Delta T_s|<0.02$ K at the surface, and $\max|\Delta q|<5\times10^{-4}$ kg\,kg$^{-1}$ in water vapor) while the window-mean TOA flux stays below $0.1$ W\,m$^{-2}$.]
 
-[Optional physics, all default-off (results
-bit-identical when off): IAPWS-95 non-ideal steam EOS \citep{wagner2002}
-with the \citet{kasting1988} non-ideal moist adiabat; the BPS/Wolf H$_2$O continuum;
-and CO$_2$ condensation with $T$-dependent $c_p$ for the outer HZ.]
+[\texttt{ExoColumn} includes several optional physics modules, all disabled by
+default; when off, results are bit-identical to the baseline configuration. Each
+is intended for a specific regime beyond modern-Earth conditions. For the hot,
+water-rich atmospheres approached at the inner edge of the HZ --- where water
+vapor becomes a major constituent and departs from ideal-gas behavior --- the
+default ideal-gas Clausius--Clapeyron treatment can be replaced by the IAPWS-95
+non-ideal equation of state (EOS) for water \citep{wagner2002}, paired with the
+\citet{kasting1988} non-ideal moist adiabat; this carries the real-gas heat
+capacity of steam and remains valid up to the critical point (647 K). The default
+MT\_CKD water-vapor continuum can be replaced by the BPS/Wolf continuum used in
+the \texttt{Clima} models \citep{kopparapu2013}, allowing a like-for-like
+comparison of the continuum treatment against previous HZ calculations. For the
+cold, dense CO$_2$ atmospheres at the outer edge of the HZ, CO$_2$ condensation
+can be enabled: the temperature profile is pinned to the CO$_2$ saturation curve
+\citep{span1996} wherever the dry adiabat would otherwise supersaturate in CO$_2$
+\citep{kasting1991}, together with a temperature-dependent CO$_2$ specific heat.
+These modules are activated only for the corresponding inner- and outer-edge
+calculations described below.]
 
 \subsection{Earth validation} \label{sec:earth}
 %% TODO
