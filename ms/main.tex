@@ -88,16 +88,27 @@ In this paper we present the \texttt{ExoColumn} RCE model, which was designed to
 radiation routine directly (the same correlated-$k$ core as ExoCAM; \citealt{wolf2022}), using the
 n68equiv 68-band scheme. Vertical grid: default 70 layers, log-spaced from
 $p_{\rm top}$ to the surface; layer count is a compile-time constant. Convection
-(default): simplified Betts--Miller (SBM; \citealt{frierson2007}), relaxing temperature to
-the moist adiabat and humidity to a reference RH (0.7); four other schemes are
-selectable. Surface turbulent fluxes: simplified Monin--Obukhov \citep{frierson2006}
+(default): simplified Betts--Miller (SBM; \citealt{betts1986, bettsmiller1986, frierson2007}),
+relaxing temperature to the moist adiabat and humidity to a reference RH (0.7);
+four other schemes are selectable --- dry convective adjustment
+\citep{manabe1964}, a relative-humidity-weighted moist adjustment and a fixed
+6.5 K\,km$^{-1}$ lapse rate \citep{manabe1967}, and the Zhang--McFarlane scheme
+\citep{zhang1995}. Surface turbulent fluxes: simplified Monin--Obukhov \citep{frierson2006}
 with the drag coefficient referenced at a fixed 10 m height (resolution-
 independent, $C\approx10^{-3}$), paired with a surface-coupled mixed layer --- no
 separate boundary-layer scheme. Water vapour is prognostic, with a cold-point
-(Brewer--Dobson) stratospheric cold trap. The surface is a slab ocean
+(Brewer--Dobson) stratospheric cold trap: air rising into the stratosphere is
+dehydrated (freeze-dried) to the saturation mixing ratio at the cold-point
+tropopause --- the level of minimum saturation mixing ratio --- and conserves
+that value on ascent, so the cold point sets the humidity of the entire
+overlying stratosphere (as in the Brewer--Dobson picture of Earth's
+stratospheric water budget). The surface is a slab ocean
 ($H_{\rm slab}=4.1\times10^{7}\,{\rm J\,m^{-2}\,K^{-1}}$ for a 10 m layer) evolved
-with semi-implicit Planck damping. Adaptive CFL timestep $\in[10^{-4},1]$ day
-with $\Delta T_{\rm target}=1$ K. Optional physics, all default-off (results
+with semi-implicit Planck damping. The column is marched to equilibrium with an
+adaptive time step set by a Courant--Friedrichs--Lewy (CFL) stability limit: each
+step is sized so that the largest radiative temperature tendency in the column
+produces a change of at most $\Delta T_{\rm target}=1$ K, with the resulting step
+clamped to the range $[10^{-4},1]$ day. Optional physics, all default-off (results
 bit-identical when off): IAPWS-95 non-ideal steam EOS \citep{wagner2002}
 with the \citet{kasting1988} non-ideal moist adiabat; the BPS/Wolf H$_2$O continuum;
 and CO$_2$ condensation with $T$-dependent $c_p$ for the outer HZ. The model is
