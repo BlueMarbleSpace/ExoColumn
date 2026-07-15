@@ -196,21 +196,47 @@ for the MT\_CKD continuum are marked. Dashed curves and markers show the
 \end{figure*}
 
 \section{The outer edge of the habitable zone} \label{sec:outer}
-[We locate the outer edge of the HZ from the maximum-greenhouse limit, sweeping
-the CO$_2$ partial pressure from 1 to 34.7 bar for a Sun-like star with CO$_2$
-condensation and a temperature-dependent CO$_2$ specific heat enabled
-(Figure~\ref{fig:hz_outer}). The maximum greenhouse --- the minimum stellar flux
-that a dense CO$_2$ atmosphere can tolerate before CO$_2$ condensation and
-Rayleigh scattering overwhelm the greenhouse warming --- occurs at
-$S_{\rm eff}=0.395$ ($p_{\rm CO_2}=8.9$ bar, $d=1.59$ AU), compared with the
-\citet{kopparapu2013} value of 0.343 ($\approx$7 bar, 1.70 AU). Our limit is thus
-the more conservative, placing the outer edge somewhat closer to the star; the
-difference is driven by the dense-CO$_2$ radiation offset, and the planetary
-albedo converges onto that of \citet{kopparapu2013} by 35 bar. We note one
-caveat: above 10 bar the correlated-$k$ pressure lookup is clamped at the top of
-the \texttt{ExoRT} pressure table (beyond which \texttt{ExoRT} would extrapolate
-its coefficients), which freezes the pressure broadening at its 10 bar value
-while the CIA and continuum opacities continue to use the true pressure.]
+[We locate the outer edge of the HZ from the maximum-greenhouse limit, following
+the inverse method of \citet{kopparapu2013} (their Section 3.3). Here the surface
+temperature is held fixed at 273 K over a 1 bar N$_2$ background, and the CO$_2$
+partial pressure is swept from 1 bar up to 34.7 bar --- the saturation pressure of
+CO$_2$ at 273 K, and hence the physical endpoint of the sweep. For each CO$_2$
+loading we build a water-saturated moist-adiabat column in which the temperature
+profile is pinned to the CO$_2$ saturation curve wherever the dry adiabat would
+otherwise supersaturate (CO$_2$ condensation; \citealt{kasting1991}, with the
+\citealt{span1996} saturation curve), the CO$_2$ contribution to the specific heat
+is evaluated at the local temperature, and the stratosphere is isothermal at 154 K.
+As in the inner-edge calculation, the radiation scheme is then called a single time
+to return the OLR and the absorbed shortwave, and the effective stellar flux is
+$S_{\rm eff}=\mathrm{OLR}/\mathrm{ASR}$ (surface albedo 0.32, six-point hemispheric
+zenith average, present solar constant). The maximum-greenhouse limit --- the outer
+edge --- is the minimum of $S_{\rm eff}$ over the sweep.]
+
+[Figure~\ref{fig:hz_outer} shows the sweep in the three-panel format of
+\citet{kopparapu2013}, with their digitized curves overlaid for comparison. Panel
+(a) shows the OLR ($F_{\rm IR}$) and the absorbed shortwave ($F_{\rm SOL}$): as
+CO$_2$ is added, the OLR falls from $\approx$123 W\,m$^{-2}$ at 1 bar to a floor of
+$\approx$72 W\,m$^{-2}$ beyond $\sim$10 bar, where the CO$_2$ greenhouse saturates,
+while the absorbed shortwave declines steadily from $\approx$228 to
+$\approx$157 W\,m$^{-2}$ as CO$_2$ Rayleigh scattering grows. Panel (b) shows the
+planetary albedo, which rises monotonically from $\approx$0.33 to $\approx$0.54
+across the sweep, driven by that increasing Rayleigh scattering. Panel (c) shows the
+resulting $S_{\rm eff}=\mathrm{OLR}/\mathrm{ASR}$, which is U-shaped: adding CO$_2$
+initially deepens the greenhouse faster than it brightens the planet, lowering
+$S_{\rm eff}$, until near 9 bar the greenhouse saturates and the still-rising albedo
+turns $S_{\rm eff}$ back upward. The minimum of this curve is the maximum-greenhouse
+limit.]
+
+[We find the maximum greenhouse at $S_{\rm eff}=0.395$ ($p_{\rm CO_2}=8.9$ bar,
+$d=1.59$ AU), compared with the \citet{kopparapu2013} value of 0.343
+($\approx$7 bar, 1.70 AU). Our limit is thus the more conservative, placing the
+outer edge somewhat closer to the star; the difference is driven by the dense-CO$_2$
+radiation offset discussed in Section~\ref{sec:lbl}, and the planetary albedo
+converges onto that of \citet{kopparapu2013} by 35 bar. We note one caveat: above
+10 bar the correlated-$k$ pressure lookup is clamped at the top of the \texttt{ExoRT}
+pressure table (beyond which \texttt{ExoRT} would extrapolate its coefficients),
+which freezes the pressure broadening at its 10 bar value while the CIA and
+continuum opacities continue to use the true pressure.]
 
 \begin{figure}[ht!]
 \centering
