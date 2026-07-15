@@ -69,7 +69,7 @@ Calculations by \citet{kasting1993} suggested that previous models lacked the ne
 The value in HZ studies is their operationalization in the search for life. The boundaries of the \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014} HZ provide constraints on the orbital distances at which a tectonically-active planet could maintain surface liquid water around a given star, which can provide a basis for choosing specific targets to observe with large ground- and space-based telescopes. The HZ concept does not categorically rule out the possibility of life existing in other places (for example, on the icy moons of outer planets), and likewise it is also incorrect to presume that a planet within its host stars HZ must inevitably be ``inhabited.'' 
 
 The HZ concept has been widely utilized since its inception and has motivated numerous applications of the concept. A non-comprehensive list of examples includes: 
-HZ calculations for dry and land-dominated planets; \citep{abe2011}; hydrogen-dominated greenhouse worlds beyond the classical HZ \citep[e.g.,][]{pierrehumbert2011, ramirez2017}; three-dimensional climate modeling calculations of the inner-edge limits \citep[e.g.,][]{leconte2013,kopparapu2016inner}; occurrence rate calculations for habitable exoplanets \citep[e.g.,][]{kopparapu2013revised,dressing2015,bryson2021occurrence}; characterization of observed exoplanet systems \citep[e.g.,][]{quintana2014, angladaescude2016, gillon2017}; and critiques of the HZ concept (\citealt{moore2017, tasker2017, zsom2015}).
+HZ calculations for dry and land-dominated planets; \citep{abe2011}; hydrogen-dominated greenhouse worlds beyond the classical HZ \citep[e.g.,][]{pierrehumbert2011, ramirez2017}; three-dimensional climate modeling calculations of the inner-edge limits \citep[e.g.,][]{leconte2013,kopparapu2016inner}; occurrence rate calculations for habitable exoplanets \citep[e.g.,][]{kopparapu2013revised,dressing2015,bryson2021occurrence}; characterization of observed exoplanet systems \citep[e.g.,][]{quintana2014, angladaescude2016, gillon2017, robertson2026revised}; and critiques of the HZ concept (\citealt{moore2017, tasker2017, zsom2015}).
 
 The \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014} lineage of models (hereafter referred to as \texttt{Clima}) continue to serve as reference HZ boundaries for guiding observations and for comparing against computationally expensive three-dimensional models. However, no independent validation study of these HZ limits have been conducted, using a comparable radiative-convective equilibrium (RCE) climate model. Although RCE models have a long history in the study of Earth's climate \citep[e.g.,][]{manabe1967}, the \texttt{Clima} lineage has been the only RCE model with the extended capabilities of studying moist atmospheres near the inner edge of the HZ and dense CO$_2$ atmospheres at the outer edge of the HZ.
 
@@ -84,42 +84,26 @@ The default convection scheme is simplified Betts--Miller (SBM; \citep{betts1986
 
 \texttt{ExoColumn} is initialized either from a cold start or from an input profile. In a cold start, the initial temperature is set by integrating a moist adiabat upward from the surface temperature $T_s$, capped at an isothermal stratosphere at $T_{\rm strato}$; water vapor is set to $\mathrm{RH}_{\rm init}\,q_{\rm sat}$ in the troposphere (and dried in the stratosphere). All the dry gases are well-mixed, with an option to include a modern Earth ozone profile \citep{wing2018}. The initial state can also be read from a stored profile. The temperature profile is advanced toward radiative--convective equilibrium by time-marching: at each step \texttt{ExoRT} returns the longwave and shortwave radiative heating rates for the current profile. These are applied to all layer temperatures as well as the surface sensible and latent heat sources in the lowest layer. Convective adjustment then restores the column to a lapse-rate-stable and sub-saturated state. 
 
-The surface is a 10\, slab ocean ($H_{\rm slab}=4.1\times10^{7}\,{\rm J\,m^{-2}\,K^{-1}}$), with surface temperature calculated with semi-implicit Planck damping.
-
-First, the surface upward longwave emission $\sigma T_s^4$ is linearized about the current surface temperature ($T_s$) so that its Planck feedback $4\sigma T_s^3$ is treated implicitly, as:
+The surface is a 10\, slab ocean ($H_{\rm slab}=4.1\times10^{7}\,{\rm J\,m^{-2}\,K^{-1}}$), with surface temperature calculated with semi-implicit Planck damping. First, the surface upward longwave emission $\sigma T_s^4$ is linearized about the current surface temperature ($T_s$) so that its Planck feedback $4\sigma T_s^3$ is treated implicitly, as:
 \begin{equation}
     T_s \leftarrow T_s + \Delta t \frac{F_{net}^{srf}-LE-SH}{H_{slab}+\Delta t\,4\sigma T_s^3}
 \end{equation}
 where $F_{net}^{srf}$ is the net surface radiative flux, $LE$ is the latent heat flux, and $SE$ is the sensible heat flux. This is intended to damp temperature overshoots and keep the slab energy budget stable at large time steps The column is marched to equilibrium with an adaptive time step set by a Courant--Friedrichs--Lewy (CFL) stability limit. Each step is sized so that the largest radiative temperature tendency in the column produces a change of at most $\Delta T_{\rm target}=1$ K, with the resulting step restricted to the range $\Delta t\ = [10^{-4},1]$ day. The model is considered converged when either of two criteria is met. \textit{Radiative equilibrium convergence} occurs when the column maximum sum of longwave plus shortwave heating falls below $0.01$ K\,day$^{-1}$ and the net top-of-atmosphere (TOA) flux falls below $0.1$ W\,m$^{-2}$. \textit{Profile stability convergence} occurs when the changes in time-mean profiles over successive 100-day windows fall below fixed thresholds ($\max|\Delta T|<1$ K in the temperature profile, $|\Delta T_s|<0.02$ K at the surface, and $\max|\Delta q|<5\times10^{-4}$ kg\,kg$^{-1}$ in water vapor) while the window-mean TOA flux stays below $0.1$ W\,m$^{-2}$.
 
-[\texttt{ExoColumn} includes several optional physics modules, all disabled by
-default; when off, results are bit-identical to the baseline configuration. Each
-is intended for a specific regime beyond modern-Earth conditions. For the hot,
-water-rich atmospheres approached at the inner edge of the HZ --- where water
-vapor becomes a major constituent and departs from ideal-gas behavior --- the
-default ideal-gas Clausius--Clapeyron treatment can be replaced by the IAPWS-95
-non-ideal equation of state (EOS) for water \citep{wagner2002}, paired with the
-\citet{kasting1988} non-ideal moist adiabat; this carries the real-gas heat
-capacity of steam and remains valid up to the critical point (647 K). The default
-MT\_CKD water-vapor continuum can be replaced by the BPS/Wolf continuum used in
-the \texttt{Clima} models \citep{kopparapu2013}, allowing a like-for-like
-comparison of the continuum treatment against previous HZ calculations. For the
-cold, dense CO$_2$ atmospheres at the outer edge of the HZ, CO$_2$ condensation
-can be enabled: the temperature profile is pinned to the CO$_2$ saturation curve
-\citep{span1996} wherever the dry adiabat would otherwise supersaturate in CO$_2$
-\citep{kasting1991}, together with a temperature-dependent CO$_2$ specific heat.
-These modules are activated only for the corresponding inner- and outer-edge
-calculations described below.]
+\texttt{ExoColumn} includes several optional physics modules (disabled by default) that are needed to make a consistent comparison of the inner and outer edge HZ calculations with \texttt{Clima}. At the inner edge of the HZ, water vapor becomes a major atmospheric constituent and departs from ideal-gas behavior. We implement the non-ideal moist pseudoadiabat described by \citet{kasting1988} and used in \texttt{Clima} as well as the IAPWS-95 non-ideal equation of state for water \citep{wagner2002}, which remains valid up to the critical point (647 K). We also included an option to replace the default MT\_CKD water-vapor continuum with the BPS continuum used in \texttt{Clima}. Toward the outer edge of the HZ, dense CO$_2$ atmospheres develop due to reduced weathering rates. We implement an option for CO$_2$ condensation, in which the temperature profile is pinned to the CO$_2$ saturation curve \citep{span1996} wherever the dry adiabat would otherwise supersaturate in CO$_2$ \citep{kasting1991}. This a temperature-dependent CO$_2$ specific heat. We also include an option to perform ``inverse'' climate modeling experiments, in which a temperature profile is specified and the model is run a single step to calculate the corresponding solar flux needed to produce the given surface temperature, which allow us to perform the same set of HZ calculations as \citet{kopparapu2013,kopparapu2014}.
 
 \subsection{Earth validation} \label{sec:earth}
-[We first validate \texttt{ExoColumn} against modern Earth. The column is
-initialized from a cold start with a 1 bar background of N$_2$, O$_2$, and Ar,
-400 ppm CO$_2$, and the RCEMIP ozone profile \citep{wing2018}, and the surface
-albedo is calibrated so that the equilibrium surface temperature reaches the
-observed global-mean value of $T_s=288$ K. The resulting temperature profile,
-radiative fluxes, heating rates, and water-vapor distribution are shown in
-Figure~\ref{fig:earth_rce}, alongside the konrad RCE model \citep{kluft2019} and a
-\texttt{Clima} calculation for comparison. The equilibrium is insensitive to the
+We first validate \texttt{ExoColumn} against present-day Earth. The column is initialized from a cold start with a 1 bar background of N$_2$, O$_2$, and Ar, 400 ppm CO$_2$, and the RCEMIP ozone profile \citep{wing2018}. We calibrate the surface albedo so that the equilibrium surface temperature reaches the observed global-mean value of $T_s\approx288$ K. This use of surface albedo as a ``tuning parameter'' follows the approaches of \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014}, with a physical justification that the tuned albedo accounts for the influence of partial cloud cover that cannot otherwise be represented in a one-dimensional column model. The calibrated surface albedo of 0.2736 allows \texttt{ExoColumn} to reach an equilibrium surface temperature $T_s=287.84$ K, which converges in 2107 steps ($\approx$1000 model days) to a top-of-atmosphere (TOA) flux imbalance below 0.1 W\,m$^{-2}$. The resulting temperature profile, radiative fluxes, heating rates, and water vapor profiles are shown in Figure~\ref{fig:earth_rce}, alongside the \texttt{konrad} RCE model based on the RRMTG radiative transfer package \citep{kluft2019}, the \texttt{Clima} model, and the 1976 U.S. Standard Atmosphere for comparison. 
+
+
+First compare the models....
+
+
+
+
+
+
+[The equilibrium is insensitive to the
 choice of convective closure: holding all other settings fixed and replacing SBM
 with the fixed 6.5 K\,km$^{-1}$ lapse-rate scheme \citep{manabe1967} or the
 relative-humidity-weighted moist-adiabat scheme shifts $T_s$ by only $+1.5$ and
@@ -132,18 +116,7 @@ n68equiv and RRTMG radiative-transfer schemes.]
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.8\textwidth]{reference/earth/earth_rce.pdf}
-\caption{[Modern-Earth radiative--convective equilibrium computed with
-\texttt{ExoColumn}. The four panels show (a) the temperature profile, (b) the
-upward and downward longwave and shortwave radiative fluxes, (c) the longwave,
-shortwave, and net heating rates, and (d) the water-vapor mixing ratio, all
-against pressure. With a calibrated surface albedo of 0.2736, \texttt{ExoColumn}
-reaches an equilibrium surface temperature $T_s=287.84$ K and a cold-point
-minimum of $\approx$204 K, with latent and sensible heat fluxes of 68.0 and
-16.4 W\,m$^{-2}$ (Bowen ratio 0.24) and a precipitation rate of
-2.35 mm\,day$^{-1}$; the run converges in 2107 steps ($\approx$1000 model days) to
-a top-of-atmosphere (TOA) flux imbalance below 0.1 W\,m$^{-2}$. For comparison we
-overplot the konrad RCE model (RRTMG radiation), a \texttt{Clima} calculation, and
-the US Standard Atmosphere 1976 (USSA-1976; dotted).]}
+\caption{Present-day Earth validation computed with \texttt{ExoColumn}. The four panels show (top left) the vertical temperature profile, (top right) upward and downward longwave (LW) and shortwave (SW) radiative fluxes, (bottom left) heating rates, and (bottom right) atmospheric composition. Also shown for comparison are \texttt{konrad} (dash-dot), \texttt{Clima} (dashed), and the 1976 U.S. Standard Atmosphere (dotted).]}
 \label{fig:earth_rce}
 \end{figure}
 
