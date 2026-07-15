@@ -126,21 +126,58 @@ Both \texttt{ExoRT} and \texttt{Clima} agree with the LBL reference to within 1\
 
 
 \section{The inner edge of the habitable zone} \label{sec:inner}
-[We locate the inner edge of the HZ by warming a Sun-like planet through a
-sequence of surface temperatures using the non-ideal IAPWS-95 steam equation of
-state. Figure~\ref{fig:hz_inner} shows the resulting OLR, planetary albedo, and
-effective stellar flux $S_{\rm eff}$ as functions of surface temperature for the
-default MT\_CKD continuum, the BPS continuum, and \texttt{Clima}. As the surface
-warms and the atmosphere becomes water-dominated, the OLR asymptotes to the
-Simpson--Nakajima radiation limit \citep{nakajima1992} of $\approx$295 W\,m$^{-2}$,
-1.3\% above the \citet{kopparapu2013} value of 291 W\,m$^{-2}$. With the MT\_CKD
-continuum we find a moist-greenhouse limit at $S_{\rm eff}=1.087$ ($d=0.959$ AU)
-and a runaway-greenhouse limit at $S_{\rm eff}=1.101$ ($d=0.953$ AU); the BPS
-continuum lowers these to 1.074 and 1.093, while \texttt{Clima} gives 1.016 and
-1.060. The residual offset in $S_{\rm eff}$ relative to \texttt{Clima} is driven
-by near-infrared shortwave absorption by water vapor --- our albedo plateau is
-0.211 versus \texttt{Clima}'s 0.193 --- consistent with the LBL decomposition of
-Section~\ref{sec:lbl}, since the OLR itself matches to within 1.3\%.]
+[We locate the inner edge of the HZ with the inverse (reverse-climate) method of
+\citet{kasting1988} and \citet{kopparapu2013}, using the inverse mode of
+\texttt{ExoColumn} introduced in Section~\ref{sec:model}. Rather than time-marching
+each case to equilibrium, we prescribe a surface temperature $T_s$ and build a
+fully water-saturated column: a moist adiabat integrated upward from $T_s$ with the
+non-ideal \citet{kasting1988} pseudoadiabat and the IAPWS-95 steam equation of
+state \citep{wagner2002}, capped by an isothermal stratosphere at
+$T_{\rm strato}=200$ K. The radiation scheme is then called a single time to return
+the outgoing longwave radiation (OLR) and the absorbed shortwave radiation (ASR)
+for that column. The atmosphere is Earth-like but cloud-free (0.78 N$_2$,
+0.21 O$_2$, 0.01 Ar, and 330 ppm CO$_2$, with prognostic H$_2$O and no O$_3$ or
+CH$_4$), and the ASR is computed with a six-point Gauss--Legendre hemispheric
+average over the solar zenith angle, both following \citet{kopparapu2013}. The
+effective stellar flux that would sustain each column then follows from
+top-of-atmosphere energy balance as $S_{\rm eff}=\mathrm{OLR}/\mathrm{ASR}$, in
+units of the present-day solar constant, so that $S_{\rm eff}>1$ denotes a planet
+receiving more than modern Earth's insolation. Sweeping $T_s$ upward from
+present-day values then carries the column through the moist- and
+runaway-greenhouse transitions.]
+
+[Figure~\ref{fig:hz_inner} presents the sweep in the four-panel format of
+\citet{kopparapu2013}, comparing the default MT\_CKD continuum, the BPS continuum,
+and \texttt{Clima}. Panel (a) shows the OLR and the absorbed shortwave versus
+$T_s$: as the surface warms and water vapor comes to dominate the atmosphere, the
+OLR saturates near the Simpson--Nakajima radiation limit \citep{nakajima1992} of
+$\approx$295 W\,m$^{-2}$ (1.3\% above the \citeauthor{kopparapu2013} value of
+291 W\,m$^{-2}$), because the optically thick water-vapor column fixes the emission
+to a nearly isothermal upper troposphere, while the absorbed shortwave rises
+steadily. Panel (b) shows the planetary albedo, which falls monotonically from
+$\approx$0.30 at $T_s=280$ K to $\approx$0.18 by 400 K as near-infrared absorption
+by the growing water-vapor column removes an increasing fraction of the incident
+sunlight. Panel (c) shows the resulting $S_{\rm eff}$, which rises to a peak near
+$T_s=320$ K and then declines, as the falling albedo (rising ASR) outpaces the
+saturating OLR. Panel (d) shows the vertical profiles of H$_2$O volume mixing ratio
+(VMR) for surface temperatures from 280 to 380 K: the troposphere is saturated in
+every case, but the stratosphere moistens dramatically as $T_s$ rises, from a
+cold-trapped VMR of $\sim$10$^{-5}$ near 300 K to of order 10$^{-1}$ or more above
+$\sim$360 K --- the essence of the moist- and runaway-greenhouse transition.]
+
+[Two limits are marked in panel (c). The moist-greenhouse (water-loss) limit is the
+point at which the stratospheric H$_2$O mixing ratio reaches $3\times10^{-3}$, above
+which water is efficiently photodissociated and hydrogen escapes to space
+\citep{kasting1988, kopparapu2013}; we find it at $S_{\rm eff}=1.087$
+($d=0.959$ AU). The runaway-greenhouse limit is the peak $S_{\rm eff}$ on the inner
+branch, where the OLR reaches its Simpson--Nakajima ceiling and no warmer surface
+can be sustained; we find $S_{\rm eff}=1.101$ ($d=0.953$ AU). With the BPS continuum
+these limits shift to 1.074 and 1.093, while \texttt{Clima} gives 1.016 and 1.060.
+The residual $S_{\rm eff}$ offset relative to \texttt{Clima} is set by
+near-infrared shortwave absorption by water vapor --- our albedo plateau is 0.211
+versus \texttt{Clima}'s 0.193 --- consistent with the band-resolved decomposition
+of Section~\ref{sec:lbl}, since the OLR itself matches \texttt{Clima} to within
+1.3\%.]
 
 \begin{figure*}[ht!]
 \centering
