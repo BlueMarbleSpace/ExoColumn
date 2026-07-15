@@ -88,7 +88,36 @@ The surface is a 10\, slab ocean ($H_{\rm slab}=4.1\times10^{7}\,{\rm J\,m^{-2}\
 \begin{equation}
     T_s \leftarrow T_s + \Delta t \frac{F_{net}^{srf}-LE-SH}{H_{slab}+\Delta t\,4\sigma T_s^3}
 \end{equation}
-where $F_{net}^{srf}$ is the net surface radiative flux, $LE$ is the latent heat flux, and $SE$ is the sensible heat flux. This is intended to damp temperature overshoots and keep the slab energy budget stable at large time steps The column is marched to equilibrium with an adaptive time step set by a Courant--Friedrichs--Lewy (CFL) stability limit. Each step is sized so that the largest radiative temperature tendency in the column produces a change of at most $\Delta T_{\rm target}=1$ K, with the resulting step restricted to the range $\Delta t\ = [10^{-4},1]$ day. The model is considered converged when either of two criteria is met. \textit{Radiative equilibrium convergence} occurs when the column maximum sum of longwave plus shortwave heating falls below $0.01$ K\,day$^{-1}$ and the net top-of-atmosphere (TOA) flux falls below $0.1$ W\,m$^{-2}$. \textit{Profile stability convergence} occurs when the changes in time-mean profiles over successive 100-day windows fall below fixed thresholds ($\max|\Delta T|<1$ K in the temperature profile, $|\Delta T_s|<0.02$ K at the surface, and $\max|\Delta q|<5\times10^{-4}$ kg\,kg$^{-1}$ in water vapor) while the window-mean TOA flux stays below $0.1$ W\,m$^{-2}$.
+where $F_{net}^{srf}$ is the net surface radiative flux, $LE$ is the latent heat flux, and $SH$ is the sensible heat flux. This is intended to damp temperature overshoots and keep the slab energy budget stable at large time steps The column is marched to equilibrium with an adaptive time step set by a Courant--Friedrichs--Lewy (CFL) stability limit. Each step is sized so that the largest radiative temperature tendency in the column produces a change of at most $\Delta T_{\rm target}=1$ K, with the resulting step restricted to the range $\Delta t\ = [10^{-4},1]$ day. The model is considered converged when either of two criteria is met. \textit{Radiative equilibrium convergence} occurs when the column maximum sum of longwave plus shortwave heating falls below $0.01$ K\,day$^{-1}$ and the net top-of-atmosphere (TOA) flux falls below $0.1$ W\,m$^{-2}$. \textit{Profile stability convergence} occurs when the changes in time-mean profiles over successive 100-day windows fall below fixed thresholds ($\max|\Delta T|<1$ K in the temperature profile, $|\Delta T_s|<0.02$ K at the surface, and $\max|\Delta q|<5\times10^{-4}$ kg\,kg$^{-1}$ in water vapor) while the window-mean TOA flux stays below $0.1$ W\,m$^{-2}$.
+
+[The latent and sensible heat fluxes that appear in Equation~(1) are computed from
+bulk aerodynamic formulas following the simplified Monin--Obukhov scheme of
+\citet{frierson2006}. Writing $\rho_a$ for the air density at the lowest model
+level, $U$ for the near-surface wind speed (a fixed model parameter, default
+$5\,{\rm m\,s^{-1}}$), and $C$ for a dimensionless exchange coefficient, the fluxes
+are
+\begin{eqnarray}
+SH &=& \rho_a\,c_p\,C\,U\,(\Theta_s - \Theta_a), \label{eq:sh} \\
+LE &=& \rho_a\,L(T_s)\,C\,U\,(q^*_s - q_a), \label{eq:le}
+\end{eqnarray}
+where $\Theta_s=T_s$ and $\Theta_a=T_a\,(p_0/p_a)^{R_d/c_p}$ are the surface and
+near-surface potential temperatures, $q^*_s=q_{\rm sat}(T_s)$ is the saturation
+specific humidity at the surface and $q_a$ the near-surface specific humidity,
+$c_p$ and $R_d$ are the specific heat and gas constant of the dry air, and $L(T_s)$
+is the latent heat of vaporization evaluated at the surface temperature
+(phase-aware, switching to the latent heat of sublimation below the triple point).
+The exchange coefficient follows the neutral drag law
+$C_N=\kappa^2/[\ln(z_{\rm ref}/z_0)]^2$, where $\kappa=0.4$ is the von K\'arm\'an
+constant and $z_0$ is the surface roughness length; the reference height is fixed
+at $z_{\rm ref}=10$ m rather than at the lowest model level, which makes $C$
+resolution-independent and of Earth-like magnitude ($C\approx10^{-3}$). Static
+stability is accounted for through the bulk Richardson number $Ri$: $C$ is held at
+its neutral value $C_N$ for unstable conditions ($Ri<0$), reduced as
+$C=C_N\,(1-Ri/Ri_c)^2$ for stable conditions ($0<Ri<Ri_c$, with critical value
+$Ri_c=1$), and set to zero for $Ri>Ri_c$. Over a dry (land) surface the latent heat
+flux is set to zero while the sensible heat flux is retained, and a legacy option
+instead uses fixed-coefficient bulk formulas in actual rather than potential
+temperature.]
 
 \texttt{ExoColumn} includes several optional physics modules (disabled by default) that are needed to make a consistent comparison of the inner and outer edge HZ calculations with \texttt{Clima}. At the inner edge of the HZ, water vapor becomes a major atmospheric constituent and departs from ideal-gas behavior. We implement the non-ideal moist pseudoadiabat described by \citet{kasting1988} and used in \texttt{Clima} as well as the IAPWS-95 non-ideal equation of state for water \citep{wagner2002}, which remains valid up to the critical point (647 K). We also included an option to replace the default MT\_CKD water-vapor continuum with the BPS continuum used in \texttt{Clima}. Toward the outer edge of the HZ, dense CO$_2$ atmospheres develop due to reduced weathering rates. We implement an option for CO$_2$ condensation, in which the temperature profile is pinned to the CO$_2$ saturation curve \citep{span1996} wherever the dry adiabat would otherwise supersaturate in CO$_2$ \citep{kasting1991}. This a temperature-dependent CO$_2$ specific heat. We also include an option to perform ``inverse'' climate modeling experiments, in which a temperature profile is specified and the model is run a single step to calculate the corresponding solar flux needed to produce the given surface temperature, which allow us to perform the same set of HZ calculations as \citet{kopparapu2013,kopparapu2014}.
 
