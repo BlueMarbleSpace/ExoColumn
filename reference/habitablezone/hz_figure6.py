@@ -218,11 +218,11 @@ def plot(data):
         axx.set_xlabel('Surface temperature [K]')
     a.set_ylabel('Planetary albedo')
     a.set_ylim(0, 0.40)
-    a.set_title('(a)  Inner edge', loc='left', fontsize=10)
+    a.set_title('Inner edge', loc='left', fontsize=10)
     b.set_ylabel(r'Effective stellar flux  $S_{\rm eff}$')
     b.set_ylim(0.5, 1.8)   # Kopparapu Fig 6b framing; the nonideal-steam
     # supercritical branch (Ts >~ 1600 K) climbs off-scale to Seff ~ 3.5.
-    b.set_title('(b)  Inner edge', loc='left', fontsize=10)
+    b.set_title('Inner edge', loc='left', fontsize=10)
     b.annotate('supercritical\n(off-scale) ', xy=(2150, 1.78), ha='right',
                va='top', fontsize=7, color='0.4')
 
@@ -232,9 +232,9 @@ def plot(data):
         axx.set_xlim(1, 35)
         axx.set_xlabel('CO$_2$ partial pressure [bar]')
     c.set_ylabel('Planetary albedo')
-    c.set_title('(c)  Outer edge', loc='left', fontsize=10)
+    c.set_title('Outer edge', loc='left', fontsize=10)
     dax.set_ylabel(r'Effective stellar flux  $S_{\rm eff}$')
-    dax.set_title('(d)  Outer edge', loc='left', fontsize=10)
+    dax.set_title('Outer edge', loc='left', fontsize=10)
 
     for axx in (a, b, c, dax):
         axx.grid(alpha=0.25, lw=0.5)
@@ -243,10 +243,7 @@ def plot(data):
     sm = mcm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
 
-    fig.suptitle('ExoColumn habitable-zone limits vs host star  '
-                 '(Kopparapu et al. 2013, Fig. 6 analogue; F-G-K-M set)',
-                 fontsize=10)
-    fig.subplots_adjust(left=0.07, right=0.87, top=0.93, bottom=0.07,
+    fig.subplots_adjust(left=0.07, right=0.87, top=0.96, bottom=0.07,
                         wspace=0.26, hspace=0.30)
     cax = fig.add_axes((0.895, 0.10, 0.018, 0.80))
     cb = fig.colorbar(sm, cax=cax)
