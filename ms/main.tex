@@ -93,50 +93,22 @@ where $F_{net}^{srf}$ is the net surface radiative flux, $LE$ is the latent heat
 \texttt{ExoColumn} includes several optional physics modules (disabled by default) that are needed to make a consistent comparison of the inner and outer edge HZ calculations with \texttt{Clima}. At the inner edge of the HZ, water vapor becomes a major atmospheric constituent and departs from ideal-gas behavior. We implement the non-ideal moist pseudoadiabat described by \citet{kasting1988} and used in \texttt{Clima} as well as the IAPWS-95 non-ideal equation of state for water \citep{wagner2002}, which remains valid up to the critical point (647 K). We also included an option to replace the default MT\_CKD water-vapor continuum with the BPS continuum used in \texttt{Clima}. Toward the outer edge of the HZ, dense CO$_2$ atmospheres develop due to reduced weathering rates. We implement an option for CO$_2$ condensation, in which the temperature profile is pinned to the CO$_2$ saturation curve \citep{span1996} wherever the dry adiabat would otherwise supersaturate in CO$_2$ \citep{kasting1991}. This a temperature-dependent CO$_2$ specific heat. We also include an option to perform ``inverse'' climate modeling experiments, in which a temperature profile is specified and the model is run a single step to calculate the corresponding solar flux needed to produce the given surface temperature, which allow us to perform the same set of HZ calculations as \citet{kopparapu2013,kopparapu2014}.
 
 \subsection{Earth validation} \label{sec:earth}
-We first validate \texttt{ExoColumn} against present-day Earth. The column is initialized from a cold start with a 1 bar background of N$_2$, O$_2$, and Ar, 400 ppm CO$_2$, and the RCEMIP ozone profile \citep{wing2018}. We calibrate the surface albedo so that the equilibrium surface temperature reaches the observed global-mean value of $T_s\approx288$ K. This use of surface albedo as a ``tuning parameter'' follows the approaches of \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014}, with a physical justification that the tuned albedo accounts for the influence of partial cloud cover that cannot otherwise be represented in a one-dimensional column model. The calibrated surface albedo of 0.2736 allows \texttt{ExoColumn} to reach an equilibrium surface temperature $T_s=287.84$ K, which converges in 2107 steps ($\approx$1000 model days) to a top-of-atmosphere (TOA) flux imbalance below 0.1 W\,m$^{-2}$. The resulting temperature profile, radiative fluxes, heating rates, and water vapor profiles are shown in Figure~\ref{fig:earth_rce}, alongside the \texttt{konrad} RCE model based on the RRMTG radiative transfer package \citep{kluft2019}, the \texttt{Clima} model, and the 1976 U.S. Standard Atmosphere for comparison. 
+We first validate \texttt{ExoColumn} against present-day Earth. The column is initialized from a cold start with a 1 bar background of N$_2$, O$_2$, and Ar, 400 ppm CO$_2$, and the RCEMIP ozone profile \citep{wing2018}. We calibrate the surface albedo so that the equilibrium surface temperature reaches the observed global-mean value of $T_s\approx288$ K. This use of surface albedo as a ``tuning parameter'' follows the approaches of \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014}, with a physical justification that the tuned albedo accounts for the influence of partial cloud cover that cannot otherwise be represented in a one-dimensional column model. The calibrated surface albedo of 0.2736 allows \texttt{ExoColumn} to reach an equilibrium surface temperature $T_s=287.84$ K, which converges in 2107 steps ($\approx$1000 model days) to a top-of-atmosphere (TOA) flux imbalance below 0.1 W\,m$^{-2}$. The resulting temperature profile, radiative fluxes, heating rates, and water vapor profiles are shown in Figure~\ref{fig:earth_rce}, alongside the \texttt{konrad} RCE model \citep{kluft2019} based on the \texttt{RRMTG} radiative transfer package \citep{mlawer1997}, the \texttt{Clima} model, and the 1976 U.S. Standard Atmosphere for comparison. 
 
-
-[Figure~\ref{fig:earth_rce} shows that \texttt{ExoColumn} reproduces the
-present-day Earth temperature profile well, agreeing with both \texttt{konrad} and
-\texttt{Clima} to within a few K through most of the troposphere and tracking the
-U.S. Standard Atmosphere closely below the tropopause. All three models share the
-same qualitative structure: a convecting troposphere at close to the moist
-adiabatic lapse rate, a temperature minimum near the tropopause, and a stratosphere
-in radiative equilibrium. The \texttt{ExoColumn} profile exhibits a sharp change in
-lapse rate (a temperature ``kink'') at the tropopause, where the
-convectively-adjusted troposphere meets the radiative-equilibrium stratosphere.
-This feature is not a numerical artifact: an abrupt lapse-rate transition at the
-convective top is a generic property of radiative--convective models with
-convective adjustment, set by the radiative constraint that fixes the tropopause
-temperature and height \citep{held1982, thuburn2000}. \texttt{konrad} produces a
-smoother tropopause because it applies a hard adjustment to a prescribed moist
-lapse rate together with a separate cold-point coupling, rather than the
-enthalpy-conserving simplified Betts--Miller relaxation used here, so the
-difference in tropopause sharpness reflects the convective closure rather than a
-difference in physical fidelity. The \texttt{Clima} profile places its tropopause
-at a somewhat higher pressure (lower altitude) than either \texttt{ExoColumn} or
-\texttt{konrad}. The three models differ most in the stratosphere, where
-\texttt{ExoColumn} is the warmest, as quantified below.]
-
-
-
-
-
+The \texttt{ExoColumn} temperature profile matches both \texttt{konrad} and \texttt{Clima} to within a few K through most of the troposphere. All models are consistent with the 1976 U.S. Standard Atmosphere below the tropopause, with significant differences in the stratosphere; this is expected because the U.S. Standard Atmosphere is based on observed averages. All three models share the same qualitative structure with a convecting troposphere at close to the moist adiabatic lapse rate, a temperature minimum near the tropopause, and a stratosphere in radiative equilibrium. The \texttt{ExoColumn} profile exhibits a sharp change in lapse rate (a temperature ``kink'') at the tropopause, where the convectively-adjusted troposphere meets the radiative-equilibrium stratosphere. This abrupt lapse-rate change at the convective top is a property that appears in other RCE models with convective adjustment \citep[see, e.g.,][]{held1982, thuburn2000} and not a numerical artifact. The \texttt{konrad} model produces a smoother tropopause because it applies a hard adjustment scheme to a prescribed moist lapse rate along with a cold-point tropopause coupling intended to produce a present-day Earth profile. The \texttt{Clima} model gives a tropopause at a lower altitude than either \texttt{ExoColumn} or \texttt{konrad}. The three models differ most in the stratosphere, where \texttt{ExoColumn} is the warmest and wettest, and the cold-point tropopause temperature minimum ($\approx$204 K) is about 7 K warmer than \texttt{konrad}. Both \texttt{ExoColumn} and \texttt{konrad} use the same RCEMIP ozone profile, while \texttt{Clima} uses a U.S. Standard Atmosphere ozone profile, which contributes to a cooler stratosphere for \texttt{Clima}. The remaining differences between the models are attributable to differences between the underlying radiative transfer schemes.
 
 [The equilibrium is insensitive to the
 choice of convective closure: holding all other settings fixed and replacing SBM
 with the fixed 6.5 K\,km$^{-1}$ lapse-rate scheme \citep{manabe1967} or the
 relative-humidity-weighted moist-adiabat scheme shifts $T_s$ by only $+1.5$ and
 $+2.2$ K, respectively, while the Zhang--McFarlane scheme \citep{zhang1995} runs
-$+7.5$ K warmer. The cold-point temperature minimum ($\approx$204 K) is about 7 K
-warmer than that of konrad's RRTMG radiation core \citep{kluft2019, mlawer1997}
-($\approx$197 K), which we attribute to differences between the \texttt{ExoRT}
-n68equiv and RRTMG radiative-transfer schemes.]
+$+7.5$ K warmer. ]
+
 
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.8\textwidth]{reference/earth/earth_rce.pdf}
-\caption{Present-day Earth validation computed with \texttt{ExoColumn}. The four panels show (top left) the vertical temperature profile, (top right) upward and downward longwave (LW) and shortwave (SW) radiative fluxes, (bottom left) heating rates, and (bottom right) atmospheric composition. Also shown for comparison are \texttt{konrad} (dash-dot), \texttt{Clima} (dashed), and the 1976 U.S. Standard Atmosphere (dotted).]}
+\caption{Present-day Earth validation computed with \texttt{ExoColumn}. The four panels show (top left) the vertical temperature profile, (top right) upward and downward longwave (LW) and shortwave (SW) radiative fluxes, (bottom left) heating rates, and (bottom right) atmospheric composition. Also shown for comparison are \texttt{konrad} (dash-dot), \texttt{Clima} (dashed), and the 1976 U.S. Standard Atmosphere (dotted).}
 \label{fig:earth_rce}
 \end{figure}
 
@@ -361,7 +333,7 @@ This paper is dedicated to Jim Kasting. This material is based on work performed
 \end{acknowledgments}
 
 %\facilities{}
-\software{\texttt{ExoColumn} \citep[][]{}, \texttt{Clima} \citep[][]{kopparapu2013,kopparapu2014}, Matplotlib \citep{Hunter2007}, Claude Code \citep[Opus 4.8,][]{anthropic2026opus48}}
+\software{\texttt{ExoColumn} \citep[][]{}, \texttt{Clima} \citep[][]{kopparapu2013,kopparapu2014}, \texttt{konrad} \citep{kluft2019}, Matplotlib \citep{Hunter2007}, Claude Code \citep[Opus 4.8,][]{anthropic2026opus48}}
 
 %\appendix
 %\section{} \label{sec:appendix}
