@@ -128,6 +128,23 @@ albedo to within 0.0002 --- so the offsets relative to \citet{kopparapu2013} tha
 we quantify below arise from differences in the \texttt{Clima} 2013-era model
 ingredients rather than from errors in either radiation core.]
 
+[A band-resolved comparison localizes the small residual differences between
+\texttt{ExoColumn} and \texttt{Clima} to a few spectral regions. For the moist
+inner-HZ column ($T_s=300$ K), \texttt{ExoColumn}'s OLR exceeds that of the
+2013-era \texttt{Clima} $k$-distribution most strongly in the pure-rotational
+H$_2$O band in the far infrared ($\lesssim600$ cm$^{-1}$, $\gtrsim17\,\mu$m;
+$+8.6$ W\,m$^{-2}$) and across the 8--13 $\mu$m window (750--1250 cm$^{-1}$;
+$+5.6$ W\,m$^{-2}$), with a smaller contribution from the H$_2$O $\nu_2$ band near
+6.3 $\mu$m; the 15 $\mu$m CO$_2$ band is essentially identical between the two
+models, since both are saturated there. These differences largely disappear when
+\texttt{Clima} is run with its updated HITRAN-2016 $k$-coefficients rather than its
+2013-era set, confirming that the offset originates in the older line data rather
+than in the radiation scheme. For the dense-CO$_2$ outer-HZ column the models
+instead differ most in the 8--12 $\mu$m window, where the CO$_2$ far-wing and
+window-continuum treatment --- rather than the CO$_2$--CO$_2$ CIA, which is
+negligible there --- sets a spread of a few W\,m$^{-2}$ among \texttt{ExoColumn}
+and both \texttt{Clima} generations.]
+
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=\textwidth]{reference/max_greenhouse/lbl_olr_benchmark_2panel.pdf}
