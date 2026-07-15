@@ -128,6 +128,22 @@ albedo to within 0.0002 --- so the offsets relative to \citet{kopparapu2013} tha
 we quantify below arise from differences in the \texttt{Clima} 2013-era model
 ingredients rather than from errors in either radiation core.]
 
+[The two radiation cores are built from different generations of spectroscopic
+line data, which accounts for much of the difference between them. The
+\texttt{ExoRT} n68equiv $k$-coefficients are computed from the HITRAN-2016 line
+lists \citep{gordon2017} for H$_2$O, CO$_2$, and CH$_4$. The original
+\texttt{Clima} $k$-coefficients of \citet{kopparapu2013} instead use the
+HITRAN-2008 line lists \citep{rothman2009}, supplemented by the high-temperature
+HITEMP-2010 database \citep{rothman2010} for the near-infrared H$_2$O bands that
+dominate the absorbed stellar flux near the inner edge. A more recent
+\texttt{Clima} update (our second \texttt{Clima} comparison here) rebuilds its
+$k$-coefficients from HITRAN-2016, matching \texttt{ExoRT}'s line-list edition, and
+as shown below this removes most of the outgoing-longwave difference between the
+two cores. The independent LBL reference is computed from the current consolidated
+HITRAN-2020 line list \citep{gordon2022} served by \texttt{RADIS}, whose sub-1\%
+differences from HITRAN-2016 in the bands that dominate the OLR are smaller than
+the correlated-$k$ residual itself.]
+
 [A band-resolved comparison localizes the small residual differences between
 \texttt{ExoColumn} and \texttt{Clima} to a few spectral regions. For the moist
 inner-HZ column ($T_s=300$ K), \texttt{ExoColumn}'s OLR exceeds that of the
