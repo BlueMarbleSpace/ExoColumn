@@ -111,73 +111,19 @@ We first validate \texttt{ExoColumn} against present-day Earth. The column is in
 The \texttt{ExoColumn} temperature profile matches both \texttt{konrad} and \texttt{Clima} to within a few K through most of the troposphere. All models are consistent with the 1976 U.S. Standard Atmosphere below the tropopause, with significant differences in the stratosphere; this is expected because the U.S. Standard Atmosphere is based on observed averages. All three models share the same qualitative structure with a convecting troposphere at close to the moist adiabatic lapse rate, a temperature minimum near the tropopause, and a stratosphere in radiative equilibrium. The \texttt{ExoColumn} profile exhibits a sharp change in lapse rate (a temperature ``kink'') at the tropopause, where the convectively-adjusted troposphere meets the radiative-equilibrium stratosphere. This abrupt lapse-rate change at the convective top is a property that appears in other RCE models with convective adjustment \citep[see, e.g.,][]{held1982, thuburn2000} and not a numerical artifact. The \texttt{konrad} model produces a smoother tropopause because it applies a hard adjustment scheme to a prescribed moist lapse rate along with a cold-point tropopause coupling intended to produce a present-day Earth profile. The \texttt{Clima} model gives a tropopause at a lower altitude than either \texttt{ExoColumn} or \texttt{konrad}. The three models differ most in the stratosphere, where \texttt{ExoColumn} is the warmest and wettest, and the cold-point tropopause temperature minimum ($\approx$204 K) is about 7 K warmer than \texttt{konrad}. Both \texttt{ExoColumn} and \texttt{konrad} use the same RCEMIP ozone profile, while \texttt{Clima} uses a U.S. Standard Atmosphere ozone profile, which contributes to a cooler stratosphere for \texttt{Clima}. The remaining differences between the models are attributable to differences between the underlying radiative transfer schemes.
 
 \subsection{Radiative-transfer benchmarks} \label{sec:lbl}
-[To confirm that the \texttt{ExoRT} n68equiv radiation core is accurate in the
-regimes relevant to the HZ, we compare it against independent line-by-line (LBL)
-radiative-transfer calculations. The LBL reference is built with a custom
-Lorentz$\times\chi$ code that draws HITRAN line data and Voigt line profiles from
-the \texttt{RADIS} line-by-line code \citep{pannier2019} and adds the
-\citet{perrin1989} sub-Lorentzian $\chi$-factor for the CO$_2$ far line wings
-together with HITRAN-2024 CO$_2$--CO$_2$ collision-induced absorption (CIA). Figure~\ref{fig:lbl} compares the outgoing
-longwave radiation (OLR) for an inner-HZ-like column and a dense-CO$_2$ outer-HZ
-column. In the dense-CO$_2$ case the window OLR is controlled by the treatment of
-the CO$_2$ far wings and $\chi$-factor and spans a wide envelope; both
-\texttt{ExoRT} and \texttt{Clima} fall inside this envelope and close to one
-another. Across both cases the two correlated-$k$ cores are LBL-grade --- the
-infrared flux agrees with the LBL reference to within 1\% and the shortwave (SW)
-albedo to within 0.0002 --- so the offsets relative to \citet{kopparapu2013} that
-we quantify below arise from differences in the \texttt{Clima} 2013-era model
-ingredients rather than from errors in either radiation core.]
 
-[The two radiation cores are built from different generations of spectroscopic
-line data, which accounts for much of the difference between them. The
-\texttt{ExoRT} n68equiv $k$-coefficients are computed from the HITRAN-2016 line
-lists \citep{gordon2017} for H$_2$O, CO$_2$, and CH$_4$. The original
-\texttt{Clima} $k$-coefficients of \citet{kopparapu2013} instead use the
-HITRAN-2008 line lists \citep{rothman2009}, supplemented by the high-temperature
-HITEMP-2010 database \citep{rothman2010} for the near-infrared H$_2$O bands that
-dominate the absorbed stellar flux near the inner edge. A more recent
-\texttt{Clima} update (our second \texttt{Clima} comparison here) rebuilds its
-$k$-coefficients from HITRAN-2016, matching \texttt{ExoRT}'s line-list edition, and
-as shown below this removes most of the outgoing-longwave difference between the
-two cores. The independent LBL reference is computed from the current consolidated
-HITRAN-2020 line list \citep{gordon2022} served by \texttt{RADIS}, whose sub-1\%
-differences from HITRAN-2016 in the bands that dominate the OLR are smaller than
-the correlated-$k$ residual itself.]
-
-[A band-resolved comparison localizes the small residual differences between
-\texttt{ExoColumn} and \texttt{Clima} to a few spectral regions. For the moist
-inner-HZ column ($T_s=300$ K), \texttt{ExoColumn}'s OLR exceeds that of the
-2013-era \texttt{Clima} $k$-distribution most strongly in the pure-rotational
-H$_2$O band in the far infrared ($\lesssim600$ cm$^{-1}$, $\gtrsim17\,\mu$m;
-$+8.6$ W\,m$^{-2}$) and across the 8--13 $\mu$m window (750--1250 cm$^{-1}$;
-$+5.6$ W\,m$^{-2}$), with a smaller contribution from the H$_2$O $\nu_2$ band near
-6.3 $\mu$m; the 15 $\mu$m CO$_2$ band is essentially identical between the two
-models, since both are saturated there. These differences largely disappear when
-\texttt{Clima} is run with its updated HITRAN-2016 $k$-coefficients rather than its
-2013-era set, confirming that the offset originates in the older line data rather
-than in the radiation scheme. For the dense-CO$_2$ outer-HZ column the models
-instead differ most in the 8--12 $\mu$m window, where the CO$_2$ far-wing and
-window-continuum treatment --- rather than the CO$_2$--CO$_2$ CIA, which is
-negligible there --- sets a spread of a few W\,m$^{-2}$ among \texttt{ExoColumn}
-and both \texttt{Clima} generations.]
+We next evaluate the \texttt{ExoRT} and \texttt{Clima} correlated-$k$ radiation cores for regimes relevant to the inner and outer edges of the HZ. We compare these both against independent line-by-line (LBL)
+radiative-transfer calculations. The LBL reference is built with a custom code that draws HITRAN line data and Voigt line profiles from the \texttt{RADIS} line-by-line code \citep{pannier2019} and adds a sub-Lorentzian $\chi$-factor \citep{perrin1989} for the CO$_2$ far line wings as well as HITRAN-2024 CO$_2$--CO$_2$ collision-induced absorption. Figure~\ref{fig:lbl} compares the outgoing longwave radiative flux ($F_{IR}$) of \texttt{ExoRT}, \texttt{Clima}, and the LBL reference for a moist atmosphere near the inner edge of the HZ ($T_s=300$\,K, 1\,bar N$_2$ + 330\,ppm CO$_2$) and a dense-CO$_2$ atmosphere near the outer edge of the HZ ($T_s=273$\,K, 8.87\,ppm CO$_2$ + 1\,bar N$_2$). 
 
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=\textwidth]{reference/max_greenhouse/lbl_olr_benchmark_2panel.pdf}
-\caption{[Line-by-line (LBL) validation of the \texttt{ExoRT} n68equiv radiation
-core. The left panel shows an inner-HZ-like column ($T_s=300$ K) and the right
-panel an outer-HZ dense-CO$_2$ column (8.87 bar). Curves are the LBL reference
-(grey), the n68 band averages (black), \texttt{ExoRT} (red), and \texttt{Clima}
-(green; both the 2013-era and Wolf 2016 continuum configurations). In the
-dense-CO$_2$ window the outgoing longwave radiation (OLR) ranges from
-$\approx$44 W\,m$^{-2}$ for a pure-Lorentz line shape to $\approx$92 W\,m$^{-2}$
-for the \citet{perrin1989} $\chi$-factor; \texttt{ExoRT} (75.5 W\,m$^{-2}$) and
-\texttt{Clima} (69--72 W\,m$^{-2}$) both lie inside this envelope. The spread
-across the window is set by the treatment of the CO$_2$ far wings rather than by
-collision-induced absorption (CIA), which is negligible there in both the HITRAN
-data and \texttt{ExoRT}.]}
+\caption{Comparison of the \texttt{ExoRT} (red) and \texttt{Clima} (green) correlated-$k$ radiation cores against a line-by-line (LBL) reference (grey, black) for an atmospheric column near the inner edge (left) and outer edge (right) of the habitable zone.}
 \label{fig:lbl}
 \end{figure*}
+
+Both \texttt{ExoRT} and \texttt{Clima} agree with the LBL reference to within 1\%. The differences are almost entirely due to the different generations of spectroscopic line data used in each model. The LBL reference itself is based on the HITRAN-2020 line list \citep{gordon2022}, although differences from HITRAN-2016 in the bands that dominate the outgoing longwave radiative flux are less than 1\%. The \texttt{ExoRT} n68equiv $k$-coefficients are computed from the HITRAN-2016 line lists \citep{gordon2017} for H$_2$O, CO$_2$, and CH$_4$. The \texttt{Clima} $k$-coefficients of \citet{kopparapu2013} instead use the HITRAN-2008 line lists \citep{rothman2009}, supplemented by the high-temperature HITEMP-2010 database \citep{rothman2010} for near-infrared H$_2$O bands that dominate the absorbed stellar flux near the inner edge. Note that a more recent version of \texttt{Clima} \citep{vidaurri2022outer} has implemented new $k$-coefficients from HITRAN-2016 that remove most of the differences with \texttt{ExoRT} (not shown). We show the 2013-era \texttt{Clima} results in this paper to remain consistent with the HZ results reported by \citet{kopparapu2013,kopparapu2014}. Differences between \texttt{ExoColumn} and \texttt{Clima} occur in the pure-rotational H$_2$O band in the far infrared ($\lesssim600$ cm$^{-1}$, $\gtrsim17\,\mu$m; $+8.6$ W\,m$^{-2}$) and across the 750--1250 cm$^{-1}$ window (8--13 $\mu$m; $+5.6$ W\,m$^{-2}$). These differences in the underlying radiative transfer core are the primary source of differences between the  \texttt{Clima} HZ calculations  by \citet{kopparapu2013,kopparapu2014} and those described next with \texttt{ExoColumn}.
+
 
 \section{The inner edge of the habitable zone} \label{sec:inner}
 [We locate the inner edge of the HZ by warming a Sun-like planet through a
