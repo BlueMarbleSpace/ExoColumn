@@ -114,9 +114,10 @@ The \texttt{ExoColumn} temperature profile matches both \texttt{konrad} and \tex
 [To confirm that the \texttt{ExoRT} n68equiv radiation core is accurate in the
 regimes relevant to the HZ, we compare it against independent line-by-line (LBL)
 radiative-transfer calculations. The LBL reference is built with a custom
-Lorentz$\times\chi$ code that combines the \citet{perrin1989} sub-Lorentzian
-$\chi$-factor for the CO$_2$ far line wings with HITRAN-2024 CO$_2$--CO$_2$
-collision-induced absorption (CIA). Figure~\ref{fig:lbl} compares the outgoing
+Lorentz$\times\chi$ code that draws HITRAN line data and Voigt line profiles from
+the \texttt{RADIS} line-by-line code \citep{pannier2019} and adds the
+\citet{perrin1989} sub-Lorentzian $\chi$-factor for the CO$_2$ far line wings
+together with HITRAN-2024 CO$_2$--CO$_2$ collision-induced absorption (CIA). Figure~\ref{fig:lbl} compares the outgoing
 longwave radiation (OLR) for an inner-HZ-like column and a dense-CO$_2$ outer-HZ
 column. In the dense-CO$_2$ case the window OLR is controlled by the treatment of
 the CO$_2$ far wings and $\chi$-factor and spans a wide envelope; both
