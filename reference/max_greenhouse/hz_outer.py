@@ -293,10 +293,10 @@ def _plot(pco2, olr, asr, alpha, seff):
     ax_a.plot(pco2, asr, color='C0', lw=1.6, zorder=4)
     ax_a.set_ylabel('Flux (W m⁻²)')
     ax_a.set_ylim(50., 260.)
-    ax_a.text(2.6, 238., '$F_\\mathrm{SOL}$', color='C0', fontsize=11,
-              fontweight='bold', ha='center', va='bottom')
-    ax_a.text(2.6, 95., '$F_\\mathrm{IR}$', color='C3', fontsize=11,
+    ax_a.text(3.0, 202., '$F_\\mathrm{SOL}$', color='C0', fontsize=11,
               fontweight='bold', ha='center', va='top')
+    ax_a.text(3.0, 134., '$F_\\mathrm{IR}$', color='C3', fontsize=11,
+              fontweight='bold', ha='center', va='bottom')
     ax_a.text(16., 152., 'Kopparapu+2013', color='0.45', fontsize=8,
               ha='center', va='bottom', rotation=-18)
     ax_a.set_facecolor('white')
@@ -310,8 +310,8 @@ def _plot(pco2, olr, asr, alpha, seff):
     ax_b.set_ylim(0.2, 0.7)
     ax_b.text(13., ALBEDO + 0.008, f'Surface albedo = {ALBEDO:.2f}',
               color='0.3', fontsize=8, ha='left', va='bottom')
-    ax_b.text(16., 0.475, 'Kopparapu+2013', color='0.45', fontsize=8,
-              ha='center', va='top', rotation=14)
+    ax_b.text(1.7, 0.262, 'Kopparapu+2013', color='0.45', fontsize=8,
+              ha='left', va='top', rotation=19)
     ax_b.set_facecolor('white')
 
     # --- (c) Seff vs pCO2 ---
