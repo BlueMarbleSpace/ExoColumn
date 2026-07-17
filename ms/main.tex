@@ -79,7 +79,7 @@ In this paper we present the \texttt{ExoColumn} RCE model, which was designed to
 
 \texttt{ExoColumn} is a one-dimensional RCE model written in Fortran as standalone software, which depends on \texttt{ExoRT} without any modifications. his gives \texttt{ExoColumn} the flexibility to incorporate any future \texttt{ExoRT} updates. \texttt{ExoColumn} calls the \texttt{ExoRT} radiation routine (\texttt{aerad\_driver}) directly, using the radiative fluxes from \texttt{ExoRT} to calculate equilibrium vertical profiles of temperature. The default configuration uses the n68equiv 68-band scheme and a grid of 70 vertical layers log-spaced from $p_{\rm top}$ to the surface.
 
-The default convection scheme is simplified Betts--Miller (\citep{betts1986, bettsmiller1986, frierson2007}), which relaxes the temperature profile toward a moist adiabat and humidity toward a reference relative humidity ($RH_{init}=0.7$). Other convection schemes are also selectable: dry convective adjustment \citep{manabe1964}, Manabe-Wetherald moist adjustment schemes \citep{manabe1967}, and the Zhang--McFarlane scheme \citep{zhang1995}. The water vapor saturation vapor pressure ($q_{\rm sat}$) is calculated with the Clausius-Clapeyron relation. \texttt{ExoColumn} also implements a stratospheric ``cold trap'' intended to represent stratospheric drying due to the Brewer--Dobson cycle. The model defines the cold-point tropopause as the level of minimum saturation mixing ratio, so that an ascending parcel's water vapor is reduced to this value at the tropopause and conserved on its continued ascent into the stratosphere. 
+The default convection scheme is simplified Betts--Miller \citep{betts1986, bettsmiller1986, frierson2007}, which relaxes the temperature profile toward a moist adiabat and humidity toward a reference relative humidity ($RH_{init}=0.7$). Other convection schemes are also selectable: dry convective adjustment \citep{manabe1964}, Manabe-Wetherald moist adjustment schemes \citep{manabe1967}, and the Zhang--McFarlane scheme \citep{zhang1995}. The water vapor saturation vapor pressure ($q_{\rm sat}$) is calculated with the Clausius-Clapeyron relation. \texttt{ExoColumn} also implements a stratospheric ``cold trap'' intended to represent stratospheric drying due to the Brewer--Dobson cycle. The model defines the cold-point tropopause as the level of minimum saturation mixing ratio, so that an ascending parcel's water vapor is reduced to this value at the tropopause and conserved on its continued ascent into the stratosphere. 
 
 \texttt{ExoColumn} is initialized either from a cold start or from an input profile. In a cold start, the initial temperature is set by integrating a moist adiabat upward from the surface temperature $T_s$, capped at an isothermal stratosphere at $T_{\rm strato}$; water vapor is set to $\mathrm{RH}_{\rm init}\,q_{\rm sat}$ in the troposphere (and dried in the stratosphere). All the dry gases are well-mixed, with an option to include a modern Earth ozone profile \citep{wing2018}. The initial state can also be read from a stored profile. The temperature profile is advanced toward radiative--convective equilibrium by time-marching: at each step \texttt{ExoRT} returns the longwave and shortwave radiative heating rates for the current profile. These are applied to all layer temperatures as well as the surface sensible and latent heat sources in the lowest layer. Convective adjustment then restores the column to a lapse-rate-stable and sub-saturated state. 
 
@@ -96,7 +96,7 @@ LE &=& \rho_a\,L(T_s)\,C\,U\,(q^*_s - q_a), \label{eq:le}
 \end{eqnarray}
 where $\rho_a$ is air density at the lowest model level, $U$ is the near-surface wind speed (a fixed model parameter, default $5\,{\rm m\,s^{-1}}$), $C$ a dimensionless exchange coefficient, $\Theta_s=T_s$ and $\Theta_a=T_a\,(p_0/p_a)^{R_d/c_p}$ are the surface and near-surface potential temperatures, $q^*_s=q_{\rm sat}(T_s)$ is the saturation specific humidity at the surface, $q_a$ the near-surface specific humidity, $c_p$ is the specific heat of dry air, $R_d$ is the gas constant of dry air, and $L(T_s)$ is the latent heat of vaporization evaluated at the surface temperature (which becomes the latent heat of sublimation below the triple point). The value of $C\approx10^{-3}$ is calculated based on a fixed 10\,m reference height in order to be resolution-independent and of Earth-like magnitude. 
 
-\texttt{ExoColumn} includes several optional physics modules (disabled by default) that are needed to make a consistent comparison of the inner and outer edge HZ calculations with \texttt{Clima}. At the inner edge of the HZ, water vapor becomes a major atmospheric constituent and departs from ideal-gas behavior. We implement the non-ideal moist pseudoadiabat described by \citet{kasting1988} and used in \texttt{Clima} as well as the IAPWS-95 non-ideal equation of state for water \citep{wagner2002}, which remains valid up to the critical point (647 K). We also included an option to replace the default MT\_CKD water-vapor continuum with the BPS continuum used in \texttt{Clima}. Toward the outer edge of the HZ, dense CO$_2$ atmospheres develop due to reduced weathering rates. We implement an option for CO$_2$ condensation, in which the temperature profile is pinned to the CO$_2$ saturation curve \citep{span1996} wherever the dry adiabat would otherwise supersaturate in CO$_2$ \citep{kasting1991}. This a temperature-dependent CO$_2$ specific heat. We also include an option to perform ``inverse'' climate modeling experiments, in which a temperature profile is specified and the model is run a single step to calculate the corresponding solar flux needed to produce the given surface temperature, which allow us to perform the same set of HZ calculations as \citet{kopparapu2013,kopparapu2014}.
+\texttt{ExoColumn} includes several optional physics modules (disabled by default) that are needed to make a consistent comparison of the inner and outer edge HZ calculations with \texttt{Clima}. At the inner edge of the HZ, water vapor becomes a major atmospheric constituent and departs from ideal-gas behavior. We implement the non-ideal moist pseudoadiabat described by \citet{kasting1988} and used in \texttt{Clima} as well as the IAPWS-95 non-ideal equation of state for water \citep{wagner2002}, which remains valid up to the critical point (647 K). We also included an option to replace the default MT\_CKD water vapor continuum with the BPS continuum used in \texttt{Clima}. Toward the outer edge of the HZ, dense CO$_2$ atmospheres develop due to reduced weathering rates. We implement an option for CO$_2$ condensation, in which the temperature profile is pinned to the CO$_2$ saturation curve \citep{span1996} wherever the dry adiabat would otherwise supersaturate in CO$_2$ \citep{kasting1991}. This a temperature-dependent CO$_2$ specific heat. We also include an option to perform ``inverse'' climate modeling experiments, in which a temperature profile is specified and the model is run a single step to calculate the corresponding solar flux needed to produce the given surface temperature, which allow us to perform the same set of HZ calculations as \citet{kopparapu2013,kopparapu2014}.
 
 \subsection{Earth validation} \label{sec:earth}
 We first validate \texttt{ExoColumn} against present-day Earth. The column is initialized from a cold start with a 1 bar background of N$_2$, O$_2$, and Ar, 400 ppm CO$_2$, and the RCEMIP ozone profile \citep{wing2018}. We calibrate the surface albedo so that the equilibrium surface temperature reaches the observed global-mean value of $T_s\approx288$ K. This use of surface albedo as a ``tuning parameter'' follows the approaches of \citet{kasting1993} and \citet{kopparapu2013,kopparapu2014}, with a physical justification that the tuned albedo accounts for the influence of partial cloud cover that cannot otherwise be represented in a one-dimensional column model. The calibrated surface albedo of 0.2736 allows \texttt{ExoColumn} to reach an equilibrium surface temperature $T_s=287.84$ K, which converges in 2107 steps ($\approx$1000 model days) to a top-of-atmosphere (TOA) flux imbalance below 0.1 W\,m$^{-2}$. The resulting temperature profile, radiative fluxes, heating rates, and water vapor profiles are shown in Figure~\ref{fig:earth_rce}, alongside the \texttt{konrad} RCE model \citep{kluft2019} based on the \texttt{RRMTG} radiative transfer package \citep{mlawer1997}, the \texttt{Clima} model, and the 1976 U.S. Standard Atmosphere for comparison. 
@@ -113,7 +113,7 @@ The \texttt{ExoColumn} temperature profile matches both \texttt{konrad} and \tex
 \subsection{Radiative-transfer benchmarks} \label{sec:lbl}
 
 We next evaluate the \texttt{ExoRT} and \texttt{Clima} correlated-$k$ radiation cores for regimes relevant to the inner and outer edges of the HZ. We compare these both against independent line-by-line (LBL)
-radiative-transfer calculations. The LBL reference is built with a custom code that draws HITRAN line data and Voigt line profiles from the \texttt{RADIS} line-by-line code \citep{pannier2019} and adds a sub-Lorentzian $\chi$-factor \citep{perrin1989} for the CO$_2$ far line wings as well as HITRAN-2024 CO$_2$--CO$_2$ collision-induced absorption. Figure~\ref{fig:lbl} compares the outgoing longwave radiative flux ($F_{IR}$) of \texttt{ExoRT}, \texttt{Clima}, and the LBL reference for a moist atmosphere near the inner edge of the HZ ($T_s=300$\,K, 1\,bar N$_2$ + 330\,ppm CO$_2$) and a dense-CO$_2$ atmosphere near the outer edge of the HZ ($T_s=273$\,K, 8.87\,ppm CO$_2$ + 1\,bar N$_2$). 
+radiative-transfer calculations. The LBL reference is built with a custom code that draws HITRAN line data and Voigt line profiles from the \texttt{RADIS} line-by-line code \citep{pannier2019} and adds a sub-Lorentzian $\chi$-factor \citep{perrin1989} for the CO$_2$ far line wings as well as HITRAN-2024 CO$_2$--CO$_2$ collision-induced absorption. Figure~\ref{fig:lbl} compares the outgoing longwave radiative flux ($F_{\text{IR}}$) of \texttt{ExoRT}, \texttt{Clima}, and the LBL reference for a moist atmosphere near the inner edge of the HZ ($T_s=300$\,K, 1\,bar N$_2$ + 330\,ppm CO$_2$) and a dense-CO$_2$ atmosphere near the outer edge of the HZ ($T_s=273$\,K, 8.87\,ppm CO$_2$ + 1\,bar N$_2$). 
 
 \begin{figure*}[ht!]
 \centering
@@ -126,25 +126,10 @@ Both \texttt{ExoRT} and \texttt{Clima} agree with the LBL reference to within 1\
 
 
 \section{The inner edge of the habitable zone} \label{sec:inner}
-[We locate the inner edge of the HZ with the inverse (reverse-climate) method of
-\citet{kasting1988} and \citet{kopparapu2013}, using the inverse mode of
-\texttt{ExoColumn} introduced in Section~\ref{sec:model}. Rather than time-marching
-each case to equilibrium, we prescribe a surface temperature $T_s$ and build a
-fully water-saturated column: a moist adiabat integrated upward from $T_s$ with the
-non-ideal \citet{kasting1988} pseudoadiabat and the IAPWS-95 steam equation of
-state \citep{wagner2002}, capped by an isothermal stratosphere at
-$T_{\rm strato}=200$ K. The radiation scheme is then called a single time to return
-the outgoing longwave radiation (OLR) and the absorbed shortwave radiation (ASR)
-for that column. The atmosphere is Earth-like but cloud-free (0.78 N$_2$,
-0.21 O$_2$, 0.01 Ar, and 330 ppm CO$_2$, with prognostic H$_2$O and no O$_3$ or
-CH$_4$), and the ASR is computed with a six-point Gauss--Legendre hemispheric
-average over the solar zenith angle, both following \citet{kopparapu2013}. The
-effective stellar flux that would sustain each column then follows from
-top-of-atmosphere energy balance as $S_{\rm eff}=\mathrm{OLR}/\mathrm{ASR}$, in
-units of the present-day solar constant, so that $S_{\rm eff}>1$ denotes a planet
-receiving more than modern Earth's insolation. Sweeping $T_s$ upward from
-present-day values then carries the column through the moist- and
-runaway-greenhouse transitions.]
+
+We calculate the inner edge of the HZ for Earth following the inverse climate modeling method of \citet{kasting1988} and \citet{kopparapu2013}. Instead of time-marching each case to equilibrium, we prescribe a surface temperature $T_s$ and build a vertical profile for a fully water-saturated column. We integrate upward from $T_s$ with a non-ideal moist pseudoadiabat \citet{kasting1988} and the IAPWS-95 steam equation of state \citep{wagner2002}, with an isothermal stratosphere of $T_{\rm strato}=200$ K. The \texttt{ExoRT} radiation core is then called a single step to return the net outgoing infrared radiative flux, $F_{\text{IR}}$, and the net incident solar radiative flux, $F_{\text{SOL}}$, for the prescribed column. (Note that $F_{\text{SOL}}$ is computed with a six-point Gauss--Legendre hemispheric average over the solar zenith angle, following \citet{kopparapu2013}.) The effective stellar flux that would sustain each column can the be calculated as $S_{\rm eff}=F_{\text{IR}}/F_{\text{SOL}}$, so that $S_{\rm eff}>1$ denotes a planet receiving greater insolation than present-day Earth. These calculations assume a background 1\,bar atmosphere with 78\% N$_2$, 21\% O$_2$, 1\% Ar, and 330 ppm CO$_2$, prognostic H$_2$O, and no O$_3$ or CH$_4$. We assume a fixed surface albedo of 0.32 to match the value used by \citet{kopparapu2013} (using a different albedo value for fixed-profile inverse calculations would result in a different energy balance). We perform a set of calculations that increase $T_s$ upward from present-day values to the point where the column transitions into a moist and then runaway greenhouse state.
+
+
 
 [Figure~\ref{fig:hz_inner} presents the sweep in the four-panel format of
 \citet{kopparapu2013}, comparing the default MT\_CKD continuum, the BPS continuum,
@@ -165,6 +150,17 @@ every case, but the stratosphere moistens dramatically as $T_s$ rises, from a
 cold-trapped VMR of $\sim$10$^{-5}$ near 300 K to of order 10$^{-1}$ or more above
 $\sim$360 K --- the essence of the moist- and runaway-greenhouse transition.]
 
+
+
+\begin{figure*}[ht!]
+\centering
+\includegraphics[width=\textwidth]{reference/moist_runaway/hz_inner_nonideal.pdf}
+\caption{Inner edge of the HZ for a Sun-like star. Calculations with \texttt{ExoColumn} are shown using the the default MT\_CKD continuum (solid) and the BPS continuum (dotted), alongside \texttt{Clima} calculations with the BPS continuum for comparison (dashed). Panels show (top left) net outgoing infrared flux and net incident solar flux, (top right) planetary albedo, (bottom left) effective solar flux, and sample non-ideal pseudoadiabatic water vapor profiles.}
+\label{fig:hz_inner}
+\end{figure*}
+
+
+
 [Two limits are marked in panel (c). The moist-greenhouse (water-loss) limit is the
 point at which the stratospheric H$_2$O mixing ratio reaches $3\times10^{-3}$, above
 which water is efficiently photodissociated and hydrogen escapes to space
@@ -179,21 +175,7 @@ versus \texttt{Clima}'s 0.193 --- consistent with the band-resolved decompositio
 of Section~\ref{sec:lbl}, since the OLR itself matches \texttt{Clima} to within
 1.3\%.]
 
-\begin{figure*}[ht!]
-\centering
-\includegraphics[width=\textwidth]{reference/moist_runaway/hz_inner_nonideal.pdf}
-\caption{[Inner edge of the HZ for a Sun-like star, an analogue of Figure 3 of
-\citet{kopparapu2013}. Panels (a)--(c) show the outgoing longwave radiation (OLR),
-planetary albedo, and effective stellar flux $S_{\rm eff}$ as functions of surface
-temperature for the MT\_CKD (default) and BPS continua and for \texttt{Clima};
-panel (d) shows the H$_2$O volume mixing ratio (VMR) profiles (altitude versus
-VMR) at $T_s=320$, 340, and 360 K. The OLR saturates near the Simpson--Nakajima
-limit ($\approx$295 W\,m$^{-2}$), and the moist-greenhouse ($S_{\rm eff}=1.087$,
-$d=0.959$ AU) and runaway-greenhouse ($S_{\rm eff}=1.101$, $d=0.953$ AU) limits
-for the MT\_CKD continuum are marked. Dashed curves and markers show the
-\citet{kopparapu2013} \texttt{Clima} data.]}
-\label{fig:hz_inner}
-\end{figure*}
+
 
 \section{The outer edge of the habitable zone} \label{sec:outer}
 [We locate the outer edge of the HZ from the maximum-greenhouse limit, following
