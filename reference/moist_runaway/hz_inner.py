@@ -657,7 +657,6 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     # PEAK of each model's own S_eff(Ts).  Drawn as grey SQUARES (ExoColumn uses
     # circles); each also sits on the dashed-vs-solid curve of its own model.
     kopp_moist_seff = kopp_run_seff = np.nan
-    kopp_moist_ts = kopp_run_ts = np.nan
     if kopp is not None:
         kt, ksf, kfh = kopp['tgo'], kopp['seff'], kopp['fh2o']
         wet = np.where(kfh >= MOIST_GH_VMR)[0]
@@ -697,53 +696,20 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
             lines.append(f'{SQUARE} Clima (BPS):                 {_au(kopp_s)}')
         return '\n'.join(lines)
 
-    # The moist- and runaway-greenhouse limits fall only ~25 K apart here, with the
-    # three continua stacked within ~0.09 in S_eff, so their on-curve markers are
-    # unreadable at panel scale.  A zoom inset over the 300-365 K peak separates the
-    # six markers; the exact S_eff/AU values are given in the caption and text.
-    axins = ax_c.inset_axes([0.31, 0.44, 0.43, 0.50])
-    axins.plot(ts, seff, color='C1', lw=1.3, zorder=4)
-    if bseff is not None:
-        axins.plot(bts, bseff, color='C1', **BPS_KW)
-    if kopp is not None:
-        axins.plot(kopp['tgo'], kopp['seff'], color='C1', **KOPP_KW)
-    _MK = dict(color=GREY, mec='w', mew=0.6, zorder=6)
     if np.isfinite(exo_moist):
-        axins.plot(moist_ts, exo_moist, 'o', ms=6, **_MK)
+        ax_c.annotate(_limit_text('MOIST GREENHOUSE', exo_moist, bps_moist, kopp_moist_seff),
+                      xy=(moist_ts, exo_moist), xytext=(-8, 68),
+                      textcoords='offset points', color=GREY, fontsize=8,
+                      ha='left', va='top',
+                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
+                                      shrinkB=3))
     if np.isfinite(exo_runaway):
-        axins.plot(runaway_ts, exo_runaway, 'o', ms=6, **_MK)
-    if np.isfinite(bps_moist):
-        axins.plot(moist_ts, bps_moist, 'D', ms=5, **_MK)
-    if np.isfinite(bps_runaway):
-        axins.plot(runaway_ts, bps_runaway, 'D', ms=5, **_MK)
-    if np.isfinite(kopp_moist_seff):
-        axins.plot(kopp_moist_ts, kopp_moist_seff, 's', ms=5, **_MK)
-    if np.isfinite(kopp_run_seff):
-        axins.plot(kopp_run_ts, kopp_run_seff, 's', ms=5, **_MK)
-    axins.set_xlim(300., 365.)
-    axins.set_ylim(0.99, 1.13)
-    axins.tick_params(labelsize=6)
-    axins.set_facecolor('white')
-    if np.isfinite(exo_runaway):
-        axins.annotate('runaway', xy=(runaway_ts, exo_runaway), xytext=(-2, 7),
-                       textcoords='offset points', ha='center', va='bottom',
-                       fontsize=7.5, color=GREY)
-    if np.isfinite(exo_moist):
-        axins.annotate('moist', xy=(moist_ts, exo_moist), xytext=(7, 2),
-                       textcoords='offset points', ha='left', va='bottom',
-                       fontsize=7.5, color=GREY)
-    ax_c.indicate_inset_zoom(axins, edgecolor='0.5', lw=0.8, alpha=0.7)
-    # Marker-shape key (shape = model; complements the line-style legend in panel a).
-    from matplotlib.lines import Line2D
-    _key = [Line2D([0], [0], marker='o', ls='none', mfc=GREY, mec='w', ms=6,
-                   label='ExoColumn (MT_CKD)'),
-            Line2D([0], [0], marker='D', ls='none', mfc=GREY, mec='w', ms=5,
-                   label='ExoColumn (BPS)'),
-            Line2D([0], [0], marker='s', ls='none', mfc=GREY, mec='w', ms=5,
-                   label='Clima')]
-    ax_c.legend(handles=_key, loc='lower center', bbox_to_anchor=(0.55, 0.0),
-                ncol=3, fontsize=7, frameon=False, handletextpad=0.2,
-                columnspacing=1.0)
+        ax_c.annotate(_limit_text('RUNAWAY GREENHOUSE', exo_runaway, bps_runaway, kopp_run_seff),
+                      xy=(runaway_ts, exo_runaway), xytext=(0, -40),
+                      textcoords='offset points', color=GREY, fontsize=8,
+                      ha='left', va='top',
+                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
+                                      shrinkB=3))
     ax_c.set(**kw)
     ax_c.set_facecolor('white')
 
