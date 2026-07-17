@@ -634,28 +634,28 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
         ax_c.plot(bts, bseff, color='C1', **BPS_KW)
     if kopp is not None:
         ax_c.plot(kopp['tgo'], kopp['seff'], color='C1', **KOPP_KW)
-    # Markers on the curve at the two greenhouse limits: moist-GH (water-loss; the
-    # Ts where stratospheric H2O VMR first reaches 3e-3) and runaway-GH (at the
-    # H2O critical temperature Tc).  Circle = MT_CKD, diamond = BPS, square = Clima.
-    if np.isfinite(exo_moist):
-        ax_c.plot(moist_ts, exo_moist, 'o', color=GREY, ms=3,
-                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+    # Mark the two ExoColumn (MT_CKD) greenhouse limits on the curve with a single
+    # point each and a short leader label giving the limit S_eff inline.  moist-GH =
+    # the Ts where stratospheric H2O VMR first reaches 3e-3 (water loss); runaway-GH
+    # = the Simpson-Nakajima peak of S_eff(Ts).  The BPS and Clima limit values are
+    # given in the caption/text, so only the MT_CKD points are drawn on the figure.
     if np.isfinite(exo_runaway):
-        ax_c.plot(runaway_ts, exo_runaway, 'o', color=GREY, ms=3,
-                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
-    if np.isfinite(bps_moist):
-        ax_c.plot(moist_ts, bps_moist, 'D', color=GREY, ms=3,
-                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
-    if np.isfinite(bps_runaway):
-        ax_c.plot(runaway_ts, bps_runaway, 'D', color=GREY, ms=3,
-                  markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+        ax_c.plot(runaway_ts, exo_runaway, 'o', color=GREY, ms=4, zorder=6)
+        ax_c.annotate(f'runaway greenhouse\n$S_\\mathrm{{eff}}$ = {exo_runaway:.3f}',
+                      xy=(runaway_ts, exo_runaway), xytext=(-40, 46),
+                      textcoords='offset points', color=GREY, fontsize=8,
+                      ha='right', va='bottom',
+                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6, shrinkB=3))
+    if np.isfinite(exo_moist):
+        ax_c.plot(moist_ts, exo_moist, 'o', color=GREY, ms=4, zorder=6)
+        ax_c.annotate(f'moist greenhouse\n$S_\\mathrm{{eff}}$ = {exo_moist:.3f}',
+                      xy=(moist_ts, exo_moist), xytext=(44, 78),
+                      textcoords='offset points', color=GREY, fontsize=8,
+                      ha='left', va='bottom',
+                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6, shrinkB=3))
 
-    # Kopparapu+2013 IHZ limits on their own (dashed) Seff curve, derived with the
-    # same physical definitions used for ExoColumn: moist greenhouse where the
-    # stratospheric H2O VMR (FH2O column) first reaches MOIST_GH_VMR (interpolated
-    # on Kopparapu's coarser 20 K grid), runaway greenhouse at the Simpson-Nakajima
-    # PEAK of each model's own S_eff(Ts).  Drawn as grey SQUARES (ExoColumn uses
-    # circles); each also sits on the dashed-vs-solid curve of its own model.
+    # Kopparapu+2013 limit S_eff (same definitions) — computed for the console
+    # summary and quoted in the caption/text, but not marked on the figure.
     kopp_moist_seff = kopp_run_seff = np.nan
     if kopp is not None:
         kt, ksf, kfh = kopp['tgo'], kopp['seff'], kopp['fh2o']
@@ -665,51 +665,16 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
             kopp_moist_ts = float(np.interp(np.log10(MOIST_GH_VMR),
                                             np.log10(kfh[j - 1:j + 1]), kt[j - 1:j + 1]))
             kopp_moist_seff = float(np.interp(kopp_moist_ts, kt, ksf))
-            ax_c.plot(kopp_moist_ts, kopp_moist_seff, 's', color=GREY, ms=3,
-                      markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
         _kb = (kt >= RUNAWAY_TS_LO) & (kt <= RUNAWAY_TS_HI)
         if np.any(_kb):
             _ki = int(np.nanargmax(ksf[_kb]))
-            kopp_run_ts = float(kt[_kb][_ki])
             kopp_run_seff = float(ksf[_kb][_ki])
-            ax_c.plot(kopp_run_ts, kopp_run_seff, 's', color=GREY, ms=3,
-                      markeredgecolor=GREY, markeredgewidth=0.5, zorder=6)
+        print(f"  Kopparapu  moist-GH Seff = {kopp_moist_seff:.3f}"
+              f" ;  runaway Seff = {kopp_run_seff:.3f}")
 
     ax_c.set_ylabel('$S_{\\rm eff}$')
     ax_c.set_xlabel('Surface temperature (K)')
     ax_c.set_ylim(0.4, 1.8)
-    # Label each limit (with the implied IHZ orbital distance d = 1/sqrt(Seff) [AU]),
-    # giving both models' Seff: ExoColumn (circle, solid curve) and Kopparapu+2013
-    # (square, dashed curve).  Runaway (Nakajima peak, ~320 K) and moist (~345 K)
-    # now sit close together in Ts, so moist is annotated above and runaway below.
-    # Lead each model's line with its plot-marker glyph (● circle = ExoColumn,
-    # ■ square = Clima) so the label doubles as the marker key.  Same grey as the
-    # plotted markers and text.
-    CIRCLE, DIAMOND, SQUARE = '•', '◆', '▪'   # glyphs ~matching the ms=3 markers
-    def _limit_text(name, exo_s, bps_s, kopp_s):
-        def _au(s):
-            return f'$S_\\mathrm{{eff}}$ = {s:.3f} ({1.0 / np.sqrt(s):.3f} AU)'
-        lines = [name, f'{CIRCLE} ExoColumn (MT_CKD):  {_au(exo_s)}']
-        if np.isfinite(bps_s):
-            lines.append(f'{DIAMOND} ExoColumn (BPS):        {_au(bps_s)}')
-        if np.isfinite(kopp_s):
-            lines.append(f'{SQUARE} Clima (BPS):                 {_au(kopp_s)}')
-        return '\n'.join(lines)
-
-    if np.isfinite(exo_moist):
-        ax_c.annotate(_limit_text('MOIST GREENHOUSE', exo_moist, bps_moist, kopp_moist_seff),
-                      xy=(moist_ts, exo_moist), xytext=(-8, 68),
-                      textcoords='offset points', color=GREY, fontsize=8,
-                      ha='left', va='top',
-                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
-                                      shrinkB=3))
-    if np.isfinite(exo_runaway):
-        ax_c.annotate(_limit_text('RUNAWAY GREENHOUSE', exo_runaway, bps_runaway, kopp_run_seff),
-                      xy=(runaway_ts, exo_runaway), xytext=(0, -40),
-                      textcoords='offset points', color=GREY, fontsize=8,
-                      ha='left', va='top',
-                      arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6,
-                                      shrinkB=3))
     ax_c.set(**kw)
     ax_c.set_facecolor('white')
 
