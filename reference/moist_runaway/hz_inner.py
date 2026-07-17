@@ -640,16 +640,18 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
     # = the Simpson-Nakajima peak of S_eff(Ts).  The BPS and Clima limit values are
     # given in the caption/text, so only the MT_CKD points are drawn on the figure.
     if np.isfinite(exo_runaway):
-        ax_c.plot(runaway_ts, exo_runaway, 'o', color=GREY, ms=4, zorder=6)
-        ax_c.annotate(f'runaway greenhouse\n$S_\\mathrm{{eff}}$ = {exo_runaway:.3f}',
-                      xy=(runaway_ts, exo_runaway), xytext=(-40, 46),
+        ax_c.plot(runaway_ts, exo_runaway, '|', color=GREY, ms=7, zorder=6)
+        ax_c.annotate(f'runaway greenhouse\n$S_\\mathrm{{eff}}$ = {exo_runaway:.3f}'
+                      f' ({1.0 / np.sqrt(exo_runaway):.3f} AU)',
+                      xy=(runaway_ts, exo_runaway), xytext=(75, 46),
                       textcoords='offset points', color=GREY, fontsize=8,
                       ha='right', va='bottom',
                       arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6, shrinkB=3))
     if np.isfinite(exo_moist):
-        ax_c.plot(moist_ts, exo_moist, 'o', color=GREY, ms=4, zorder=6)
-        ax_c.annotate(f'moist greenhouse\n$S_\\mathrm{{eff}}$ = {exo_moist:.3f}',
-                      xy=(moist_ts, exo_moist), xytext=(44, 78),
+        ax_c.plot(moist_ts, exo_moist, '|', color=GREY, ms=7, zorder=6)
+        ax_c.annotate(f'moist greenhouse\n$S_\\mathrm{{eff}}$ = {exo_moist:.3f}'
+                      f' ({1.0 / np.sqrt(exo_moist):.3f} AU)',
+                      xy=(moist_ts, exo_moist), xytext=(90, 25),
                       textcoords='offset points', color=GREY, fontsize=8,
                       ha='left', va='bottom',
                       arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6, shrinkB=3))
