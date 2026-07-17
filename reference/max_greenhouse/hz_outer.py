@@ -295,10 +295,10 @@ def _plot(pco2, olr, asr, alpha, seff):
     ax_a.set_ylim(50., 260.)
     ax_a.text(3.0, 202., '$F_\\mathrm{SOL}$', color='C0', fontsize=11,
               fontweight='bold', ha='center', va='top')
-    ax_a.text(3.0, 134., '$F_\\mathrm{IR}$', color='C3', fontsize=11,
+    ax_a.text(3.0, 110., '$F_\\mathrm{IR}$', color='C3', fontsize=11,
               fontweight='bold', ha='center', va='bottom')
-    ax_a.text(16., 152., 'Kopparapu+2013', color='0.45', fontsize=8,
-              ha='center', va='bottom', rotation=-18)
+    #ax_a.text(16., 152., 'Kopparapu+2013', color='0.45', fontsize=8,
+    #          ha='center', va='bottom', rotation=-18)
     ax_a.set_facecolor('white')
 
     # --- (b) planetary albedo vs pCO2 ---
@@ -308,10 +308,10 @@ def _plot(pco2, olr, asr, alpha, seff):
     ax_b.axhline(ALBEDO, color='0.3', lw=0.9, ls=':')
     ax_b.set_ylabel('Planetary albedo $\\alpha_p$')
     ax_b.set_ylim(0.2, 0.7)
-    ax_b.text(13., ALBEDO + 0.008, f'Surface albedo = {ALBEDO:.2f}',
+    ax_b.text(10., ALBEDO + 0.008, f'Surface albedo = {ALBEDO:.2f}',
               color='0.3', fontsize=8, ha='left', va='bottom')
-    ax_b.text(1.7, 0.262, 'Kopparapu+2013', color='0.45', fontsize=8,
-              ha='left', va='top', rotation=19)
+    #ax_b.text(1.7, 0.262, 'Kopparapu+2013', color='0.45', fontsize=8,
+    #          ha='left', va='top', rotation=19)
     ax_b.set_facecolor('white')
 
     # --- (c) Seff vs pCO2 ---
@@ -325,14 +325,14 @@ def _plot(pco2, olr, asr, alpha, seff):
         ax_c.plot(kpp[ki], ks[ki], 'o', color='0.55', ms=3, zorder=3)
         ax_c.annotate(f'Kopparapu+2013\n$S_\\mathrm{{eff}}$ = '
                       f'{KOPP_SEFF_MAX:.3f} ({KOPP_D_MAX:.2f} AU)',
-                      xy=(kpp[ki], ks[ki]), xytext=(40, -4),
+                      xy=(kpp[ki], ks[ki]), xytext=(20, -2),
                       textcoords='offset points', color='0.45', fontsize=8,
                       ha='left', va='top')
     ax_c.plot(pco2, seff, color='C1', lw=1.6, zorder=4)
     if at_edge:
         # Seff is still falling at the sweep edge: quote the edge value as a
         # bound on the maximum-greenhouse limit, not a minimum.
-        ax_c.text(10.3, 0.435, 'Maximum greenhouse\n'
+        ax_c.text(10.3, 1.555, 'Maximum greenhouse\n'
                   f'$S_\\mathrm{{eff}} \\leq$ {s_min:.3f} '
                   f'($d \\geq$ {d_min:.2f} AU)\nat the sweep edge',
                   color='0.25', fontsize=8, ha='left', va='bottom')
@@ -340,7 +340,7 @@ def _plot(pco2, olr, asr, alpha, seff):
         ax_c.plot(p_min, s_min, 'o', color='0.3', ms=3.5, zorder=6)
         ax_c.annotate(f'Maximum greenhouse\n$S_\\mathrm{{eff}}$ = {s_min:.3f}'
                       f' ({d_min:.2f} AU)',
-                      xy=(p_min, s_min), xytext=(10, 12),
+                      xy=(p_min, s_min), xytext=(10, 18),
                       textcoords='offset points', color='0.25', fontsize=8,
                       ha='center', va='bottom')
     ax_c.set_ylabel('$S_\\mathrm{eff}$')

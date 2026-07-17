@@ -643,9 +643,9 @@ def _plot(ts, olr, asr, alpha, seff, strat_vmr, profiles, bps=None):
         ax_c.plot(runaway_ts, exo_runaway, '|', color=GREY, ms=7, zorder=6)
         ax_c.annotate(f'runaway greenhouse\n$S_\\mathrm{{eff}}$ = {exo_runaway:.3f}'
                       f' ({1.0 / np.sqrt(exo_runaway):.3f} AU)',
-                      xy=(runaway_ts, exo_runaway), xytext=(75, 46),
+                      xy=(runaway_ts, exo_runaway), xytext=(15, 46),
                       textcoords='offset points', color=GREY, fontsize=8,
-                      ha='right', va='bottom',
+                      ha='left', va='bottom',
                       arrowprops=dict(arrowstyle='->', color=GREY, lw=0.6, shrinkB=3))
     if np.isfinite(exo_moist):
         ax_c.plot(moist_ts, exo_moist, '|', color=GREY, ms=7, zorder=6)
