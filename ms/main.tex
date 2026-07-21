@@ -37,6 +37,7 @@
 %% verify/replace, and add ORCIDs and \email{} addresses as appropriate.]
 \author[0000-0002-7188-1648]{Eric T. Wolf}
 \affiliation{Laboratory for Atmospheric and Space Physics, University of Colorado Boulder, Boulder, CO, USA}
+\affiliation{Blue Marble Space, Seattle, WA, USA}
 \email{eric.wolf@colorado.edu}
 
 \author[0000-0002-5893-2471]{Ravi K. Kopparapu}
@@ -127,59 +128,22 @@ Both \texttt{ExoRT} and \texttt{Clima} agree with the LBL reference to within 1\
 
 \section{The inner edge of the habitable zone} \label{sec:inner}
 
-We calculate the inner edge of the HZ for Earth following the inverse climate modeling method of \citet{kasting1988} and \citet{kopparapu2013}. Instead of time-marching each case to equilibrium, we prescribe a surface temperature $T_s$ and build a vertical profile for a fully water-saturated column. We integrate upward from $T_s$ with a non-ideal moist pseudoadiabat \citet{kasting1988} and the IAPWS-95 steam equation of state \citep{wagner2002}, with an isothermal stratosphere of $T_{\rm strato}=200$ K. The \texttt{ExoRT} radiation core is then called a single step to return the net outgoing infrared radiative flux, $F_{\text{IR}}$, and the net incident solar radiative flux, $F_{\text{SOL}}$, for the prescribed column. (Note that $F_{\text{SOL}}$ is computed with a six-point Gauss--Legendre hemispheric average over the solar zenith angle, following \citet{kopparapu2013}.) The effective stellar flux that would sustain each column can the be calculated as $S_{\rm eff}=F_{\text{IR}}/F_{\text{SOL}}$, so that $S_{\rm eff}>1$ denotes a planet receiving greater insolation than present-day Earth. These calculations assume a background 1\,bar atmosphere with 78\% N$_2$, 21\% O$_2$, 1\% Ar, and 330 ppm CO$_2$, prognostic H$_2$O, and no O$_3$ or CH$_4$. We assume a fixed surface albedo of 0.32 to match the value used by \citet{kopparapu2013} (using a different albedo value for fixed-profile inverse calculations would result in a different energy balance). We perform the set of calculations by increasing $T_s$ upward from present-day values to the point where the column transitions into a moist and then runaway greenhouse state.
+We calculate the inner edge of the HZ for Earth following the inverse climate modeling method of \citet{kasting1988} and \citet{kopparapu2013}. Instead of time-marching each case to equilibrium, we prescribe a surface temperature $T_s$ and build a vertical profile for a fully water-saturated column. We integrate upward from $T_s$ with a non-ideal moist pseudoadiabat \citet{kasting1988} and the IAPWS-95 steam equation of state \citep{wagner2002}, with an isothermal stratosphere of $T_{\rm strato}=200$ K. The \texttt{ExoRT} radiation core is then called a single step to return the net outgoing infrared radiative flux, $F_{\text{IR}}$, and the net incident solar radiative flux, $F_{\text{SOL}}$, for the prescribed column. (Note that $F_{\text{SOL}}$ is computed with a six-point Gauss--Legendre hemispheric average over the solar zenith angle, following \citet{kopparapu2013}.) The effective stellar flux that would sustain each column can then be calculated as $S_{\rm eff}=F_{\text{IR}}/F_{\text{SOL}}$, so that $S_{\rm eff}>1$ denotes a planet receiving greater insolation than present-day Earth. These calculations assume a background 1\,bar atmosphere with 78\% N$_2$, 21\% O$_2$, 1\% Ar, and 330 ppm CO$_2$, prognostic H$_2$O, and no O$_3$ or CH$_4$. We assume a fixed surface albedo of 0.32 to match the value used by \citet{kopparapu2013} (using a different albedo value for fixed-profile inverse calculations would result in a different energy balance). We perform the set of calculations by increasing $T_s$ upward from present-day values to the point where the column transitions into a moist and then runaway greenhouse state.
 
-The results of these \texttt{ExoColumn} calculations for the inner edge of the HZ are shown in Figure~\ref{fig:hz_inner}, following the same format as \citet[Fig. 3][]{kopparapu2013}. Results from \texttt{Clima} are also shown as well as a version of \texttt{ExoColumn} using the BPS water vapor continuum (used by \texttt{Clima}) instead of the default MT\_CKD continuum.
-
-
-
-
-
-
-
-
-[Panel (a) shows the OLR and the absorbed shortwave versus
-$T_s$: as the surface warms and water vapor comes to dominate the atmosphere, the
-OLR saturates near the Simpson--Nakajima radiation limit \citep{nakajima1992} of
-$\approx$295 W\,m$^{-2}$ (1.3\% above the \citeauthor{kopparapu2013} value of
-291 W\,m$^{-2}$), because the optically thick water-vapor column fixes the emission
-to a nearly isothermal upper troposphere, while the absorbed shortwave rises
-steadily. Panel (b) shows the planetary albedo, which falls monotonically from
-$\approx$0.30 at $T_s=280$ K to $\approx$0.18 by 400 K as near-infrared absorption
-by the growing water-vapor column removes an increasing fraction of the incident
-sunlight. Panel (c) shows the resulting $S_{\rm eff}$, which rises to a peak near
-$T_s=320$ K and then declines, as the falling albedo (rising ASR) outpaces the
-saturating OLR. Panel (d) shows the vertical profiles of H$_2$O volume mixing ratio
-(VMR) for surface temperatures from 280 to 380 K: the troposphere is saturated in
-every case, but the stratosphere moistens dramatically as $T_s$ rises, from a
-cold-trapped VMR of $\sim$10$^{-5}$ near 300 K to of order 10$^{-1}$ or more above
-$\sim$360 K --- the essence of the moist- and runaway-greenhouse transition.]
-
-
+The results of these \texttt{ExoColumn} calculations for the inner edge of the HZ are shown in Figure~\ref{fig:hz_inner}, following the same format as \citet[Fig. 3][]{kopparapu2013}. Values from \texttt{Clima} are also shown as well as a version of \texttt{ExoColumn} using the BPS water vapor continuum (used by \texttt{Clima}) instead of the default MT\_CKD continuum. Figure~\ref{fig:hz_inner} (top left) shows that $F_{\text{IR}}$ and $F_{\text{SOL}}$ steadily increase as the surface warms and water vapor comes to dominate the atmosphere, with $F_{\text{IR}}$ peaking near the Simpson--Nakajima radiation limit \citep{nakajima1992} of $\approx$295 W\,m$^{-2}$ (1.3\% above the \citeauthor{kopparapu2013} value of 291 W\,m$^{-2}$) as most of the atmosphere becomes opaque to infrared radiation. Further increases in $F_{\text{IR}}$ occur near 2000\,K as the surface begins to radiate at visible and near-infrared wavelengths. This behavior is shown in the changes of planetary albedo (calculated as the ratio of the upward and downward solar fluxes) with surface temperature (Figure~\ref{fig:hz_inner}, top right). The minimum value of planetary albedo corresponds to the maximum value in $F_{\text{IR}}$, which both then flatten out at higher surface temperatures. 
 
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=\textwidth]{reference/moist_runaway/hz_inner_nonideal.pdf}
-\caption{Inner edge of the HZ for a Sun-like star. Calculations with \texttt{ExoColumn} are shown using the the default MT\_CKD continuum (solid) and the BPS continuum (dotted), alongside \texttt{Clima} calculations with the BPS continuum for comparison (dashed). Panels show (top left) net outgoing infrared flux and net incident solar flux, (top right) planetary albedo, (bottom left) effective solar flux, and sample non-ideal pseudoadiabatic water vapor profiles. The moist- and runaway-greenhouse limits marked in the bottom-left panel are $S_{\rm eff}=1.087$ (0.959\,AU) and 1.101 (0.953\,AU) for the MT\_CKD continuum; the corresponding BPS-continuum limits are 1.074 (0.965\,AU) and 1.093 (0.956\,AU), and the \texttt{Clima} limits are 1.016 (0.992\,AU) and 1.060 (0.971\,AU).}
+\caption{Inner edge of the HZ for a Sun-like star. Calculations with \texttt{ExoColumn} are shown using the the default MT\_CKD continuum (solid) and the BPS continuum (dotted), alongside \texttt{Clima} calculations with the BPS continuum for comparison (dashed). Panels show (top left) net outgoing infrared flux and net incident solar flux, (top right) planetary albedo, (bottom left) effective solar flux, and (bottom right) sample non-ideal pseudoadiabatic water vapor profiles. The moist- and runaway-greenhouse limits marked in the bottom-left panel are $S_{\rm eff}=1.087$ (0.959\,AU) and 1.101 (0.953\,AU) for the MT\_CKD continuum. The corresponding BPS-continuum limits are 1.074 (0.965\,AU) and 1.093 (0.956\,AU), and the \texttt{Clima} limits are 1.016 (0.992\,AU) and 1.060 (0.971\,AU).}
 \label{fig:hz_inner}
 \end{figure*}
 
+The first inner HZ limit is the moist greenhouse limit, which is is the point at which the stratospheric H$_2$O mixing ratio reaches $3\times10^{-3}$, above which water is efficiently photodissociated and hydrogen escapes to space \citep{kasting1988, kopparapu2013}. This change in water vapor content occurs between $T_s$ = 320\,K and 340\,K, with over an order of magnitude increase in stratospheric water vapor (Figure~\ref{fig:hz_inner}, bottom right). This moist greenhouse limit occurs in the \texttt{ExoColumn} results at $S_{\rm eff} = 1.087$ (Figure~\ref{fig:hz_inner}, bottom left), which corresponds to an orbital distance of $d=1/\sqrt{S_{\rm eff}}=0.959$\,AU. For comparison, the \texttt{ExoColumn} BPS-continuum moist greenhouse limit is at $S_{\rm eff} = 1.074$ (0.965\,AU), and the \texttt{Clima} limit is $S_{\rm eff} = 1.016$ (0.992\,AU).
 
+The second inner HZ limit is the runaway greenhouse limit at which the oceans completely evaporate. The runaway greenhouse limit occurs in the \texttt{ExoColumn} results at $S_{\rm eff} = 1.101$ (Figure~\ref{fig:hz_inner}, bottom left), which corresponds to an orbital distance of $d=1/\sqrt{S_{\rm eff}}=0.953$\,AU. This is the value of $S_{\rm eff}$ where the model first reaches the Simpson--Nakajima radiation limit \citep{nakajima1992}. For comparison, the \texttt{ExoColumn} BPS-continuum runaway greenhouse limit is at $S_{\rm eff} = 1.093$ (0.956\,AU), and the \texttt{Clima} limit is $S_{\rm eff} = 1.060$ (0.971\,AU). 
 
-[Two limits are marked in panel (c). The moist-greenhouse (water-loss) limit is the
-point at which the stratospheric H$_2$O mixing ratio reaches $3\times10^{-3}$, above
-which water is efficiently photodissociated and hydrogen escapes to space
-\citep{kasting1988, kopparapu2013}; we find it at $S_{\rm eff}=1.087$
-($d=0.959$ AU). The runaway-greenhouse limit is the peak $S_{\rm eff}$ on the inner
-branch, where the OLR reaches its Simpson--Nakajima ceiling and no warmer surface
-can be sustained; we find $S_{\rm eff}=1.101$ ($d=0.953$ AU). With the BPS continuum
-these limits shift to 1.074 and 1.093, while \texttt{Clima} gives 1.016 and 1.060.
-The residual $S_{\rm eff}$ offset relative to \texttt{Clima} is set by
-near-infrared shortwave absorption by water vapor --- our albedo plateau is 0.211
-versus \texttt{Clima}'s 0.193 --- consistent with the band-resolved decomposition
-of Section~\ref{sec:lbl}, since the OLR itself matches \texttt{Clima} to within
-1.3\%.]
-
+The offsets between the \texttt{ExoColumn} and \texttt{Clima} model are modest and almost entirely due to the different correlated-$k$ radiation cores used by each model (see \S\ref{sec:lbl}). Our experiments included an implementation of the BMS water vapor continuum to more directly comapre with \texttt{Clima}, but this only accounts for a fraction of the differences between the model results. Nevertheless, these \texttt{ExoColumn} results give moist and runaway greenhouse limits with HZ distances that agree with those published by \citet{kopparapu2013} within $\sim$2\%.
 
 
 \section{The outer edge of the habitable zone} \label{sec:outer}
@@ -357,7 +321,7 @@ core.]
 %% ============================================================
 
 \begin{acknowledgments}
-This paper is dedicated to Jim Kasting. This material is based on work performed as part of the Consortium on Habitability and Atmospheres of M dwarf Planets (CHAMPs) team, supported by the National Aeronautics and Space Administration (NASA) under grant No. 80NSSC23K1399 issued through the Interdisciplinary Consortia for Astrobiology Research (ICAR) program. JHM also acknowledges support from the NASA Habitable Worlds program under grant 80NSSC24K1896. 
+This paper is dedicated to Jim Kasting. This material is based on work performed as part of the Consortium on Habitability and Atmospheres of M dwarf Planets (CHAMPs) team, supported by the National Aeronautics and Space Administration (NASA) under grant No. 80NSSC23K1399 issued through the Interdisciplinary Consortia for Astrobiology Research (ICAR) program. 
 \end{acknowledgments}
 
 %\facilities{}
