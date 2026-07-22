@@ -274,7 +274,7 @@ def _plot(pco2, olr, asr, alpha, seff):
     print(f"\n  ExoColumn maximum greenhouse: Seff = {s_min:.4f} at "
           f"pCO2 = {p_min:.2f} bar  ->  d = {d_min:.3f} AU"
           + ("  [AT SWEEP EDGE — minimum not resolved]" if at_edge else ""))
-    print(f"  Kopparapu+2013              : Seff = {KOPP_SEFF_MAX:.3f} at "
+    print(f"  Clima (Kopparapu et al. 2013)              : Seff = {KOPP_SEFF_MAX:.3f} at "
           f"pCO2 ~ {KOPP_PCO2_MAX:.0f} bar  ->  d = {KOPP_D_MAX:.2f} AU  "
           f"(Fig 5 caption / Table 1)")
 
@@ -323,11 +323,11 @@ def _plot(pco2, olr, asr, alpha, seff):
         # but LABEL it with Kopparapu's published headline value (Fig 5 caption /
         # Table 1: Seff = 0.343, d = 1.70 AU) rather than our ~0.337 pixel read.
         ax_c.plot(kpp[ki], ks[ki], 'o', color='0.55', ms=3, zorder=3)
-        ax_c.annotate(f'Kopparapu+2013\n$S_\\mathrm{{eff}}$ = '
-                      f'{KOPP_SEFF_MAX:.3f} ({KOPP_D_MAX:.2f} AU)',
-                      xy=(kpp[ki], ks[ki]), xytext=(20, -2),
-                      textcoords='offset points', color='0.45', fontsize=8,
-                      ha='left', va='top')
+        #ax_c.annotate(f'Clima (Kopparapu et al. 2013)\n$S_\\mathrm{{eff}}$ = '
+        #              f'{KOPP_SEFF_MAX:.3f} ({KOPP_D_MAX:.2f} AU)',
+        #              xy=(kpp[ki], ks[ki]), xytext=(20, -2),
+        #              textcoords='offset points', color='0.45', fontsize=8,
+        #              ha='left', va='top')
     ax_c.plot(pco2, seff, color='C1', lw=1.6, zorder=4)
     if at_edge:
         # Seff is still falling at the sweep edge: quote the edge value as a
@@ -350,6 +350,12 @@ def _plot(pco2, olr, asr, alpha, seff):
     ax_c.set_ylim(0.30, 0.60)
     ax_c.set_xticks([1, 2, 5, 10, 20, 35])
     ax_c.set_xticklabels(['1', '2', '5', '10', '20', '35'])
+    # Style legend (solid = this work, dashed = Kopparapu+2013), matching Fig 3.
+    from matplotlib.lines import Line2D
+    handles = [Line2D([0], [0], color='0.3', lw=1.5, label='ExoColumn'),
+               Line2D([0], [0], color='0.3', lw=0.9, ls='--',
+                      label='Clima (Kopparapu et al. 2013)')]
+    ax_c.legend(handles=handles, loc='upper left', fontsize=8, frameon=False)
     ax_c.set_facecolor('white')
 
     fig.tight_layout()
