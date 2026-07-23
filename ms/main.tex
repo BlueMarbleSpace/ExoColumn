@@ -130,7 +130,7 @@ Both \texttt{ExoRT} and \texttt{Clima} agree with the LBL reference to within 1\
 
 We calculate the inner edge of the HZ for Earth following the inverse climate modeling method of \citet{kasting1988} and \citet{kopparapu2013}. Instead of time-marching each case to equilibrium, we prescribe a surface temperature $T_s$ and build a vertical profile for a fully water-saturated column. We integrate upward from $T_s$ with a non-ideal moist pseudoadiabat \citet{kasting1988} and the IAPWS-95 steam equation of state \citep{wagner2002}, with an isothermal stratosphere of $T_{\rm strato}=200$ K. The \texttt{ExoRT} radiation core is then called a single step to return the net outgoing infrared radiative flux, $F_{\text{IR}}$, and the net incident solar radiative flux, $F_{\text{SOL}}$, for the prescribed column. (Note that $F_{\text{SOL}}$ is computed with a six-point Gauss--Legendre hemispheric average over the solar zenith angle, following \citet{kopparapu2013}.) The effective stellar flux that would sustain each column can then be calculated as $S_{\rm eff}=F_{\text{IR}}/F_{\text{SOL}}$, so that $S_{\rm eff}>1$ denotes a planet receiving greater insolation than present-day Earth. These calculations assume a background 1\,bar atmosphere with 78\% N$_2$, 21\% O$_2$, 1\% Ar, and 330 ppm CO$_2$, prognostic H$_2$O, and no O$_3$ or CH$_4$. We assume a fixed surface albedo of 0.32 to match the value used by \citet{kopparapu2013} (using a different albedo value for fixed-profile inverse calculations would result in a different energy balance). We perform the set of calculations by increasing $T_s$ upward from present-day values to the point where the column transitions into a moist and then runaway greenhouse state.
 
-The results of these \texttt{ExoColumn} calculations for the inner edge of the HZ are shown in Figure~\ref{fig:hz_inner}, following the same format as \citet[Fig. 3][]{kopparapu2013}. Values from \texttt{Clima} are also shown as well as a version of \texttt{ExoColumn} using the BPS water vapor continuum (used by \texttt{Clima}) instead of the default MT\_CKD continuum. Figure~\ref{fig:hz_inner} (top left) shows that $F_{\text{IR}}$ and $F_{\text{SOL}}$ steadily increase as the surface warms and water vapor comes to dominate the atmosphere, with $F_{\text{IR}}$ peaking near the Simpson--Nakajima radiation limit \citep{nakajima1992} of $\approx$295 W\,m$^{-2}$ (1.3\% above the \citeauthor{kopparapu2013} value of 291 W\,m$^{-2}$) as most of the atmosphere becomes opaque to infrared radiation. Further increases in $F_{\text{IR}}$ occur near 2000\,K as the surface begins to radiate at visible and near-infrared wavelengths. This behavior is shown in the changes of planetary albedo (calculated as the ratio of the upward and downward solar fluxes) with surface temperature (Figure~\ref{fig:hz_inner}, top right). The minimum value of planetary albedo corresponds to the maximum value in $F_{\text{IR}}$, which both then flatten out at higher surface temperatures. 
+The results of these \texttt{ExoColumn} calculations for the inner edge of the HZ are shown in Figure~\ref{fig:hz_inner}, following the same format as \citet[Fig. 3,][]{kopparapu2013}. Values from \texttt{Clima} are also shown as well as a version of \texttt{ExoColumn} using the BPS water vapor continuum (used by \texttt{Clima}) instead of the default MT\_CKD continuum. Figure~\ref{fig:hz_inner} (top left) shows that $F_{\text{IR}}$ and $F_{\text{SOL}}$ steadily increase as the surface warms and water vapor comes to dominate the atmosphere, with $F_{\text{IR}}$ peaking near the Simpson--Nakajima radiation limit \citep{nakajima1992} of $\approx$295 W\,m$^{-2}$ (1.3\% above the \citeauthor{kopparapu2013} value of 291 W\,m$^{-2}$) as most of the atmosphere becomes opaque to infrared radiation. $F_{\text{SOL}}$ likewise increases due to increased near-infrared absorption but then reaches a plateau as Rayleigh scattering increases. Further increases in $F_{\text{IR}}$ occur near 2000\,K as the surface begins to radiate at visible and near-infrared wavelengths. This behavior is shown in the changes of planetary albedo (calculated as the ratio of the upward and downward solar fluxes) with surface temperature (Figure~\ref{fig:hz_inner}, top right). The minimum value of planetary albedo corresponds to the maximum value in $F_{\text{IR}}$, which both then flatten out at higher surface temperatures. 
 
 \begin{figure*}[ht!]
 \centering
@@ -143,40 +143,35 @@ The first inner HZ limit is the moist greenhouse limit, which is is the point at
 
 The second inner HZ limit is the runaway greenhouse limit at which the oceans completely evaporate. The runaway greenhouse limit occurs in the \texttt{ExoColumn} results at $S_{\rm eff} = 1.101$ (Figure~\ref{fig:hz_inner}, bottom left), which corresponds to an orbital distance of $d=1/\sqrt{S_{\rm eff}}=0.953$\,AU. This is the value of $S_{\rm eff}$ where the model first reaches the Simpson--Nakajima radiation limit \citep{nakajima1992}. For comparison, the \texttt{ExoColumn} BPS-continuum runaway greenhouse limit is at $S_{\rm eff} = 1.093$ (0.956\,AU), and the \texttt{Clima} limit is $S_{\rm eff} = 1.060$ (0.971\,AU). 
 
-The offsets between the \texttt{ExoColumn} and \texttt{Clima} model are modest and almost entirely due to the different correlated-$k$ radiation cores used by each model (see \S\ref{sec:lbl}). Our experiments included an implementation of the BMS water vapor continuum to more directly comapre with \texttt{Clima}, but this only accounts for a fraction of the differences between the model results. Nevertheless, these \texttt{ExoColumn} results give moist and runaway greenhouse limits with HZ distances that agree with those published by \citet{kopparapu2013} within $\sim$2\%.
+The offsets between the \texttt{ExoColumn} and \texttt{Clima} model are modest and almost entirely due to the different correlated-$k$ radiation cores used by each model (see \S\ref{sec:lbl}). Our experiments included an implementation of the BMS water vapor continuum to more directly compare with \texttt{Clima}, but this only accounts for a fraction of the differences between the model results. Nevertheless, these \texttt{ExoColumn} results give moist and runaway greenhouse limits with HZ distances that agree with those published by \citet{kopparapu2013} within $\sim$2\%.
 
 
 \section{The outer edge of the habitable zone} \label{sec:outer}
-[We locate the outer edge of the HZ from the maximum-greenhouse limit, following
-the inverse method of \citet{kopparapu2013} (their Section 3.3). Here the surface
-temperature is held fixed at 273 K over a 1 bar N$_2$ background, and the CO$_2$
-partial pressure is swept from 1 bar up to 34.7 bar --- the saturation pressure of
-CO$_2$ at 273 K, and hence the physical endpoint of the sweep. For each CO$_2$
-loading we build a water-saturated moist-adiabat column in which the temperature
-profile is pinned to the CO$_2$ saturation curve wherever the dry adiabat would
-otherwise supersaturate (CO$_2$ condensation; \citealt{kasting1991}, with the
-\citealt{span1996} saturation curve), the CO$_2$ contribution to the specific heat
-is evaluated at the local temperature, and the stratosphere is isothermal at 154 K.
-As in the inner-edge calculation, the radiation scheme is then called a single time
-to return the OLR and the absorbed shortwave, and the effective stellar flux is
-$S_{\rm eff}=\mathrm{OLR}/\mathrm{ASR}$ (surface albedo 0.32, six-point hemispheric
-zenith average, present solar constant). The maximum-greenhouse limit --- the outer
-edge --- is the minimum of $S_{\rm eff}$ over the sweep.]
 
-[Figure~\ref{fig:hz_outer} shows the sweep in the three-panel format of
-\citet{kopparapu2013}, with their digitized curves overlaid for comparison. Panel
-(a) shows the OLR ($F_{\rm IR}$) and the absorbed shortwave ($F_{\rm SOL}$): as
-CO$_2$ is added, the OLR falls from $\approx$123 W\,m$^{-2}$ at 1 bar to a floor of
-$\approx$72 W\,m$^{-2}$ beyond $\sim$10 bar, where the CO$_2$ greenhouse saturates,
-while the absorbed shortwave declines steadily from $\approx$228 to
-$\approx$157 W\,m$^{-2}$ as CO$_2$ Rayleigh scattering grows. Panel (b) shows the
-planetary albedo, which rises monotonically from $\approx$0.33 to $\approx$0.54
-across the sweep, driven by that increasing Rayleigh scattering. Panel (c) shows the
+We calculate the outer edge of the HZ as the maximum greenhouse limit for a CO$_2$-dominated atmosphere, following the inverse modeling method of \citet{kasting1993} and \citet{kopparapu2013}. Here the surface
+temperature is held fixed at 273 K over a 1 bar N$_2$ background, and the CO$_2$ partial pressure is swept from 1 bar up to 34.7 bar. For each CO$_2$ partial pressure, we build a water-saturated moist adiabat in which the temperature profile is pinned to the CO$_2$ saturation curve wherever the dry adiabat would otherwise supersaturate (i.e., CO$_2$ condensation; \citealt{kasting1991}, with the \citealt{span1996} saturation curve). The CO$_2$ contribution to the specific heat is evaluated at the local temperature, and the stratosphere is isothermal at 154 K. As in the inner-edge calculation, the \texttt{ExoRT} radiative core is then called a single step to return $F_{\text{IR}}$ and $F_{\text{SOL}}$, with the ratio giving $S_{\rm eff}$. The maximum-greenhouse limit, denoting the outer edge of the HZ, is the minimum value of $S_{\rm eff}$ over the range of CO$_2$ partial pressures.
+
+The results of the \texttt{ExoColumn} calculations for the outer edge of the HZ are shown in Figure~\ref{fig:hz_outer}, following the same three-panel format as \citet[Fig. 5,][]{kopparapu2013}. Values from \texttt{Clima} are also shown for comparison. Figure~\ref{fig:hz_outer} (top) shows that $F_{\rm IR}$ and $F_{\rm SOL}$ decrease as the CO$_2$ partial pressure increases, which indicates the increasing greenhouse effect of CO$_2$. Beyond $\sim$10 bar, $F_{\rm IR}$ reaches a floor of $\approx$72 W\,m$^{-2}$ as the thick CO$_2$ atmosphere becomes opaque at infrared wavelengths, while $F_{\rm SOL}$ continues to decrease as Rayleigh scattering increases. This corresponds to a high planetary albedo as CO$_2$ partial pressure increases (Figure~\ref{fig:hz_outer}, middle). 
+
+
+
+
+
+
+Panel (c) shows the
 resulting $S_{\rm eff}=\mathrm{OLR}/\mathrm{ASR}$, which is U-shaped: adding CO$_2$
 initially deepens the greenhouse faster than it brightens the planet, lowering
 $S_{\rm eff}$, until near 9 bar the greenhouse saturates and the still-rising albedo
 turns $S_{\rm eff}$ back upward. The minimum of this curve is the maximum-greenhouse
 limit.]
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.45\textwidth]{reference/max_greenhouse/hz_outer.pdf}
+\caption{Outer edge of the HZ for a Sun-like star. Calculations with \texttt{ExoColumn} (solid) are shown alongside values from \texttt{Clima} (dashed). Panels show  (top) net outgoing infrared flux and net incident solar flux, (middle) planetary albedo, and (bottom) effective solar flux. The maximum greenhouse limit marked on the bottom panel is $S_{\rm eff}=0.395$ ($1.59$ AU) at a CO$_2$ partial pressure of 8.9 bar. The corresponding \texttt{Clima} value is $S_{\rm eff}=0.343$ ($1.70$ AU) at $\sim$7 bar.}
+\label{fig:hz_outer}
+\end{figure}
+
 
 [We find the maximum greenhouse at $S_{\rm eff}=0.395$ ($p_{\rm CO_2}=8.9$ bar,
 $d=1.59$ AU), compared with the \citet{kopparapu2013} value of 0.343
@@ -189,12 +184,7 @@ pressure table (beyond which \texttt{ExoRT} would extrapolate its coefficients),
 which freezes the pressure broadening at its 10 bar value while the CIA and
 continuum opacities continue to use the true pressure.]
 
-\begin{figure}[ht!]
-\centering
-\includegraphics[width=0.45\textwidth]{reference/max_greenhouse/hz_outer.pdf}
-\caption{Outer edge of the HZ for a Sun-like star. Calculations with \citettt{ExoColumn} (solid) are shown alongside values from \texttt{Clima} (dashed). Panels show  (top) net outgoing infrared flux and net incident solar flux, (middle) planetary albedo, and (bottom) effective solar flux. The maximum greenhouse limit marked on the bottom panel is $S_{\rm eff}=0.395$ ($1.59$ AU) at a CO$_2$ partial pressure of 8.9 bar. The corresponding \citettt{Clima} value is $S_{\rm eff}=0.343$ at $\sim$7 bar.}
-\label{fig:hz_outer}
-\end{figure}
+
 
 \section{Habitable-zone limits across stellar spectral types} \label{sec:stellar}
 [We next compute the HZ limits for nine host stars spanning spectral types F
