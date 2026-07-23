@@ -223,8 +223,6 @@ def plot(data):
     b.set_ylim(0.5, 1.8)   # Kopparapu Fig 6b framing; the nonideal-steam
     # supercritical branch (Ts >~ 1600 K) climbs off-scale to Seff ~ 3.5.
     b.set_title('Inner edge', loc='left', fontsize=10)
-    b.annotate('supercritical\n(off-scale) ', xy=(2150, 1.78), ha='right',
-               va='top', fontsize=7, color='0.4')
 
     # Outer-edge panels (c, d): vs CO2 partial pressure
     for axx in (c, dax):
@@ -235,9 +233,6 @@ def plot(data):
     c.set_title('Outer edge', loc='left', fontsize=10)
     dax.set_ylabel(r'Effective stellar flux  $S_{\rm eff}$')
     dax.set_title('Outer edge', loc='left', fontsize=10)
-
-    for axx in (a, b, c, dax):
-        axx.grid(alpha=0.25, lw=0.5)
 
     # Single Teff colorbar on the right (replaces the per-curve labels).
     sm = mcm.ScalarMappable(norm=norm, cmap=cmap)
