@@ -151,19 +151,7 @@ The offsets between the \texttt{ExoColumn} and \texttt{Clima} model are modest a
 We calculate the outer edge of the HZ as the maximum greenhouse limit for a CO$_2$-dominated atmosphere, following the inverse modeling method of \citet{kasting1993} and \citet{kopparapu2013}. Here the surface
 temperature is held fixed at 273 K over a 1 bar N$_2$ background, and the CO$_2$ partial pressure is swept from 1 bar up to 34.7 bar. For each CO$_2$ partial pressure, we build a water-saturated moist adiabat in which the temperature profile is pinned to the CO$_2$ saturation curve wherever the dry adiabat would otherwise supersaturate (i.e., CO$_2$ condensation; \citealt{kasting1991}, with the \citealt{span1996} saturation curve). The CO$_2$ contribution to the specific heat is evaluated at the local temperature, and the stratosphere is isothermal at 154 K. As in the inner-edge calculation, the \texttt{ExoRT} radiative core is then called a single step to return $F_{\text{IR}}$ and $F_{\text{SOL}}$, with the ratio giving $S_{\rm eff}$. The maximum-greenhouse limit, denoting the outer edge of the HZ, is the minimum value of $S_{\rm eff}$ over the range of CO$_2$ partial pressures.
 
-The results of the \texttt{ExoColumn} calculations for the outer edge of the HZ are shown in Figure~\ref{fig:hz_outer}, following the same three-panel format as \citet[Fig. 5,][]{kopparapu2013}. Values from \texttt{Clima} are also shown for comparison. Figure~\ref{fig:hz_outer} (top) shows that $F_{\rm IR}$ and $F_{\rm SOL}$ decrease as the CO$_2$ partial pressure increases, which indicates the increasing greenhouse effect of CO$_2$. Beyond $\sim$10 bar, $F_{\rm IR}$ reaches a floor of $\approx$72 W\,m$^{-2}$ as the thick CO$_2$ atmosphere becomes opaque at infrared wavelengths, while $F_{\rm SOL}$ continues to decrease as Rayleigh scattering increases. This corresponds to a high planetary albedo as CO$_2$ partial pressure increases (Figure~\ref{fig:hz_outer}, middle). 
-
-
-
-
-
-
-Panel (c) shows the
-resulting $S_{\rm eff}=\mathrm{OLR}/\mathrm{ASR}$, which is U-shaped: adding CO$_2$
-initially deepens the greenhouse faster than it brightens the planet, lowering
-$S_{\rm eff}$, until near 9 bar the greenhouse saturates and the still-rising albedo
-turns $S_{\rm eff}$ back upward. The minimum of this curve is the maximum-greenhouse
-limit.]
+The results of the \texttt{ExoColumn} calculations for the outer edge of the HZ are shown in Figure~\ref{fig:hz_outer}, following the same three-panel format as \citet[Fig. 5,][]{kopparapu2013}. Values from \texttt{Clima} are also shown for comparison. Figure~\ref{fig:hz_outer} (top) shows that $F_{\rm IR}$ and $F_{\rm SOL}$ decrease as the CO$_2$ partial pressure increases, which indicates the increasing greenhouse effect of CO$_2$. Beyond $\sim$10 bar, $F_{\rm IR}$ reaches a floor of $\approx$72 W\,m$^{-2}$ as the thick CO$_2$ atmosphere becomes opaque at infrared wavelengths, while $F_{\rm SOL}$ continues to decrease as Rayleigh scattering increases. This corresponds to a high planetary albedo as CO$_2$ partial pressure increases (Figure~\ref{fig:hz_outer}, middle). The competing tendencies of $F_{\rm IR}$ and $F_{\rm SOL}$ lead to a minimum $S_{\rm eff}=0.395$ ($1.59$ AU) at a CO$_2$ partial pressure of 8.9 bar. This is the maximum greenhouse limit, beyond which $S_{\rm eff}$ decreases as the cooling by Rayleigh scattering dominates any increased greenhouse warming from additional CO$_2$.
 
 \begin{figure}[ht!]
 \centering
@@ -172,21 +160,11 @@ limit.]
 \label{fig:hz_outer}
 \end{figure}
 
-
-[We find the maximum greenhouse at $S_{\rm eff}=0.395$ ($p_{\rm CO_2}=8.9$ bar,
-$d=1.59$ AU), compared with the \citet{kopparapu2013} value of 0.343
-($\approx$8 bar, 1.70 AU). Our limit is thus the more conservative, placing the
-outer edge somewhat closer to the star; the difference is driven by the dense-CO$_2$
-radiation offset discussed in Section~\ref{sec:lbl}, and the planetary albedo
-converges onto that of \citet{kopparapu2013} by 35 bar. We note one caveat: above
-10 bar the correlated-$k$ pressure lookup is clamped at the top of the \texttt{ExoRT}
-pressure table (beyond which \texttt{ExoRT} would extrapolate its coefficients),
-which freezes the pressure broadening at its 10 bar value while the CIA and
-continuum opacities continue to use the true pressure.]
-
+The \texttt{Clima} maximum greenhouse limit calculated by \citet{kopparapu2013} is $S_{\rm eff}= 0.343$ (1.70 AU) at a CO$_2$ partial pressure of $\sim$8 bar. The \texttt{ExoColumn} limit is thus more conservative, which places the outer edge closer to the star by $\sim$6\%. This difference is driven by the dense-CO$_2$ offsets in the two correlated-$k$ radiation cores discussed in Section~\ref{sec:lbl}. We also note that the \texttt{ExoColumn} calculations above 10 bar are performed by clamping the correlated-$k$ lookup at the top of the \texttt{ExoRT} pressure table. This freezes the pressure broadening at its 10 bar value, while the collision-induced absorption and continuum opacities continue to use the true pressure.
 
 
 \section{Habitable-zone limits across stellar spectral types} \label{sec:stellar}
+
 [We next compute the HZ limits for nine host stars spanning spectral types F
 (7200 K) through G (5780 K, the Sun), K (4000--4800 K), and M (2600--3700 K),
 using BT-Settl spectral energy distributions (SEDs) \citep{allard2012}, with the
