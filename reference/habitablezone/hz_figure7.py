@@ -302,15 +302,13 @@ def plot(d):
              ha='center', va='center', weight='bold')
     # Boundary identity labelled directly on the plot (colour-matched leaders);
     # runaway/maximum above the F-star (7200 K) curve tops, moist below the curves.
-    axa.annotate('Runaway greenhouse', xy=(1.24, 6800), xytext=(1.36, 7300),
-                 color=RUN, ha='left', va='center', fontsize=8.5,
-                 arrowprops=dict(arrowstyle='->', color=RUN, lw=0.7))
+    axa.text(1.36, 7300, 'Runaway greenhouse',
+             color=RUN, ha='left', va='center', fontsize=8.5)
     axa.annotate('Moist greenhouse', xy=(0.90, 2740), xytext=(1.03, 2470),
                  color=MOIST, ha='center', va='center', fontsize=8.5,
                  arrowprops=dict(arrowstyle='->', color=MOIST, lw=0.7))
-    axa.annotate('Maximum greenhouse', xy=(0.47, 6800), xytext=(0.60, 7300),
-                 color=MAX, ha='right', va='center', fontsize=8.5,
-                 arrowprops=dict(arrowstyle='->', color=MAX, lw=0.7))
+    axa.text(0.46, 7300, 'Maximum greenhouse',
+             color=MAX, ha='center', va='center', fontsize=8.5)
     add_spectral_axis(axa, SPT_TEFF_BOUNDS, SPT_TEFF_CENTERS, SPT_LABELS)
 
     # ---- Panel (b): HZ distances — distance vs stellar mass ------------------
