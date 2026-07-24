@@ -333,7 +333,7 @@ def plot(d):
     for _a, _r in [(0.387, 0.383), (0.723, 0.949), (1.000, 1.000), (1.524, 0.532)]:
         axb.plot(_a, 1.0, 'o', color=PLANET_C, ms=MS_E * _r, zorder=8)
     axb.text(1.00, 1.30, 'Solar System', ha='center', va='bottom',
-             fontsize=7.5, color=PLANET_C, zorder=8)
+             fontsize=9.5, color=PLANET_C, zorder=8)
     # TRAPPIST-1 (M = 0.0898 Msun, Teff 2566 K; Agol et al. 2021): planets b..h.
     # Its mass matches our M2600 case, so e/f/g fall in the computed HZ strip.
     T1M = 0.0898
@@ -342,7 +342,7 @@ def plot(d):
                    (0.06193, 0.755)]:
         axb.plot(_a, T1M, 'o', color=PLANET_C, ms=MS_E * _r, zorder=9)
     axb.text(0.0145, 0.069, 'TRAPPIST-1', ha='center', va='top',
-             fontsize=7.5, color=PLANET_C, zorder=9)
+             fontsize=9.5, color=PLANET_C, zorder=9)
     # Tidal-lock radius (Kasting, Whitmire & Reynolds 1993, Eq. 10, all-CGS):
     #   r_T = 0.027 (P0 t / Q)^(1/6) M^(1/3)  [cm],
     # with their adopted P0 = 13.5 hr, t = 4.5 Gyr, Q = 100 -> r_T(1 Msun)=0.459 AU
@@ -361,13 +361,13 @@ def plot(d):
     axb.set_xlim(0.009, 4.5)            # F-star outer edge reaches ~3.9 AU
     axb.set_ylim(0.055, 1.9)            # F-star mass = 1.61 Msun
     # On-curve label for the tidal-lock line, rotated to match it in display space.
-    _il = int(np.argmin(np.abs(_mg - 0.42)))
+    _il = int(np.argmin(np.abs(_mg - 0.22)))
     _p1 = axb.transData.transform((_rT[_il], _mg[_il]))
     _p2 = axb.transData.transform((_rT[_il + 6], _mg[_il + 6]))
     _ang = np.degrees(np.arctan2(_p2[1] - _p1[1], _p2[0] - _p1[0]))
     axb.text(_rT[_il], _mg[_il], 'Tidal lock radius  ', rotation=_ang,
              rotation_mode='anchor', ha='right', va='bottom',
-             fontsize=7.5, color='0.35', zorder=4)
+             fontsize=9.5, color='0.35', zorder=4)
     axb.set_yticks([0.1, 0.2, 0.3, 0.5, 0.7, 1.0, 1.5])
     axb.set_yticklabels(['0.1', '0.2', '0.3', '0.5', '0.7', '1.0', '1.5'])
     axb.set_xticks([0.01, 0.03, 0.1, 0.3, 1.0, 3.0])
