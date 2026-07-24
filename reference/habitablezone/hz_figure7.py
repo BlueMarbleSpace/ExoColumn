@@ -332,7 +332,7 @@ def plot(d):
     # label (individual planet names omitted).
     for _a, _r in [(0.387, 0.383), (0.723, 0.949), (1.000, 1.000), (1.524, 0.532)]:
         axb.plot(_a, 1.0, 'o', color=PLANET_C, ms=MS_E * _r, zorder=8)
-    axb.text(0.70, 1.30, 'Solar System', ha='center', va='bottom',
+    axb.text(1.00, 1.30, 'Solar System', ha='center', va='bottom',
              fontsize=7.5, color=PLANET_C, zorder=8)
     # TRAPPIST-1 (M = 0.0898 Msun, Teff 2566 K; Agol et al. 2021): planets b..h.
     # Its mass matches our M2600 case, so e/f/g fall in the computed HZ strip.
@@ -381,7 +381,7 @@ def plot(d):
     # placed on panel (b) upper-left, which is empty (high mass + small distance).
     handles = [Line2D([0], [0], color='0.35', lw=2, ls='-',  label='ExoColumn'),
                Line2D([0], [0], color='0.35', lw=2, ls='--', label='Kopparapu et al. 2013')]
-    axb.legend(handles=handles, fontsize=8, loc='upper left', framealpha=0.92)
+    axb.legend(handles=handles, fontsize=8, loc='upper left', frameon=False)
 
     fig.tight_layout()
     fig.savefig(FIG_PNG, dpi=300)
