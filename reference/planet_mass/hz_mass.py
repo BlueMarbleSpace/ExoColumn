@@ -441,7 +441,7 @@ def plot():
     src = [Line2D([0], [0], color='0.35', lw=2, ls='-', label='ExoColumn'),
            Line2D([0], [0], color='0.35', lw=1.2, ls='--',
                   label='Kopparapu et al. 2014')]
-    ax.legend(handles=src, loc='center', bbox_to_anchor=(0.6, 0.62),
+    ax.legend(handles=src, loc='upper center', bbox_to_anchor=(0.5, 0.98),
               fontsize=8.5, framealpha=0.92)
 
     fig.tight_layout()
