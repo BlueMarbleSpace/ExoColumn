@@ -167,19 +167,55 @@ The \texttt{Clima} maximum greenhouse limit calculated by \citet{kopparapu2013} 
 
 We now proceed to calculate the boundaries of the HZ for main sequence stars, following the method first performed by \citet{kasting1993} and then by \citet{kopparapu2013} using versions of \texttt{Clima}. We compute the HZ limits with \texttt{ExoColumn} for nine host stars spanning spectral types F (7200 K) through G (5780 K, the Sun), K (4000--4800 K), and M (2600--3700 K), plus cooler stars down to 2000\,K, using BT-Settl spectral energy distributions (SEDs) \citep{allard2012}. 
 
-[Because the host SED enters the cold-start
-column only through the planetary albedo, the moist-greenhouse limit occurs at a
-star-independent surface temperature of $T_s=344$ K, and only the corresponding
-$S_{\rm eff}$ varies between stars (Figure~\ref{fig:hz_fig6}). We fit the
-resulting boundaries to the quartic form of \citet{kopparapu2013},
-$S_{\rm eff}=S_{\rm eff,\odot}+a\,T_\star+b\,T_\star^2+c\,T_\star^3+d\,T_\star^4$
-with $T_\star=T_{\rm eff}-5780$ K, obtaining a fit to the model results with a
-root-mean-square residual of $\sim10^{-3}\,S_\odot$ over 2000--7200 K
-(Figure~\ref{fig:hz_fig7}). The resulting coefficients (Table~\ref{tab:hz_coeff})
-are a drop-in replacement for Table 3 of \citet{kopparapu2013} evaluated with the
-\texttt{ExoColumn} radiation core, with $S_{\rm eff,\odot}=1.10$, 1.09, and 0.39
-for the runaway-greenhouse, moist-greenhouse, and maximum-greenhouse limits,
-respectively.]
+[Figure~\ref{fig:hz_fig6} presents the full set of calculations for all nine
+host stars, following the four-panel format of Figure 6 of \citet{kopparapu2013}.
+The top row shows the inner-edge sweep: planetary albedo (left) and $S_{\rm eff}$
+(right) as functions of surface temperature from 200 to 2200\,K. As the surface
+warms and water vapor comes to dominate the atmosphere, the albedo falls to a
+star-dependent plateau and $S_{\rm eff}$ rises toward the Simpson--Nakajima
+radiation limit \citep{nakajima1992} before climbing again once the surface
+begins to radiate at visible and near-infrared wavelengths. Because the host SED
+enters the cold-start column only through the planetary albedo, the
+moist-greenhouse threshold (a stratospheric H$_2$O mixing ratio of
+$3\times10^{-3}$) is reached at a star-independent surface temperature of
+$T_s=344$\,K, so only the corresponding $S_{\rm eff}$ varies between stars. The
+bottom row shows the outer-edge sweep: planetary albedo (left) and $S_{\rm eff}$
+(right) as functions of CO$_2$ partial pressure from 1 to 35\,bar, where
+increasing Rayleigh scattering raises the albedo and produces the U-shaped
+$S_{\rm eff}$ whose minimum defines the maximum-greenhouse limit.]
+
+[Figure~\ref{fig:hz_fig7} summarizes these boundaries in the two-panel format of
+Figure 7 of \citet{kopparapu2013}. The top panel shows $S_{\rm eff}$ at the
+moist- and maximum-greenhouse limits as a function of stellar effective
+temperature, tracing the inner and outer edges of the HZ across spectral type.
+The bottom panel converts these limits to orbital distance through
+$d=\sqrt{(L/L_\odot)/S_{\rm eff}}$ as a function of stellar mass, using the
+\citet{baraffe1998} 5\,Gyr solar-metallicity isochrone to relate stellar mass,
+luminosity, and effective temperature (with the F star anchored to the
+present-day main sequence, which lies beyond the reach of the isochrone). The
+Solar System and TRAPPIST-1 planets are overplotted for reference.]
+
+[We fit the resulting boundaries to the quartic form of \citet{kopparapu2013},
+$S_{\rm eff}(T_{\rm eff})=S_{\rm eff,\odot}+a\,T_\star+b\,T_\star^2+c\,T_\star^3+d\,T_\star^4$
+with $T_\star=T_{\rm eff}-5780$\,K, obtaining a fit to the model results with a
+root-mean-square residual of $\sim10^{-3}\,S_\odot$ over 2000--7200\,K. The
+resulting coefficients are listed in Table~\ref{tab:hz_coeff}, with
+$S_{\rm eff,\odot}=1.10$, 1.09, and 0.39 for the runaway-, moist-, and
+maximum-greenhouse limits, respectively. This table is a drop-in replacement for
+Table 3 of \citet{kopparapu2013} evaluated with the \texttt{ExoColumn} radiation
+core, and is intended for community use.]
+
+[The dashed curves in Figure~\ref{fig:hz_fig7} show the corresponding
+\citet{kopparapu2013} boundaries. The \texttt{ExoColumn} limits are
+systematically slightly more conservative: at the Sun, the moist-greenhouse limit
+is $S_{\rm eff}=1.088$ against the \texttt{Clima} value of 1.014, and the
+maximum-greenhouse limit is 0.395 against 0.344. These offsets are consistent in
+sign and magnitude across the full range of stellar types, and they trace to the
+same radiation differences quantified in Sections~\ref{sec:inner} and
+\ref{sec:outer}: enhanced near-infrared water-vapor absorption at the inner edge
+and the dense-CO$_2$ opacity treatment at the outer edge (Section~\ref{sec:lbl}).
+The net effect is a slightly narrower HZ, with the inner edge placed marginally
+farther from the star and the outer edge marginally closer.]
 
 \begin{figure*}[ht!]
 \centering
@@ -214,20 +250,27 @@ dashed curves show the \citet{kopparapu2013} boundaries.]}
 %% regenerated on each run, so rewrite them in the script (not the .tex) or here.
 \input{../reference/habitablezone/hz_coefficients.tex}
 
-\subsection{Dependence on planetary mass} \label{sec:mass}
 [Finally, we examine how the HZ limits depend on planetary mass, computing the
 boundaries as a function of stellar effective temperature for planets of 0.1, 1,
 and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}), following \citet{kopparapu2014}.
 Planetary mass sets both the surface gravity ($g=g_\oplus M^{0.375}$, giving
-4.14, 9.81, and 17.93 m\,s$^{-2}$) and the N$_2$ inventory
-($p_{\rm N_2}=1\,{\rm bar}\,M^{0.75}$, giving 0.18, 1.0, and 3.34 bar); in
-\texttt{ExoColumn} the surface gravity is a compile-time parameter. At the Sun,
-the inner-edge (runaway-greenhouse) $S_{\rm eff}$ is 1.041, 1.102, and 1.161 for
-the 0.1, 1, and 5 $M_\oplus$ planets, compared with 0.990, 1.107, and 1.188 from
-\citet{kopparapu2014}. The 1 $M_\oplus$ case matches closely, and the mass
-ordering --- higher gravity yields a thinner column and shifts the HZ farther in
---- is reproduced, although with a somewhat compressed spread across the mass
-range.]
+4.14, 9.81, and 17.93\,m\,s$^{-2}$) and the N$_2$ inventory
+($p_{\rm N_2}=1\,{\rm bar}\,M^{0.75}$, giving 0.18, 1.0, and 3.34\,bar); in
+\texttt{ExoColumn} the surface gravity is a compile-time parameter. A more
+massive planet therefore has both a higher surface gravity and a larger N$_2$
+column, which together thin the atmosphere per unit mass and shift the HZ
+boundaries. At the Sun, the inner-edge (runaway-greenhouse) $S_{\rm eff}$ is
+1.041, 1.102, and 1.161 for the 0.1, 1, and 5\,$M_\oplus$ planets, respectively.]
+
+[The dashed curves in Figure~\ref{fig:hz_mass} show the \citet{kopparapu2014}
+boundaries (their Equation 4). The 1\,$M_\oplus$ case matches closely (1.102
+against 1.107), and the mass ordering --- higher gravity yields a thinner column
+and shifts the HZ farther in --- is reproduced, although the \texttt{ExoColumn}
+values of 1.041, 1.102, and 1.161 span a somewhat compressed range relative to
+the \citet{kopparapu2014} values of 0.990, 1.107, and 1.188. We note that the
+2014 runaway fit lies $\sim$5--6\% above the 2013 fit used in
+Figure~\ref{fig:hz_fig7}, which accounts for part of the offset at the extreme
+masses.]
 
 \begin{figure}[ht!]
 \centering
