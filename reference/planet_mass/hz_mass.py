@@ -415,11 +415,15 @@ def plot():
             color=MAXGH_C, lw=1.2, zorder=4)
 
     # Solar-system reference points at the Sun's Teff (Seff = S/S0 = 1/a^2).
-    for nm, a_au in [('Venus', 0.723), ('Earth', 1.000), ('Mars', 1.524)]:
+    # Labels sit to the side of each marker (in the open direction) so they do
+    # not overlap the nearby runaway-/maximum-greenhouse curves.
+    for nm, a_au, dx, hal in [('Venus', 0.723, 0, 'center'),
+                              ('Earth', 1.000, 10, 'left'),
+                              ('Mars', 1.524, -10, 'right')]:
         s = 1.0 / a_au**2
         ax.plot(s, 5780, 'o', color='0.25', ms=5, zorder=8)
-        ax.annotate(nm, xy=(s, 5780), xytext=(0, 7), textcoords='offset points',
-                    ha='center', va='bottom', fontsize=8, color='0.25', zorder=8)
+        ax.annotate(nm, xy=(s, 5780), xytext=(dx, 0), textcoords='offset points',
+                    ha=hal, va='center', fontsize=11, color='0.25', zorder=8)
 
     ax.set_xlim(1.40, 0.15)          # reversed; matches Fig. 7 top-panel S/S0 range
     ax.set_ylim(2000, 7200)          # extended to the 2000 K BT-Settl floor
@@ -437,7 +441,8 @@ def plot():
     src = [Line2D([0], [0], color='0.35', lw=2, ls='-', label='ExoColumn'),
            Line2D([0], [0], color='0.35', lw=1.2, ls='--',
                   label='Kopparapu et al. 2014')]
-    ax.legend(handles=src, loc='upper right', fontsize=8.5, framealpha=0.92)
+    ax.legend(handles=src, loc='center', bbox_to_anchor=(0.6, 0.62),
+              fontsize=8.5, framealpha=0.92)
 
     fig.tight_layout()
     fig.savefig(FIG_PNG, dpi=300)
