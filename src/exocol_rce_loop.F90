@@ -112,11 +112,30 @@ module exocol_rce_loop
   ! (An earlier attempt keyed dt_outer on the NET tendency; that runs away —
   ! convection cancels radiation so net ΔT stays small while the column is still
   ! radiatively stiff, and the slab derails to a spurious cold attractor.)
-  ! With f_excl_mass = 0 (default) no layer
-  ! is excluded, so dt_outer = the bulk radiative CFL and N_sub = 1 — i.e. the
-  ! reference single-explicit-step scheme; the scaffolding is dormant.
-  real(r8), parameter :: f_excl_mass = 0.0_r8       ! column-mass fraction of stiffest layers excluded from dt_outer
+  ! With f_excl_mass = 0 no layer is excluded, so dt_outer = the bulk radiative CFL and
+  ! N_sub = 1 — i.e. the reference single-explicit-step scheme.  That was the setting up
+  ! to 2026-07; it is now 1e-4, see below.
+  ! ACTIVE at 1e-4, paired with the semi-implicit radiative damping in step 3a.  On its
+  ! own this setting is UNSAFE (frozen HR applied across a dt the excluded layer cannot
+  ! resolve over-drives it); with the damping, those layers relax stably toward their own
+  ! radiative equilibrium instead, so dt_outer can be keyed on the mass-bearing column as
+  ! intended.  1e-4 of column mass is ~everything above 10 Pa in a 1-bar column.
+  real(r8), parameter :: f_excl_mass = 1.0e-4_r8    ! column-mass fraction of stiffest layers excluded from dt_outer
   integer,  parameter :: nsub_max    = 2000         ! cap on radiation sub-steps
+
+  ! The semi-implicit damping in step 3a is applied to EXACTLY the layers excluded from
+  ! setting dt_outer, and to no others.  That pairing is deliberate on both sides:
+  !   * those layers are the near-massless, optically THIN ones, which is precisely
+  !     where tau_rad = cp*(dp/g)/(4*sigma*T^3) -- free Planck emission to space -- is
+  !     the right relaxation time;
+  !   * applying it to the optically THICK troposphere would be wrong and badly
+  !     over-damping.  There a layer's neighbours reabsorb its emission, so the net
+  !     cooling responds to its own temperature far more weakly than free emission
+  !     implies; the formula gives ~5.6 h for a tropospheric layer, which would damp a
+  !     1-day step 5x and cripple the ordinary integration (measured: the Earth
+  !     calibration stopped converging in practical time).
+  ! With f_excl_mass = 0 nothing is excluded, damp_layer is all .false., and the scheme
+  ! is bit-for-bit the original explicit one.
 
   ! Cold-trap toggle (default on).  apply_stratospheric_coldtrap is now
   ! water-conservative (it sources its stratospheric water from the troposphere
@@ -237,6 +256,9 @@ contains
     ! ---- Radiation sub-cycling state ----
     real(r8) :: dt_outer_days                        ! outer (radiation) step
     real(r8) :: dt_sub_days, dt_sub_sec              ! sub-step = dt_outer / N_sub
+    ! Layers excluded from setting dt_outer, and therefore the ones given the
+    ! semi-implicit radiative damping in step 3a (see rad-damping note in the header).
+    logical  :: damp_layer(pver)
     real(r8) :: LE_acc_outer, SH_acc_outer           ! dt-weighted flux sums over sub-steps
     real(r8) :: precip_acc_outer                     ! dt-weighted precip sum over sub-steps
     integer  :: N_sub, isub_rad
@@ -358,6 +380,7 @@ contains
         hrabs       = abs(LWHR + SWHR)
         excl_budget = f_excl_mass * sum(pdel)
         avail       = .true.
+        damp_layer  = .false.        ! set for each layer the loop below excludes
         acc_mass    = 0._r8
         hr_for_dt   = maxval(hrabs)
         do
@@ -381,6 +404,7 @@ contains
           end if
           acc_mass    = acc_mass + pdel(kmax)     ! exclude this thin stiff layer
           avail(kmax) = .false.
+          damp_layer(kmax) = .true.               ! ... and damp it semi-implicitly
         end do
 
         if (hr_for_dt > 0._r8) then
@@ -414,9 +438,43 @@ contains
       ! ================= Radiation sub-cycle (frozen HR) =================
       do isub_rad = 1, N_sub
 
-      ! ---- 3a. Apply frozen radiation tendency (small, CFL-bounded step) ----
+      ! ---- 3a. Apply frozen radiation tendency, damped semi-implicitly ----------
+      ! Explicit Euler (tmid += dt·HR) is stable only while dt·|HR| <= dT_target.  For
+      ! near-massless layers that is brutal: a layer at 1 Pa concentrates its flux
+      ! divergence into almost no mass and reaches |HR| ~ 100-600 K/day, so a high model
+      ! top (p_top << 100 Pa) throttles the WHOLE column to dt ~ 0.005 d and a deep
+      ! CO2/CH4 atmosphere -- whose own radiative tail is ~450 model days -- then needs
+      ! ~4e5 steps to equilibrate.  That is what made p_top = 0.1 Pa unaffordable.
+      !
+      ! Fix: treat the layer's own Planck response implicitly.  Linearising the heating
+      ! rate about the current temperature, the self-emission term gives Newtonian
+      ! relaxation at
+      !     tau_rad = cp·(dp/g) / (4·sigma·T^3)        [s]
+      ! and backward Euler on that term yields
+      !     dT = dt·HR / (1 + dt/tau_rad).
+      ! Unconditionally stable, and it cannot overshoot: the damping factor is < 1 and
+      ! shrinks as dt/tau_rad grows.  This is what f_excl_mass could NOT do -- excluding
+      ! the stiff layers from dt_outer while still applying FROZEN HR across the whole
+      ! step over-drove them (2barCO2dry ran its top layer to 4.9e5 K).
+      !
+      ! CRUCIAL: the fixed point is untouched.  At equilibrium HR -> 0, so the damping
+      ! multiplies zero and the converged state is exactly the undamped one; only the
+      ! path there is stabilised.  Layers with dt << tau_rad (the entire mass-bearing
+      ! troposphere) take the ORIGINAL explicit branch bit-for-bit, so previously
+      ! converged results are reproduced exactly rather than merely closely.
       do k = 1, pver
-        tmid(k) = tmid(k) + dt_sub_days * (LWHR(k) + SWHR(k))
+        if (damp_layer(k)) then
+          block
+            real(r8) :: tau_rad, dt_over_tau
+            tau_rad = cpdry_col * (pdel(k) / exo_g) &
+                      / (4._r8 * SHR_CONST_STEBOL * tmid(k)**3)
+            dt_over_tau = dt_sub_sec / max(tau_rad, 1.e-30_r8)
+            tmid(k) = tmid(k) + dt_sub_days * (LWHR(k) + SWHR(k)) &
+                                / (1._r8 + dt_over_tau)
+          end block
+        else
+          tmid(k) = tmid(k) + dt_sub_days * (LWHR(k) + SWHR(k))
+        end if
       end do
 
       ! ---- 4–6. Surface turbulent fluxes + slab ocean ----
