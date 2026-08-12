@@ -169,42 +169,14 @@ We now proceed to calculate the boundaries of the HZ for main sequence stars, fo
 
 Calculations of the inner and outer HZ edge for all nine host stars is shown in Figure~\ref{fig:hz_fig6}, following the four-panel format as \citet[][Fig. 6]{kopparapu2013}. Planetary albedo (top left for inner edge, bottom left for outer edge) is higher for F-dwarf host stars and lowest for M-dwarf host stars, which occurs for two reasons. First is that the stellar spectral energy distribution of F-type stars is shifted toward shorter wavelengths, which increases the Rayleigh scattering of incident light. Second is that water vapor and CO$_2$ absorb more strongly at near-infrared than visible wavelengths, which results in M-dwarf plants absorbing a larger fraction of incident light. These effects are most pronounced for dense atmospheres, such as water-vapor rich atmospheres near the inner edge or dense CO$_2$ atmospheres near the outer edge.
 
-These HZ boundaries are summarized in Figure~\ref{fig:hz_fig7}, following the two-panel format of \citet[][Fig. 7]{kopparapu2013}. The top panel shows $S_{\rm eff}$ at the moist- and maximum-greenhouse limits as a function of stellar effective temperature, and the bottom panel converts these limits to orbital distance as a function of stellar mass, using the \citet{baraffe1998} 5\,Gyr solar-metallicity relationships for stellar mass, luminosity, and effective temperature.
-
-
-The dashed curves in Figure~\ref{fig:hz_fig7} show the corresponding \citet{kopparapu2013} boundaries. The \texttt{ExoColumn} limits are
-
-
-systematically slightly more conservative: at the Sun, the moist-greenhouse limit
-is $S_{\rm eff}=1.088$ against the \texttt{Clima} value of 1.014, and the
-maximum-greenhouse limit is 0.395 against 0.344. These offsets are consistent in
-sign and magnitude across the full range of stellar types, and they trace to the
-same radiation differences quantified in Sections~\ref{sec:inner} and
-\ref{sec:outer}: enhanced near-infrared water-vapor absorption at the inner edge
-and the dense-CO$_2$ opacity treatment at the outer edge (Section~\ref{sec:lbl}).
-The net effect is a slightly narrower HZ, with the inner edge placed marginally
-farther from the star and the outer edge marginally closer.]
-
-
-
-[We fit the resulting boundaries to the quartic form of \citet{kopparapu2013},
-$S_{\rm eff}(T_{\rm eff})=S_{\rm eff,\odot}+a\,T_\star+b\,T_\star^2+c\,T_\star^3+d\,T_\star^4$
-with $T_\star=T_{\rm eff}-5780$\,K, obtaining a fit to the model results with a
-root-mean-square residual of $\sim10^{-3}\,S_\odot$ over 2000--7200\,K. The
-resulting coefficients are listed in Table~\ref{tab:hz_coeff}, with
-$S_{\rm eff,\odot}=1.10$, 1.09, and 0.39 for the runaway-, moist-, and
-maximum-greenhouse limits, respectively. This table is a drop-in replacement for
-Table 3 of \citet{kopparapu2013} evaluated with the \texttt{ExoColumn} radiation
-core, and is intended for community use.]
-
-
-
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=0.95\textwidth]{reference/habitablezone/hz_figure6.pdf}
 \caption{Habitable zone limits for nine host stars ranging from M (2600\,K) to F (7200\,K). Inner edge calculations are shown on the top row and outer edge calculations are shown on the bottom row.}
 \label{fig:hz_fig6}
 \end{figure*}
+
+These HZ boundaries are summarized in Figure~\ref{fig:hz_fig7}, following the two-panel format of \citet[][Fig. 7]{kopparapu2013}. The top panel shows $S_{\rm eff}$ at the moist- and maximum-greenhouse limits as a function of stellar effective temperature, and the bottom panel converts these limits to orbital distance as a function of stellar mass, using the \citet{baraffe1998} 5\,Gyr solar-metallicity relationships for stellar mass, luminosity, and effective temperature. The dashed curves in Figure~\ref{fig:hz_fig7} show the corresponding \textbf{Clima} boundaries \citep{kopparapu2013}. The \texttt{ExoColumn} inner and outer limits both shift inward toward the star across all stellar types. The primary driver of this shift is the different correlated-$k$ radiation cores used in the two models (see \S\ref{sec:lbl}). The net width of the HZ remains approximately the same as \texttt{Clima}, and the differences between the two models are only of a few percent when shown as a function of orbital distance (Figure~\ref{fig:hz_fig7}, bottom panel). These results provide encouraging validation that the previously-published \texttt{Clima} calculations of the HZ are robust when assessed with an independent model.
 
 \begin{figure}[ht!]
 \centering
@@ -213,10 +185,37 @@ core, and is intended for community use.]
 \label{fig:hz_fig7}
 \end{figure}
 
+We fit the resulting HZ boundaries, following the quartic form of \citet{kopparapu2013},
+\begin{equation}
+    S_{\rm eff}(T_{\rm eff})=S_{\rm eff,\odot}+a\,T_\star+b\,T_\star^2+c\,T_\star^3+d\,T_\star^4,\label{eq:fit}
+\end{equation}
+with $T_\star=T_{\rm eff}-5780$\,K. This allows the associated HZ distances to be calculated as
+\begin{equation}
+    d=\left(\frac{L/L_{\odot}}{S_{\rm eff}}\right)^{0.5}\,\text{AU},\label{eq:distance}
+\end{equation}
+where $L/L_{\odot}$ is the relative luminosity of the star to the sun. This expression fits the \texttt{ExoColumn} model results with a root-mean-square residual of $\sim10^{-3}\,S_\odot$ over 2000--7200\,K. The resulting coefficients are listed in Table~\ref{tab:hz_coeff}, with $S_{\rm eff,\odot}=1.10$, 1.09, and 0.39 for the runaway-, moist-, and maximum-greenhouse limits, respectively. This table can be directly compared with the corresponding \texttt{Clima} polynomial \citep[][Tab. 3]{kopparapu2013}.
+
 %% The HZ boundary coefficients (the reusable deliverable) are auto-generated by
 %% reference/habitablezone/hz_polyfit.py; its bracketed caption/comments are
 %% regenerated on each run, so rewrite them in the script (not the .tex) or here.
-\input{../reference/habitablezone/hz_coefficients.tex}
+%\input{../reference/habitablezone/hz_coefficients.tex}
+\begin{deluxetable*}{lrrrrr}
+\tablecaption{\texttt{ExoColumn} habitable zone boundary coefficients to calculate stellar effective flux by Eq. (\ref{eq:fit}) and orbital distance by Eq. (\ref{eq:distance}) for main sequence stars with effective temperature from 2000\,K to 7200\,K.}
+\tablehead{
+  \colhead{HZ boundary} & \colhead{$S_{\rm eff,\odot}$} &
+  \colhead{$a$} & \colhead{$b$} & \colhead{$c$} & \colhead{$d$}
+}
+\startdata
+Runaway greenhouse & 1.1015 & $9.4144\times10^{-5}$ & $7.3652\times10^{-9}$ & $-2.5772\times10^{-12}$ & $-4.6037\times10^{-16}$ \\
+Moist greenhouse & 1.0880 & $9.5624\times10^{-5}$ & $5.4507\times10^{-9}$ & $-3.7032\times10^{-12}$ & $-5.9351\times10^{-16}$ \\
+Maximum greenhouse & 0.3947 & $7.5232\times10^{-5}$ & $3.4318\times10^{-9}$ & $-3.3521\times10^{-12}$ & $-5.6844\times10^{-16}$
+\enddata
+%\tablecomments{$S_{\rm eff}(T_{\rm eff}) = S_{\rm eff,\odot} + a\,T_\star + b\,T_\star^2 + c\,T_\star^3 + d\,T_\star^4$, with $T_\star = T_{\rm eff} - 5780$~K, valid for $T_{\rm eff} = 2000-7200$~K.}
+\label{tab:hz_coeff}
+\end{deluxetable*}
+
+
+
 
 [Finally, we examine how the HZ limits depend on planetary mass, computing the
 boundaries as a function of stellar effective temperature for planets of 0.1, 1,
