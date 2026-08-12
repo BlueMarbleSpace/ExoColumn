@@ -378,7 +378,7 @@ def plot(d):
     # Legend distinguishes source only (boundary identity is labelled on-curve);
     # placed on panel (b) upper-left, which is empty (high mass + small distance).
     handles = [Line2D([0], [0], color='0.35', lw=2, ls='-',  label='ExoColumn'),
-               Line2D([0], [0], color='0.35', lw=2, ls='--', label='Kopparapu et al. 2013')]
+               Line2D([0], [0], color='0.35', lw=2, ls='--', label='Clima (Kopparapu et al. 2013)')]
     axb.legend(handles=handles, fontsize=8, loc='upper left', frameon=False)
 
     fig.tight_layout()
