@@ -220,10 +220,18 @@ Maximum greenhouse & 0.3947 & $7.5232\times10^{-5}$ & $3.4318\times10^{-9}$ & $-
 [Finally, we examine how the HZ limits depend on planetary mass, computing the
 boundaries as a function of stellar effective temperature for planets of 0.1, 1,
 and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}), following \citet{kopparapu2014}.
-Planetary mass sets both the surface gravity ($g=g_\oplus M^{0.375}$, giving
-4.14, 9.81, and 17.93\,m\,s$^{-2}$) and the N$_2$ inventory
-($p_{\rm N_2}=1\,{\rm bar}\,M^{0.75}$, giving 0.18, 1.0, and 3.34\,bar); in
-\texttt{ExoColumn} the surface gravity is a compile-time parameter. A more
+Their prescription follows from the mass--radius relation
+$M_p/M_\oplus=0.968\,(R_p/R_\oplus)^{3.2}$ for $M_p<5\,M_\oplus$, together with a
+background N$_2$ pressure scaled with planetary radius as
+$P_s/P_\oplus=0.937\,(R_p/R_\oplus)^{2.40}$ (their Equation 3). Expressed as
+powers of mass, these are equivalent to $g\propto M^{1-2/3.2}=M^{0.375}$ and
+$p_{\rm N_2}\propto M^{2.40/3.2}=M^{0.75}$. We renormalize both so that
+1\,$M_\oplus$ recovers Earth exactly, since the empirical coefficients above
+place Earth at 9.61\,m\,s$^{-2}$ and 0.96\,bar; the correction is a constant
+factor at all masses, so the mass dependence is unchanged. The three masses then
+correspond to surface gravities of 4.14, 9.81, and 17.93\,m\,s$^{-2}$ and N$_2$
+inventories of 0.18, 1.0, and 3.34\,bar, with the surface gravity set at compile
+time in \texttt{ExoColumn}. A more
 massive planet therefore has both a higher surface gravity and a larger N$_2$
 column, which together thin the atmosphere per unit mass and shift the HZ
 boundaries. At the Sun, the inner-edge (runaway-greenhouse) $S_{\rm eff}$ is
