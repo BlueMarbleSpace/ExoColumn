@@ -214,31 +214,12 @@ Maximum greenhouse & 0.3947 & $7.5232\times10^{-5}$ & $3.4318\times10^{-9}$ & $-
 \label{tab:hz_coeff}
 \end{deluxetable*}
 
+Finally, we examine the dependence of these limits on planetary mass by calculating the HZ boundaries for planets of 0.1, 1, and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}), We follow the approach of \citet{kopparapu2014}, which uses the mass--radius relation $M_p/M_\oplus=0.968\,(R_p/R_\oplus)^{3.2}$ for $M_p<5\,M_\oplus$ and assumes that the background N$_2$ pressure scales with planetary radius as
+$P_s/P_\oplus=0.937\,(R_p/R_\oplus)^{2.40}$. These relationships can be expressed using powers of mass, as $g\propto M^{1-2/3.2}=M^{0.375}$ and $p_{\rm N_2}\propto M^{2.40/3.2}=M^{0.75}$. We renormalize both $g$ and $p_{\rm N_2}$ so that 1\,$M_\oplus$ gives exactly Earth values, with the renormalizing applied at all masses. (Without renormalizing, 1\,$M_\oplus$  would give $g=9.61$\,m\,s$^{-2}$ and $p_{\rm N_2}=$0.96\,bar.) The three planetary masses considered correspond to surface gravities of 4.14, 9.81, and 17.93\,m\,s$^{-2}$ and N$_2$ inventories of 0.18, 1.0, and 3.34\,bar. A more massive planet has both a higher surface gravity and a larger N$_2$ column, which reduces the water vapor column depth and shifts the inner edge of the HZ closer to the host star. The outer edge remains relatively insensitive to changes in mass. 
 
+The dashed curves in Figure~\ref{fig:hz_mass} show the comparable \texttt{Clima} boundaries for the dependence of the HZ on planetary mass \citet[][Fig. 3]{kopparapu2014}
 
-
-[Finally, we examine how the HZ limits depend on planetary mass, computing the
-boundaries as a function of stellar effective temperature for planets of 0.1, 1,
-and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}), following \citet{kopparapu2014}.
-Their prescription follows from the mass--radius relation
-$M_p/M_\oplus=0.968\,(R_p/R_\oplus)^{3.2}$ for $M_p<5\,M_\oplus$, together with a
-background N$_2$ pressure scaled with planetary radius as
-$P_s/P_\oplus=0.937\,(R_p/R_\oplus)^{2.40}$ (their Equation 3). Expressed as
-powers of mass, these are equivalent to $g\propto M^{1-2/3.2}=M^{0.375}$ and
-$p_{\rm N_2}\propto M^{2.40/3.2}=M^{0.75}$. We renormalize both so that
-1\,$M_\oplus$ recovers Earth exactly, since the empirical coefficients above
-place Earth at 9.61\,m\,s$^{-2}$ and 0.96\,bar; the correction is a constant
-factor at all masses, so the mass dependence is unchanged. The three masses then
-correspond to surface gravities of 4.14, 9.81, and 17.93\,m\,s$^{-2}$ and N$_2$
-inventories of 0.18, 1.0, and 3.34\,bar, with the surface gravity set at compile
-time in \texttt{ExoColumn}. A more
-massive planet therefore has both a higher surface gravity and a larger N$_2$
-column, which together thin the atmosphere per unit mass and shift the HZ
-boundaries. At the Sun, the inner-edge (runaway-greenhouse) $S_{\rm eff}$ is
-1.041, 1.102, and 1.161 for the 0.1, 1, and 5\,$M_\oplus$ planets, respectively.]
-
-[The dashed curves in Figure~\ref{fig:hz_mass} show the \citet{kopparapu2014}
-boundaries (their Equation 4). The 1\,$M_\oplus$ case matches closely (1.102
+The 1\,$M_\oplus$ case matches closely (1.102
 against 1.107), and the mass ordering --- higher gravity yields a thinner column
 and shifts the HZ farther in --- is reproduced, although the \texttt{ExoColumn}
 values of 1.041, 1.102, and 1.161 span a somewhat compressed range relative to
@@ -305,7 +286,7 @@ This paper is dedicated to Jim Kasting. This material is based on work performed
 \end{acknowledgments}
 
 %\facilities{}
-\software{\texttt{ExoColumn} \citep[][]{}, \texttt{Clima} \citep[][]{kopparapu2013,kopparapu2014}, \texttt{konrad} \citep{kluft2019}, \texttt{RADIS} \citep{pannier2019}, Matplotlib \citep{Hunter2007}, Claude Code \citep[Opus 4.8,][]{anthropic2026opus48}}
+\software{\texttt{ExoColumn} \citep[][]{}, \texttt{ExoRT} \citep[][]{wolf2022}, \texttt{Clima} \citep[][]{kopparapu2013,kopparapu2014}, \texttt{konrad} \citep{kluft2019}, \texttt{RADIS} \citep{pannier2019}, Matplotlib \citep{Hunter2007}, Claude Code \citep[Opus 4.8,][]{anthropic2026opus48}}
 
 %\appendix
 %\section{} \label{sec:appendix}
