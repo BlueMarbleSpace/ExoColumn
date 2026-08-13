@@ -217,65 +217,23 @@ Maximum greenhouse & 0.3947 & $7.5232\times10^{-5}$ & $3.4318\times10^{-9}$ & $-
 Finally, we examine the dependence of these limits on planetary mass by calculating the HZ boundaries for planets of 0.1, 1, and 5 $M_\oplus$ (Figure~\ref{fig:hz_mass}), We follow the approach of \citet{kopparapu2014}, which uses the mass--radius relation $M_p/M_\oplus=0.968\,(R_p/R_\oplus)^{3.2}$ for $M_p<5\,M_\oplus$ and assumes that the background N$_2$ pressure scales with planetary radius as
 $P_s/P_\oplus=0.937\,(R_p/R_\oplus)^{2.40}$. These relationships can be expressed using powers of mass, as $g\propto M^{1-2/3.2}=M^{0.375}$ and $p_{\rm N_2}\propto M^{2.40/3.2}=M^{0.75}$. We renormalize both $g$ and $p_{\rm N_2}$ so that 1\,$M_\oplus$ gives exactly Earth values, with the renormalizing applied at all masses. (Without renormalizing, 1\,$M_\oplus$  would give $g=9.61$\,m\,s$^{-2}$ and $p_{\rm N_2}=$0.96\,bar.) The three planetary masses considered correspond to surface gravities of 4.14, 9.81, and 17.93\,m\,s$^{-2}$ and N$_2$ inventories of 0.18, 1.0, and 3.34\,bar. A more massive planet has both a higher surface gravity and a larger N$_2$ column, which reduces the water vapor column depth and shifts the inner edge of the HZ closer to the host star. The outer edge remains relatively insensitive to changes in mass. 
 
-The dashed curves in Figure~\ref{fig:hz_mass} show the comparable \texttt{Clima} boundaries for the dependence of the HZ on planetary mass \citet[][Fig. 3]{kopparapu2014}
+The dashed curves in Figure~\ref{fig:hz_mass} show the comparable \texttt{Clima} boundaries for the dependence of the HZ on planetary mass \citet[][Fig. 3]{kopparapu2014}. The 1\,$M_\oplus$ cases show a close match for the Sun, with $S_{\rm eff} = 1.102$ for \texttt{ExoColumn} and 1.107 for \texttt{Clima}. The mass ordering is likewise consistent between the models, with higher gravity yielding a smaller atmospheric column that shifts the HZ inward. However, the solutions with \texttt{ExoColumn} at different planetary masses occupy a somewhat compressed range compared to \texttt{Clima}. This again is primarily due to the differences in the correlated-$k$ radiative transfer cores (\S\ref{sec:lbl}).
 
-The 1\,$M_\oplus$ case matches closely (1.102
-against 1.107), and the mass ordering --- higher gravity yields a thinner column
-and shifts the HZ farther in --- is reproduced, although the \texttt{ExoColumn}
-values of 1.041, 1.102, and 1.161 span a somewhat compressed range relative to
-the \citet{kopparapu2014} values of 0.990, 1.107, and 1.188. We note that the
-2014 runaway fit lies $\sim$5--6\% above the 2013 fit used in
-Figure~\ref{fig:hz_fig7}, which accounts for part of the offset at the extreme
-masses.]
+In summary, \texttt{ExoColumn} is capable of reproducing all HZ calculations that have been performed with \texttt{Clima}. The differences in the model results can be understood as a result of differences in radiative transfer, and even with these differences the results differ by a margin of a few percent. 
 
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.7\textwidth]{reference/planet_mass/hz_mass.pdf}
-\caption{[Dependence of the HZ on planetary mass, an analogue of Figure 3 of
-\citet{kopparapu2014}: HZ limits as a function of stellar effective temperature
-for 0.1, 1, and 5 $M_\oplus$ planets, which differ in surface gravity (4.14, 9.81,
-and 17.93 m\,s$^{-2}$) and N$_2$ inventory (0.18, 1.0, and 3.34 bar). The
-inner-edge (runaway-greenhouse) $S_{\rm eff}$ at the Sun is 1.041, 1.102, and
-1.161, respectively. Dashed curves show the \citet{kopparapu2014} Equation 4; note
-that the 2014 runaway fit lies $\sim$5--6\% above the 2013 fit used in
-Figure~\ref{fig:hz_fig7}.]}
+\caption{Dependence of habitable zone boundaries on planetary mass. The inner edge is the runaway greenhouse limit and the outer edge is the maximum greenhouse limit, shown for 0.1, 1, and 5 $M_\oplus$ planets. Dashed curves show the \citet[][Eq. 4]{kopparapu2014} boundaries.}
 \label{fig:hz_mass}
 \end{figure}
 
-\section{Discussion} \label{sec:discussion}
-[Several limitations and systematic offsets of the present calculations are worth
-noting. First, \texttt{ExoColumn} is a cloud-free one-dimensional column, so it
-omits the radiative effects of clouds and any horizontal transport. Second, our
-inner-edge $S_{\rm eff}$ runs somewhat high, $\approx$1.08--1.09 versus
-\citet{kopparapu2013}'s 1.02--1.06; the LBL benchmarks of Section~\ref{sec:lbl}
-show that both radiation cores are LBL-grade, so this offset reflects differences
-in the \texttt{Clima} 2013-era ingredients (the BPS near-infrared continuum and
-$k$-distribution) rather than an error in either core, and is specifically
-attributable to near-infrared shortwave absorption by water vapor (albedo 0.211
-versus 0.193). Third, the surface-coupling scheme introduces a residual
-resolution sensitivity of $\sim$2 K in $T_s$. Fourth, the cold-point temperature
-carries a warm bias ($\approx$204 versus $\approx$197 K), attributable to the
-\texttt{ExoRT} n68equiv versus RRTMG radiation difference noted in
-Section~\ref{sec:earth}. Fifth, for dense CO$_2$ atmospheres ($>$10 bar) the
-correlated-$k$ pressure lookup is clamped at the top of the pressure table. The
-net effect of these offsets is that \texttt{ExoColumn}'s HZ is conservative
-relative to \citet{kopparapu2013,kopparapu2014}: the inner edge lies slightly
-farther from the star and the outer edge slightly closer in.]
+\section{Discussion \& Conclusion} \label{sec:discussion}
 
-\section{Summary and conclusions} \label{sec:summary}
-[We have presented \texttt{ExoColumn}, a fast one-dimensional radiative-convective
-equilibrium model whose radiation is provided by the same \texttt{ExoRT}
-correlated-$k$ core used in the \texttt{ExoCAM} three-dimensional model
-\citep{wolf2022}. We validated the model against modern Earth (reproducing
-$T_s=287.84$ K), against line-by-line radiative-transfer benchmarks (finding both
-correlated-$k$ cores to be LBL-grade in the longwave and shortwave), and against
-the \citet{kopparapu2013,kopparapu2014} HZ limits across F- through M-type stars
-and planetary masses from 0.1 to 5 $M_\oplus$. The independent \texttt{ExoColumn}
-calculations broadly reproduce the \texttt{Clima} HZ boundaries, and where they
-differ the offsets are small and traceable to specific model ingredients. As a
-practical deliverable, we provide updated, ready-to-use HZ boundary coefficients
-(Table~\ref{tab:hz_coeff}) evaluated with the \texttt{ExoColumn} radiation
-core.]
+We have presented \texttt{ExoColumn} as a new one-dimensional RCE model with all the physical capabilities needed to perform HZ calculations comparable to those with \texttt{Clima}. The value in constructing this new model is that it leverages the existing \texttt{ExoRT} radiative transfer core, also used in the \texttt{ExoCAM} three-dimensional model, which will enable self-consistent comparisons between these two models with different dimensionality but the exact same radiative transfer. \texttt{ExoColumn} is also freely available for community use and will be included in ongoing exoplanetary model intercomparison projects \citep{sohl2024cuisines}.
+
+These calculations also provide an independent validation of the \texttt{Clima} HZ boundaries \citep{kasting1993,kopparapu2013,kopparapu2014}. The \texttt{Clima} has remained an influential reference in astrobiology for over three decades, and continues to be used today. During this time, three-dimensional models have also provided constraints on HZ limits, with the most significant contributions in the M-dwarf regime where synchronous rotation can significantly change the results obtained by one-dimensional models \citep[see, e.g.,][for a review]{shields2016habitability}. However, it remains challenging for any single three-dimensional model to comprehensively explore the inner and outer HZ boundaries for a range of stellar types as was done with \texttt{Clima}. This study with \texttt{ExoColumn} represents the first comprehensive attempt at validating the \texttt{Clima} results using a model of a different lineage. The results shown in this paper are a testament to the robustness of \texttt{Clima} in its original \citep{kasting1993} and updated \citep{kopparapu2013,kopparapu2014} forms.
+
 
 %% ============================================================
 %% Back matter
