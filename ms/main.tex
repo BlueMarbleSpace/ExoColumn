@@ -47,7 +47,30 @@
 %% Additional authors go here.
 
 \begin{abstract}
-%% TODO: abstract (250-word limit for ApJ).
+[The habitable zone (HZ) boundaries calculated with the \texttt{Clima}
+one-dimensional radiative--convective equilibrium (RCE) model have served as a
+standard reference for exoplanet target selection for three decades, but they
+have never been independently validated with a comparable model. We present
+\texttt{ExoColumn}, a new one-dimensional RCE model that couples an
+independently developed column physics package to the \texttt{ExoRT}
+correlated-$k$ radiative transfer core also used by the three-dimensional
+\texttt{ExoCAM} model. Calibrated to present-day Earth, \texttt{ExoColumn}
+reaches an equilibrium surface temperature of 287.84\,K, with a temperature
+profile matching the \texttt{konrad} and \texttt{Clima} models to within a few
+kelvin through the troposphere. Line-by-line benchmarks show that the
+\texttt{ExoRT} and \texttt{Clima} radiation cores each reproduce the outgoing
+longwave flux to within 1\%, with the residual differences traceable to the
+generation of spectroscopic line data used in each. Following the same inverse
+climate modeling method as previous work, we find inner-edge moist- and
+runaway-greenhouse limits of $S_{\rm eff}=1.087$ (0.959\,AU) and 1.101
+(0.953\,AU), and an outer-edge maximum-greenhouse limit of $S_{\rm eff}=0.395$
+(1.59\,AU) at a CO$_2$ partial pressure of 8.9\,bar. We extend these
+calculations to twelve host stars spanning 2000--7200\,K and to planetary masses
+of 0.1, 1, and 5\,$M_\oplus$, and provide updated HZ boundary coefficients for
+community use. The \texttt{ExoColumn} limits are systematically more
+conservative than those of \texttt{Clima} but agree to within a few percent in
+orbital distance, confirming the robustness of the published \texttt{Clima} HZ
+boundaries.]
 \end{abstract}
 
 %% TODO: select UAT keywords -- https://astrothesaurus.org
@@ -165,14 +188,14 @@ The \texttt{Clima} maximum greenhouse limit calculated by \citet{kopparapu2013} 
 
 \section{Habitable-zone limits across stellar spectral types} \label{sec:stellar}
 
-We now proceed to calculate the boundaries of the HZ for main sequence stars, following the method first performed by \citet{kasting1993} and then by \citet{kopparapu2013} using versions of \texttt{Clima}. We compute the HZ limits with \texttt{ExoColumn} for nine host stars spanning spectral types F (7200 K) through G (5780 K, the Sun), K (4000--4800 K), and M (2600--3700 K), plus cooler stars down to 2000\,K, using BT-Settl spectral energy distributions (SEDs) \citep{allard2012}. 
+We now proceed to calculate the boundaries of the HZ for main sequence stars, following the method first performed by \citet{kasting1993} and then by \citet{kopparapu2013} using versions of \texttt{Clima}. We compute the HZ limits with \texttt{ExoColumn} for twelve host stars spanning spectral types F (7200 K) through G (5780 K, the Sun), K (4000--4800 K), and M (2000--3700 K), using BT-Settl spectral energy distributions (SEDs) \citep{allard2012}. 
 
-Calculations of the inner and outer HZ edge for all nine host stars is shown in Figure~\ref{fig:hz_fig6}, following the four-panel format as \citet[][Fig. 6]{kopparapu2013}. Planetary albedo (top left for inner edge, bottom left for outer edge) is higher for F-dwarf host stars and lowest for M-dwarf host stars, which occurs for two reasons. First is that the stellar spectral energy distribution of F-type stars is shifted toward shorter wavelengths, which increases the Rayleigh scattering of incident light. Second is that water vapor and CO$_2$ absorb more strongly at near-infrared than visible wavelengths, which results in M-dwarf plants absorbing a larger fraction of incident light. These effects are most pronounced for dense atmospheres, such as water-vapor rich atmospheres near the inner edge or dense CO$_2$ atmospheres near the outer edge.
+Calculations of the inner and outer HZ edge for all twelve host stars are shown in Figure~\ref{fig:hz_fig6}, following the four-panel format as \citet[][Fig. 6]{kopparapu2013}. Planetary albedo (top left for inner edge, bottom left for outer edge) is higher for F-dwarf host stars and lowest for M-dwarf host stars, which occurs for two reasons. First is that the stellar spectral energy distribution of F-type stars is shifted toward shorter wavelengths, which increases the Rayleigh scattering of incident light. Second is that water vapor and CO$_2$ absorb more strongly at near-infrared than visible wavelengths, which results in M-dwarf planets absorbing a larger fraction of incident light. These effects are most pronounced for dense atmospheres, such as water-vapor rich atmospheres near the inner edge or dense CO$_2$ atmospheres near the outer edge.
 
 \begin{figure*}[ht!]
 \centering
 \includegraphics[width=0.95\textwidth]{reference/habitablezone/hz_figure6.pdf}
-\caption{Habitable zone limits for nine host stars ranging from M (2600\,K) to F (7200\,K). Inner edge calculations are shown on the top row and outer edge calculations are shown on the bottom row.}
+\caption{Habitable zone limits for twelve host stars ranging from M (2000\,K) to F (7200\,K). Inner edge calculations are shown on the top row and outer edge calculations are shown on the bottom row.}
 \label{fig:hz_fig6}
 \end{figure*}
 
