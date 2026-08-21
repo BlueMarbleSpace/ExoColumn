@@ -12,8 +12,10 @@ plot_lbl_olr_2panel.py — side-by-side clear-sky OLR line-by-line benchmark fig
           HITRAN-2024 CO2-CO2 CIA + trace H2O.
 
 Each column: spectral OLR density (LBL fine, LBL averaged onto the n68 bands,
-ExoRT n68) over a faint surface-T blackbody envelope, with the ExoRT - LBL band
-residual beneath.
+ExoRT n68, and Clima in BOTH k-coefficient generations -- the 2013-era set used
+by Kopparapu et al. 2013 and the post-2014 Wolf HITRAN-2016 set adopted by the
+atmos repo in 2021) over a faint surface-T blackbody envelope, with the
+model - LBL band residuals beneath.
 
 Usage: python tools/plot_lbl_olr_2panel.py
 """
@@ -71,13 +73,18 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smooth_cm=6.0):
     a.stairs(exo / w_b, edges, color='C3', lw=1.2, zorder=3,
              label='ExoRT n68 (this work)')
 
-    clima_b = clima_e = None
+    clima_b = clima_b16 = clima_e = None
     if clima_txt and os.path.isfile(clima_txt):
         clima = np.loadtxt(clima_txt)
         clima_e = np.append(clima[:, 0], clima[-1, 1])
-        a.stairs(clima[:, 2] / np.diff(clima_e), clima_e, color='C2', lw=1.0,
-                 zorder=3, label='Clima (Kopparapu et al. 2013)')
-        clima_b = clima[:, 2]
+        cw = np.diff(clima_e)
+        # col 2 = 2013-era k (Kopparapu 2013 default);
+        # col 3 = Wolf HITRAN-2016 k, adopted by the atmos repo in 2021.
+        a.stairs(clima[:, 2] / cw, clima_e, color='C2', lw=1.0,
+                 zorder=3, label='Clima (Kopparapu et al. 2013 $k$)')
+        a.stairs(clima[:, 3] / cw, clima_e, color='C0', lw=1.0,
+                 zorder=3, label='Clima (HITRAN-2016 $k$)')
+        clima_b, clima_b16 = clima[:, 2], clima[:, 3]
 
     a.set_xlim(*xlim); a.set_ylim(*ylim)
     a.set_ylabel('F$_{IR}$ spectral density (W m$^{-2}$ / cm$^{-1}$)')
@@ -91,9 +98,12 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smooth_cm=6.0):
           label='ExoRT − LBL')
     if clima_b is not None:
         lbl_c = band_integrate(wn, oc, clima_e)
-        b.step(np.append(clima_e[0], clima_e[1:]),
-               np.append((clima_b - lbl_c) / np.diff(clima_e), np.nan),
-               where='post', color='C2', lw=1.0, label='Clima − LBL')
+        cw = np.diff(clima_e)
+        for cb, col, lab in ((clima_b, 'C2', 'Clima 2013 $k$ − LBL'),
+                             (clima_b16, 'C0', 'Clima 2016 $k$ − LBL')):
+            b.step(np.append(clima_e[0], clima_e[1:]),
+                   np.append((cb - lbl_c) / cw, np.nan),
+                   where='post', color=col, lw=1.0, label=lab)
     b.axhline(0, color='k', lw=0.6)
     b.set_ylabel('model − LBL\n(W m$^{-2}$ / cm$^{-1}$)')
     b.legend(fontsize=7, frameon=False, loc='lower right')
@@ -101,7 +111,9 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smooth_cm=6.0):
     b.set_xlim(*xlim); b.set_facecolor('white')
 
     inr = np.isfinite(lbl_b)
-    return float(np.nansum(lbl_b[inr])), float(np.nansum(exo[inr]))
+    ctot = (float(np.nansum(clima_b)), float(np.nansum(clima_b16))) \
+        if clima_b is not None else (float('nan'), float('nan'))
+    return float(np.nansum(lbl_b[inr])), float(np.nansum(exo[inr])), ctot
 
 
 def main():
@@ -114,15 +126,19 @@ def main():
     ohz = os.path.join(ROOT, 'reference', 'max_greenhouse', 'lbl_olr_co2_maxgh.npz')
     clima_o = os.path.join(ROOT, 'reference', 'max_greenhouse', 'clima_band_olr_maxgh.txt')
 
-    lbl_i, exo_i = panel((ax[0, 0], ax[1, 0]), ihz,
+    lbl_i, exo_i, cl_i = panel((ax[0, 0], ax[1, 0]), ihz,
         'Inner HZ: moist $T_s$ = 300 K (1 bar N$_2$ + 330 ppm CO$_2$ + H$_2$O)',
         xlim=(10, 2000), ylim=(0, 0.42), clima_txt=clima)
-    lbl_o, exo_o = panel((ax[0, 1], ax[1, 1]), ohz,
+    lbl_o, exo_o, cl_o = panel((ax[0, 1], ax[1, 1]), ohz,
         'Outer HZ: max-greenhouse $T_s$ = 273 K (pCO$_2$ = 8.87 bar + 1 bar N$_2$)',
         xlim=(10, 1600), ylim=(0, 0.32), clima_txt=clima_o)
 
-    print(f"IHZ (Ts=300): LBL={lbl_i:.1f}  ExoRT n68={exo_i:.1f}  diff={exo_i-lbl_i:+.1f}")
-    print(f"OHZ (Ts=273): LBL(PH89)={lbl_o:.1f}  ExoRT n68={exo_o:.1f}  diff={exo_o-lbl_o:+.1f}")
+    print(f"IHZ (Ts=300): LBL={lbl_i:.1f}  ExoRT n68={exo_i:.1f}  "
+          f"diff={exo_i-lbl_i:+.1f}  |  Clima 2013 k={cl_i[0]:.1f}  "
+          f"Clima HITRAN-2016 k={cl_i[1]:.1f}")
+    print(f"OHZ (Ts=273): LBL(PH89)={lbl_o:.1f}  ExoRT n68={exo_o:.1f}  "
+          f"diff={exo_o-lbl_o:+.1f}  |  Clima 2013 k={cl_o[0]:.1f}  "
+          f"Clima HITRAN-2016 k={cl_o[1]:.1f}")
 
     fig.tight_layout()
     for ext, dpi in (('png', 200), ('pdf', 300)):
