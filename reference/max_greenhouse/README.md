@@ -154,8 +154,14 @@ shift is only ~3 W/m² here (CO2 k-coeffs), vs ~16 W/m² in the H2O-dominated IH
 
 The figure (`lbl_olr_benchmark_2panel.{png,pdf}`, `tools/plot_lbl_olr_2panel.py`)
 puts the OHZ panel (right) in the same style as the inner-HZ Ts = 300 K benchmark
-(left): grey line-by-line LBL, black LBL n68-band averages, red ExoRT n68, green
-Clima (2013-era), with a `model − LBL` residual beneath.  The reference LBL on the
+(left): grey line-by-line LBL, black LBL n68-band averages, red ExoRT n68, and
+Clima in **both** k-coefficient generations — green for the 2013-era set used by
+Kopparapu et al. (2013), blue for the post-2014 Wolf HITRAN-2016 set adopted by
+the atmos repo in 2021 — with a `model − LBL` residual beneath (bars = ExoRT,
+step curves = the two Clima generations).  The post-2014 curve is what shows that
+the ExoRT–Clima gap is a k-coefficient-generation effect and not a model
+difference: on the IHZ column Clima moves 251.8 → 267.5 W/m² against ExoRT's
+269.9 and the LBL's 272.6, and on the OHZ column 69.4 → 72.3 against ExoRT's 75.5.  The reference LBL on the
 right is the **PH89-χ** case (the sub-Lorentzian convention Kopparapu/CLIMA use);
 the pure-Lorentz bound is the table's opaque end, not drawn.  Both ExoRT and Clima
 sit ~16–22 W/m² below the PH89 LBL in the 8–12 µm window (more opaque there) —
