@@ -53,9 +53,13 @@ import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-CACHE = os.path.join(HERE, 'hz_figure6.npz')
-FIG_PNG = os.path.join(HERE, 'hz_figure6.png')
-FIG_PDF = os.path.join(HERE, 'hz_figure6.pdf')
+# Variant tag (HZ_FIG_SUFFIX): '' => the published files.  Set it together with
+# HZ_ALBEDO/OHZ_ALBEDO so an albedo variant writes its own caches/figures and
+# never overwrites the published ones.
+SUF = os.environ.get('HZ_FIG_SUFFIX', '')
+CACHE = os.path.join(HERE, f'hz_figure6{SUF}.npz')
+FIG_PNG = os.path.join(HERE, f'hz_figure6{SUF}.png')
+FIG_PDF = os.path.join(HERE, f'hz_figure6{SUF}.pdf')
 
 
 def _load(modname, relpath):

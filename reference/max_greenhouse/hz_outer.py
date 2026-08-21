@@ -90,14 +90,24 @@ PCO2_VALUES = np.geomspace(PCO2_MIN, PCO2_MAX, PCO2_N)
 
 TS       = 273.0     # K, fixed surface temperature (Kopparapu Sec 3.3)
 T_STRATO = 154.0     # K, isothermal stratosphere (their CO2 cold-trap argument)
-ALBEDO   = 0.32      # surface albedo = Kopparapu et al. (2013) Earth tuning
+# Surface albedo.  DEFAULT 0.2736 = ExoColumn's own Earth calibration (see
+# hz_inner.py's note and reference/earth/); Kopparapu et al. (2013) tuned their
+# own model to 0.32, so matching the PROCEDURE rather than the number is the
+# apples-to-apples choice.  Affects only the shortwave (the prescribed T(p)
+# column and hence F_IR are unchanged) — and at the maximum-greenhouse point the
+# dense-CO2 Rayleigh layer screens the surface, so the outer edge is nearly
+# albedo-insensitive (dSeff/dalpha_s = 0.21 vs 0.65 at the inner edge).
+# To reproduce the ARCHIVED Kopparapu-albedo comparison set (*_a032.*):
+#     OHZ_ALBEDO=0.32 OHZ_TAG_SUFFIX=_a032 python reference/max_greenhouse/hz_outer.py
+ALBEDO   = float(os.environ.get('OHZ_ALBEDO', '0.2736'))
 P_N2     = 1.0e5     # Pa, fixed N2 background
 
 # pCO2 values [bar] for which the T(p) profile is cached (diagnostics; shows the
 # CO2-saturation-pinned upper troposphere).
 PROFILE_PCO2 = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 
-CACHE = os.path.join(HERE, 'hz_outer.npz')
+TAG   = os.environ.get('OHZ_TAG_SUFFIX', '')   # '' => the published files
+CACHE = os.path.join(HERE, f'hz_outer{TAG}.npz')
 KOPP  = os.path.join(HERE, 'kopparapu2013_fig5.npz')
 
 # Kopparapu et al. (2013) maximum-greenhouse limit for the Sun, AS PUBLISHED.
@@ -360,7 +370,7 @@ def _plot(pco2, olr, asr, alpha, seff):
 
     fig.tight_layout()
     for ext, dpi in [('pdf', 300), ('png', 150)]:
-        path = os.path.join(HERE, f'hz_outer.{ext}')
+        path = os.path.join(HERE, f'hz_outer{TAG}.{ext}')
         fig.savefig(path, dpi=dpi, facecolor='white')
         print(f"Saved: {path}")
     plt.close(fig)

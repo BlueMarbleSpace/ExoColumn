@@ -27,13 +27,23 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-F6 = os.path.join(HERE, 'hz_figure6.npz')
-F7 = os.path.join(HERE, 'hz_figure7.npz')
+# Variant tag (HZ_FIG_SUFFIX): '' => the published files.  Set it together with
+# HZ_ALBEDO/OHZ_ALBEDO so an albedo variant writes its own caches/figures and
+# never overwrites the published ones.
+SUF = os.environ.get('HZ_FIG_SUFFIX', '')
+F6 = os.path.join(HERE, f'hz_figure6{SUF}.npz')
+F7 = os.path.join(HERE, f'hz_figure7{SUF}.npz')
 
 TS = np.arange(200., 2200. + 20., 20.)        # matches hz_figure6 inner grid
 PCO2 = np.geomspace(1.0, 34.7, 30)            # matches hz_figure6 outer grid
 MOIST_TS = 344.0                              # star-independent moist-GH Ts
-RUN_LO, RUN_HI = 280.0, 700.0                 # runaway = peak of Seff(Ts) here
+# Runaway = peak of Seff(Ts) over this bracket.  MUST match hz_figure7.py's
+# RUNAWAY_TS_LO/HI and hz_mass.py's TS_RUNAWAY (280-440 K), or the F star is
+# reduced with a different convention than the other 11 and lands on the
+# SUPERCRITICAL branch (Ts>Tc=647 K), where Seff climbs again: 280-700 gives
+# 1.349 at 680 K instead of the moist-branch 1.241.  Commit 3f2f07f tightened
+# the bracket in hz_figure7.py but missed this file.
+RUN_LO, RUN_HI = 280.0, 440.0
 
 # Hot stars (n84 core + n84 SED): (label, solar_file, teff, color)
 # Only the F 7200 K star is retained.  The A 10000 K and B 20000 K BT-Settl SEDs

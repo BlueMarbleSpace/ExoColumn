@@ -1,5 +1,20 @@
 # Reference case: moist- / runaway-greenhouse inner HZ (non-ideal water EOS)
 
+> **ALBEDO UPDATE (2026-08-21).** The surface albedo used for every HZ calculation
+> was changed from Kopparapu's 0.32 to **ExoColumn's own Earth calibration,
+> α_s = 0.2736** — matching their *tuning procedure* (each model tunes its own
+> albedo to reach Ts = 288 K) rather than their number. The files in this
+> directory are now the α_s = 0.2736 results; the previous 0.32 set is archived
+> alongside them as `hz_inner_nonideal_a032[_bps].{npz,pdf,png}`.
+> **Primary limits: moist GH 1.063, runaway 1.071 (MT_CKD); 1.052 / 1.062 (BPS)**
+> — the BPS runaway lands on Clima's 1.060 to within 0.002. Since the columns are
+> prescribed, F_IR and the H₂O profiles are bit-identical between the two albedos;
+> only F_SOL, α_p and Seff change. Numbers quoted further down that are not
+> restated here were computed with α_s = 0.32 and describe the archived set; the
+> LW/line-data analysis is albedo-independent and still applies verbatim. Full
+> decomposition: `reference/albedo_sensitivity/`.
+
+
 ExoColumn analogue of **Kopparapu et al. (2013), Figure 3** — the inner edge of
 the habitable zone for a G2V (Sun-like) star, swept over surface temperature
 `Ts`. This is the **non-ideal-EOS** result we validate against; the earlier
@@ -43,7 +58,8 @@ either `.dat`/`.tab` file is absent the overlay is silently skipped.
   matching Kopparapu (2013)'s IHZ "Earth" model (Fig 3: N₂ background, FCO₂ = 3.3e-4).
   (Earlier runs carried O₂ = 0.21 + Ar = 0.01; dropping them shifts Seff by only
   ~+0.003 but is the apples-to-apples choice and is consistent with the OHZ sweep.)
-- **Surface albedo:** 0.32 (Kopparapu's IHZ value, Fig 3b, mimicking cloud reflection).
+- **Surface albedo:** 0.2736 — ExoColumn's own Earth calibration (see the albedo
+  note at the top).  The archived comparison set uses Kopparapu's 0.32.
 - **Solar zenith:** 6-point Gauss–Legendre **hemispheric** quadrature (`sw_zenith_quad`,
   `sw_nquad=6`) for the flux-weighted Bond average — same *scheme* as Kopparapu's
   6-angle Gaussian average. (Our nodes are GL-in-μ → zenith 14.9–88.1°; Kopparapu's

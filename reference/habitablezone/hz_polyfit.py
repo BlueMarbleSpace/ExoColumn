@@ -37,9 +37,13 @@ import os
 import numpy as np
 
 HERE    = os.path.dirname(os.path.abspath(__file__))
-CACHE   = os.path.join(HERE, "hz_figure7.npz")
-OUT_TXT = os.path.join(HERE, "hz_coefficients.txt")
-OUT_TEX = os.path.join(HERE, "hz_coefficients.tex")
+# Variant tag (HZ_FIG_SUFFIX): '' => the published files.  Set it together with
+# HZ_ALBEDO/OHZ_ALBEDO so an albedo variant writes its own caches/figures and
+# never overwrites the published ones.
+SUF = os.environ.get('HZ_FIG_SUFFIX', '')
+CACHE   = os.path.join(HERE, f"hz_figure7{SUF}.npz")
+OUT_TXT = os.path.join(HERE, f"hz_coefficients{SUF}.txt")
+OUT_TEX = os.path.join(HERE, f"hz_coefficients{SUF}.tex")
 
 T_SUN = 5780.0  # K — Kopparapu reference temperature (T* = T_eff - T_SUN)
 

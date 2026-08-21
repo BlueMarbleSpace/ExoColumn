@@ -78,8 +78,11 @@ import matplotlib.pyplot as plt
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 BUILD_DIR = os.path.join(ROOT, 'build')
-FIG_PNG = os.path.join(HERE, 'hz_mass.png')
-FIG_PDF = os.path.join(HERE, 'hz_mass.pdf')
+# Variant tag (HZ_FIG_SUFFIX): '' => the published files.  Set it together with
+# HZ_ALBEDO/OHZ_ALBEDO so an albedo variant writes its own caches/figure.
+SUF = os.environ.get('HZ_FIG_SUFFIX', '')
+FIG_PNG = os.path.join(HERE, f'hz_mass{SUF}.png')
+FIG_PDF = os.path.join(HERE, f'hz_mass{SUF}.pdf')
 
 PVER = int(os.environ.get('HZ_PVER', '200'))   # hz_inner/outer want PVER>=200
 
@@ -114,7 +117,7 @@ def mass_tag(m):
 
 
 def cache_path(m):
-    return os.path.join(HERE, f'hz_mass_m{mass_tag(m)}.npz')
+    return os.path.join(HERE, f'hz_mass_m{mass_tag(m)}{SUF}.npz')
 
 
 # --------------------------------------------------------------------------

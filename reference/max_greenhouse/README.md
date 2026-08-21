@@ -1,5 +1,16 @@
 # Outer HZ (maximum greenhouse) reference case
 
+> **ALBEDO UPDATE (2026-08-21).** Surface albedo changed from 0.32 to ExoColumn's
+> own Earth calibration **α_s = 0.2736** (see `reference/albedo_sensitivity/`);
+> the previous set is archived as `hz_outer_a032.{npz,pdf,png}`.
+> **Primary maximum greenhouse: Seff = 0.385 at pCO₂ = 8.68 bar → d = 1.611 AU**
+> (was 0.395 at 8.92 bar → 1.591 AU). The outer edge is nearly albedo-insensitive
+> — dSeff/dα_s = 0.21, versus 0.65 at the inner edge — because the dense-CO₂
+> Rayleigh layer screens the surface; the two α_p curves converge as pCO₂ rises.
+> Comparison numbers below that are not restated here refer to the archived
+> α_s = 0.32 set.
+
+
 ExoColumn version of Kopparapu et al. (2013) Section 3.3 / Figure 5: the
 outer-edge (maximum greenhouse) habitable-zone limit for a G2V star.
 
@@ -14,7 +25,7 @@ column — H2O-saturated moist adiabat from the surface, **pinned to the CO2
 saturation curve wherever the ascent supersaturates in CO2** (Kasting 1991;
 `co2_condense`), with the **CO2 share of cp evaluated at the local temperature**
 (`cp_co2_tdep`, Kopparapu's Shomate update), capped by an **isothermal 154 K
-stratosphere** — then calls ExoRT once (`flux_only`).  Surface albedo 0.32,
+stratosphere** — then calls ExoRT once (`flux_only`).  Surface albedo 0.2736,
 6-point Gauss–Legendre hemispheric zenith average, present solar constant.
 Seff = F_IR/F_SOL; the maximum-greenhouse limit is the Seff minimum;
 d = 1/√Seff.

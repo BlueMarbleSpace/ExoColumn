@@ -45,10 +45,14 @@ import matplotlib.pyplot as plt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-FIG6_CACHE = os.path.join(HERE, 'hz_figure6.npz')
-CACHE = os.path.join(HERE, 'hz_figure7.npz')
-FIG_PNG = os.path.join(HERE, 'hz_figure7.png')
-FIG_PDF = os.path.join(HERE, 'hz_figure7.pdf')
+# Variant tag (HZ_FIG_SUFFIX): '' => the published files.  Set it together with
+# HZ_ALBEDO/OHZ_ALBEDO so an albedo variant writes its own caches/figures and
+# never overwrites the published ones.
+SUF = os.environ.get('HZ_FIG_SUFFIX', '')
+FIG6_CACHE = os.path.join(HERE, f'hz_figure6{SUF}.npz')
+CACHE = os.path.join(HERE, f'hz_figure7{SUF}.npz')
+FIG_PNG = os.path.join(HERE, f'hz_figure7{SUF}.png')
+FIG_PDF = os.path.join(HERE, f'hz_figure7{SUF}.pdf')
 
 MOIST_GH_VMR = 3.0e-3   # Kopparapu Sec 3.1 moist-greenhouse stratospheric H2O VMR
 
