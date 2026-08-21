@@ -38,9 +38,9 @@ H2O (saturated at 273 K, a trace at ~10 bar) lines + MT_CKD are included for
 completeness via the shared helpers; their contribution is small.
 
 Result (10-2000 cm-1, the pCO2 = 8.87 bar Seff-minimum column):
-  LBL pure-Lorentz (opaque bound)  = 44.3 W/m2
+  LBL pure-Lorentz (opaque bound)  = 44.1 W/m2
   ExoRT n68 (this work)            = 75.5 W/m2
-  LBL PH89 chi  (transparent bound)= 91.7 W/m2
+  LBL PH89 chi  (transparent bound)= 78.5 W/m2
 ExoRT n68 sits well INSIDE the CO2 wing-treatment envelope.  The entire spread
 lives in the 875-1200 cm-1 (8-12 um) window: it is NOT a CIA effect — HITRAN-2024
 CO2-CO2 CIA (which carries the Gruszka-Borysow far-IR + Baranov 7um bands) AND
@@ -174,11 +174,30 @@ def _lorentz_chi_sum(wn, nu0, S, gL, B1, B2, dnu_cut, chi_on):
     return k
 
 
-def co2_line_tau(lay, wn, wstep, chi=True, dnu_cut=500.0, s_rel=1e-6):
+def co2_line_tau(lay, wn, wstep, chi=True, dnu_cut=500.0, tau_min=1e-3):
     """tau(nlay, nwn) for CO2 lines with the PH89 chi-factor.  Uses RADIS to get
     the T/P-scaled HITRAN2020 line parameters per layer, then a numba Lorentz x chi
-    sum.  s_rel prunes lines weaker than s_rel * max(S) (far-wing opacity is set by
-    the strong band lines; convergence checked in tools/check_co2_lbl.py)."""
+    sum.
+
+    Weak-line pruning is done on PEAK COLUMN OPTICAL DEPTH, not on line strength
+    relative to the band maximum.  A line is kept when
+
+        tau_peak = S / (pi * gamma_L) * N_col  >  tau_min          (default 1e-3)
+
+    i.e. when it could contribute more than tau_min of opacity over the whole CO2
+    column.  The previous criterion (S > 1e-6 * S.max()) was wrong for dense
+    columns in two ways.  (1) In absolute terms it scaled with whatever the
+    strongest line in the *requested spectral range* happened to be, so widening
+    the range from 80-1220 to 1-2500 cm-1 silently made it 12x harsher (S.max()
+    jumps from the 15 um band head to the nu3 4.3 um band head).  (2) On the
+    8.87-bar max-greenhouse column (N_col ~ 1.3e26 molec/cm2) a line sitting
+    exactly at that threshold still had a peak optical depth of ~215 through the
+    column, so the "negligible" lines being discarded were optically thick by two
+    orders of magnitude.  The damage was concentrated in the 800-1200 cm-1
+    window, where 17540 of 17610 in-window lines were being thrown away and no
+    strong band exists to carry the opacity in their place: the window OLR was
+    inflated 15.6 -> 28.2 W/m2 and the 10-2000 cm-1 total 78.5 -> 91.7 W/m2.
+    Convergence in tau_min is checked in tools/check_co2_lbl.py."""
     from radis import SpectrumFactory
     nlay = len(lay['T'])
     wmin, wmax = wn[0], wn[-1]
@@ -194,6 +213,7 @@ def co2_line_tau(lay, wn, wstep, chi=True, dnu_cut=500.0, s_rel=1e-6):
                                    'AccuracyWarning': 'ignore'})
     sf.fetch_databank('hitran')
     tau = np.zeros((nlay, len(wn)))
+    N_col = float(np.sum(lay['N_co2']))      # whole-column CO2, for the tau_min test
     for k in range(nlay):
         T = lay['T'][k]; p_mb = lay['p_mb'][k]; x = lay['x_co2'][k]
         # df1 carries T/P-scaled centre (shiftwav), intensity S, Lorentz HWHM
@@ -202,7 +222,9 @@ def co2_line_tau(lay, wn, wstep, chi=True, dnu_cut=500.0, s_rel=1e-6):
         nu0 = df['shiftwav'].values.astype(np.float64)
         S = df['S'].values.astype(np.float64)
         gL = df['hwhm_lorentz'].values.astype(np.float64)
-        keep = S > s_rel * S.max()
+        # peak column optical depth this line could contribute, on its own
+        tau_pk = S / (np.pi * np.maximum(gL, 1e-12)) * N_col
+        keep = tau_pk > tau_min
         nu0, S, gL = nu0[keep], S[keep], gL[keep]
         B1 = 0.0888 - 0.16 * np.exp(-0.0041 * T)
         B2 = 0.0526 * np.exp(-0.00152 * T)

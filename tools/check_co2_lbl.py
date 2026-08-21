@@ -7,6 +7,12 @@ lbl_co2_benchmark.py.  Three checks on a single representative dense-CO2 layer:
      RADIS (expected agreement to ~1%, since Doppler << Lorentz here).
   2. chi ON vs OFF -> the PH89 sub-Lorentzian wing suppression is visible.
   3. CO2-CO2 CIA magnitude at this layer is physically sized.
+  4. WEAK-LINE PRUNING converges in the 800-1200 cm-1 window.  Check 1 runs inside
+     the 15 um band, where strong lines carry the opacity and any sane pruning is
+     harmless -- it is blind to the pruning error that inflated the window OLR by
+     81% (see the co2_line_tau docstring).  Check 4 exists so that never recurs:
+     the window has no strong band, so its opacity is the sum of many individually
+     weak lines and it is the only place the cutoff is actually stressed.
 
 Run: python tools/check_co2_lbl.py
 """
@@ -39,7 +45,10 @@ df = sf.df1
 nu0 = df['shiftwav'].values.astype(np.float64)
 S = df['S'].values.astype(np.float64)
 gL = df['hwhm_lorentz'].values.astype(np.float64)
-keep = S > 1e-6 * S.max()
+# same criterion as co2_line_tau: peak optical depth over a representative
+# dense-CO2 column (8.87-bar max-greenhouse case, N_col ~ 1.3e26 molec/cm2)
+N_COL = 1.286e26
+keep = S / (np.pi * np.maximum(gL, 1e-12)) * N_COL > 1e-3
 nu0, S, gL = nu0[keep], S[keep], gL[keep]
 B1 = 0.0888 - 0.16 * np.exp(-0.0041 * T)
 B2 = 0.0526 * np.exp(-0.00152 * T)
@@ -80,3 +89,32 @@ print(f"  peak CIA cross-section {absco[jpk]:.3e} cm^5/molec^2 at "
 # CIA absorption coefficient at peak for this layer: alpha = absco * n_co2^2
 print(f"  -> alpha_CIA at peak = {absco[jpk]*n_co2**2:.3e} cm-1 "
       f"(tau over 10 km = {absco[jpk]*n_co2**2*1e6:.2f})")
+
+
+# check 4: weak-line pruning convergence in the 8-12 um window
+print("\n=== check 4: pruning convergence, 800-1200 cm-1 window ===")
+WW1, WW2, WWSTEP = 800.0, 1200.0, 0.02
+sfw = SpectrumFactory(wavenum_min=WW1 - cut, wavenum_max=WW2 + cut, wstep=2.0,
+                      molecule='CO2', isotope='1,2,3', pressure=1.0,
+                      mole_fraction=x, truncation=5.0, verbose=0,
+                      warnings={'AccuracyError': 'ignore', 'AccuracyWarning': 'ignore'})
+sfw.fetch_databank('hitran')
+sfw.eq_spectrum(Tgas=T, pressure=p_mb / 1013.25, mole_fraction=x)
+dfw = sfw.df1
+nu0w = dfw['shiftwav'].values.astype(np.float64)
+Sw = dfw['S'].values.astype(np.float64)
+gLw = dfw['hwhm_lorentz'].values.astype(np.float64)
+tau_pk = Sw / (np.pi * np.maximum(gLw, 1e-12)) * N_COL
+wnw = np.arange(WW1, WW2 + WWSTEP, WWSTEP)
+prev = None
+for tm in (1e-1, 1e-3, 1e-5):
+    m = tau_pk > tm
+    sig = _lorentz_chi_sum(wnw, nu0w[m], Sw[m], gLw[m], np.float64(B1),
+                           np.float64(B2), np.float64(cut), np.int64(1))
+    band = float(np.trapezoid(sig, wnw))
+    rel = "" if prev is None else "  (change %+.2f%%)" % (100 * (band - prev) / prev)
+    print(f"  tau_min={tm:.0e}: {m.sum():6d} lines kept, "
+          f"band-integrated sigma = {band:.4e}{rel}")
+    prev = band
+print("  -> the default tau_min=1e-3 must be converged here (<1% to 1e-5);")
+print("     a relative cutoff like S > 1e-6*S.max() is NOT (it keeps ~70 of 17610).")
