@@ -127,11 +127,21 @@ RUNAWAY_TS_LO, RUNAWAY_TS_HI = 280.0, 700.0
 H2O_EOS = 'nonideal'
 TAG     = '_nonideal'
 
-ALBEDO   = 0.32      # surface albedo = Kopparapu et al. (2013) value, for a DIRECT
-                     # comparison (their cloud-free 1-D model uses Ad=0.32 to mimic
-                     # cloud reflection).  Surface albedo affects only absorbed SW
-                     # (hence ASR & Seff), not the LW-driven cold-start T profile/OLR.
-                     # [Our ExoRT-tuned Ts=288 K value was 0.24229; kept in git history.]
+# Surface albedo.  DEFAULT 0.2736 = ExoColumn's OWN Earth calibration (the value
+# that brings the full RCE column to Ts = 288 K; see reference/earth/).  This is
+# the self-consistent choice: Kopparapu et al. (2013) likewise tuned THEIR albedo
+# (0.32) inside Clima, so matching the tuning procedure — not the number — is the
+# apples-to-apples comparison, and it moves every HZ limit toward theirs.
+# Surface albedo affects ONLY the shortwave (absorbed SW, hence planetary albedo
+# and Seff): in this inverse/flux_only mode the T and H2O profiles are prescribed
+# by the cold-start pseudoadiabat, so OLR, the moist-greenhouse trigger Ts and
+# panel (d) are bit-identical between albedos (asserted in
+# reference/albedo_sensitivity/plot_albedo_sensitivity.py).
+# To reproduce the ARCHIVED Kopparapu-albedo comparison set (*_a032.*):
+#     HZ_ALBEDO=0.32 HZ_TAG_SUFFIX=_a032 python reference/moist_runaway/hz_inner.py
+# Always pair HZ_ALBEDO with HZ_TAG_SUFFIX so a variant writes its own
+# cache/figure instead of overwriting the primary results.
+ALBEDO   = float(os.environ.get('HZ_ALBEDO', '0.2736'))
 T_STRATO = 200.0     # isothermal stratosphere cap [K]
 
 # Sub-freezing saturation phase.  'ice' — the model default — is ALSO CLIMA's

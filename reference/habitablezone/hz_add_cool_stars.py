@@ -30,8 +30,12 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-F6 = os.path.join(HERE, 'hz_figure6.npz')
-F7 = os.path.join(HERE, 'hz_figure7.npz')
+# Variant tag (HZ_FIG_SUFFIX): '' => the published files.  Set it together with
+# HZ_ALBEDO/OHZ_ALBEDO so an albedo variant writes its own caches/figures and
+# never overwrites the published ones.
+SUF = os.environ.get('HZ_FIG_SUFFIX', '')
+F6 = os.path.join(HERE, f'hz_figure6{SUF}.npz')
+F7 = os.path.join(HERE, f'hz_figure7{SUF}.npz')
 
 TS = np.arange(200., 2200. + 20., 20.)        # matches hz_figure6 inner grid
 PCO2 = np.geomspace(1.0, 34.7, 30)            # matches hz_figure6 outer grid

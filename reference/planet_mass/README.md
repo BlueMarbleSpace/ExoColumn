@@ -103,8 +103,28 @@ fit (their Eq. 4) is drawn as the dashed reference across the same range.
 
 Kopparapu+2014's headline inner-edge (runaway) numbers are `Seff = 0.99 / 1.107
 / 1.188` for 0.1 / 1 / 5 M⊕ (~10% lower / ~7% higher flux than Earth).
-ExoColumn's 1 M⊕ inner edge already sits ~5% above Kopparapu's at the Sun (the
-documented near-IR shortwave H₂O albedo offset; see
-`reference/moist_runaway/README.md` and the LBL benchmarks), so the three
-ExoColumn curves are expected to lie a few percent inward of the dashed
-Kopparapu curves while reproducing the **mass ordering and spacing**.
+The ExoColumn curves reproduce the **mass ordering and spacing**, lying within a
+few percent of the dashed Kopparapu curves.
+
+> **ALBEDO UPDATE (2026-08-21).** These figures are now computed at ExoColumn's
+> own Earth-calibrated surface albedo, α_s = 0.2736 (previously Kopparapu's
+> 0.32); the earlier set is archived as `hz_mass_a032.{pdf,png}` and
+> `hz_mass_m{0.1,1,5}_a032.npz`.  See `reference/albedo_sensitivity/`.
+>
+> Inner-edge (runaway) `Seff` at the Sun:
+>
+> | M | α_s = 0.32 | α_s = 0.2736 | Kopparapu+2014 |
+> |---|---|---|---|
+> | 0.1 M⊕ | 1.041 (+0.051) | **0.998 (+0.008)** | 0.990 |
+> | 1 M⊕ | 1.102 (−0.005) | 1.072 (−0.035) | 1.107 |
+> | 5 M⊕ | 1.161 (−0.027) | 1.141 (−0.047) | 1.188 |
+>
+> This is the one HZ figure where the albedo change does **not** simply improve
+> agreement: mean |gap| is 0.028 → 0.030, a wash.  The 0.32 run's near-exact
+> 1 M⊕ match was **compensating errors** — ExoColumn's radiative transfer runs
+> high in `Seff` while Kopparapu's albedo convention runs high the other way, so
+> removing one exposes the other (the same pattern as the `co2_vmr_total`
+> compensation documented in `reference/moist_runaway/README.md`).  What does
+> improve is the mass *trend*: the 0.1 → 5 M⊕ spread widens from 0.120 to 0.144
+> against Kopparapu's 0.198, easing the known compression by ~20%, and the
+> 0.1 M⊕ endpoint moves from +0.051 to +0.008.

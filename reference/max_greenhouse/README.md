@@ -1,5 +1,16 @@
 # Outer HZ (maximum greenhouse) reference case
 
+> **ALBEDO UPDATE (2026-08-21).** Surface albedo changed from 0.32 to ExoColumn's
+> own Earth calibration **α_s = 0.2736** (see `reference/albedo_sensitivity/`);
+> the previous set is archived as `hz_outer_a032.{npz,pdf,png}`.
+> **Primary maximum greenhouse: Seff = 0.385 at pCO₂ = 8.68 bar → d = 1.611 AU**
+> (was 0.395 at 8.92 bar → 1.591 AU). The outer edge is nearly albedo-insensitive
+> — dSeff/dα_s = 0.21, versus 0.65 at the inner edge — because the dense-CO₂
+> Rayleigh layer screens the surface; the two α_p curves converge as pCO₂ rises.
+> Comparison numbers below that are not restated here refer to the archived
+> α_s = 0.32 set.
+
+
 ExoColumn version of Kopparapu et al. (2013) Section 3.3 / Figure 5: the
 outer-edge (maximum greenhouse) habitable-zone limit for a G2V star.
 
@@ -14,7 +25,7 @@ column — H2O-saturated moist adiabat from the surface, **pinned to the CO2
 saturation curve wherever the ascent supersaturates in CO2** (Kasting 1991;
 `co2_condense`), with the **CO2 share of cp evaluated at the local temperature**
 (`cp_co2_tdep`, Kopparapu's Shomate update), capped by an **isothermal 154 K
-stratosphere** — then calls ExoRT once (`flux_only`).  Surface albedo 0.32,
+stratosphere** — then calls ExoRT once (`flux_only`).  Surface albedo 0.2736,
 6-point Gauss–Legendre hemispheric zenith average, present solar constant.
 Seff = F_IR/F_SOL; the maximum-greenhouse limit is the Seff minimum;
 d = 1/√Seff.
@@ -126,31 +137,49 @@ cut, ClearSky.jl/Wordsworth coefficients), HITRAN-2024 CO2-CO2 CIA (carries the
 Gruszka-Borysow far-IR + Baranov 7-µm bands), trace H2O lines + MT_CKD; the CO2
 line sum reproduces RADIS Voigt to ~1 % at χ = 1 (`tools/check_co2_lbl.py`).
 
-**Result (10–2000 cm⁻¹):** the column OLR is dominated by the CO2 far-wing
-treatment and spans a ~47 W/m² envelope —
+**Result (10–2000 cm⁻¹):**
 
 | treatment | OLR (10–2000 cm⁻¹) | 8–12 µm window |
 |---|---|---|
-| LBL pure-Lorentz wings (opaque bound) | 44.3 W/m² | 3.3 W/m² |
-| Clima 2013-era (Kopparapu) | 69.3 W/m² | 8.5 W/m² |
-| Clima Wolf-HITRAN2016 | 72.2 W/m² | 8.3 W/m² |
+| LBL pure-Lorentz wings (opaque bound) | 44.1 W/m² | 3.5 W/m² |
+| Clima 2013-era (Kopparapu) | 69.4 W/m² | 8.2 W/m² |
+| Clima Wolf-HITRAN2016 | 72.3 W/m² | 8.0 W/m² |
 | **ExoRT n68 (this work)** | **75.5 W/m²** | **9.0 W/m²** |
-| LBL PH89 χ sub-Lorentzian (transparent bound) | 91.7 W/m² | 17.6 W/m² |
+| LBL PH89 χ sub-Lorentzian (transparent bound) | 78.5 W/m² | 14.7 W/m² |
 
-**ExoRT n68 sits well inside the wing-treatment envelope, clustered with Clima.**
-The entire spread lives in the 875–1200 cm⁻¹ (8–12 µm) window and is **not** a CIA
-effect — both HITRAN-2024 CO2-CO2 CIA *and* ExoRT's own GB/Baranov-derived CIA are
-~0 across 875–1150 cm⁻¹ (directly verified) — it is the sub-Lorentzian far-wing/
-window-continuum treatment, exactly the source the §"Diagnosed radiation offsets"
-identified, now bracketed by an independent LBL.  Adding Kopparapu's CIA sources
-would not close it (they have no opacity there); the lever is the wing/continuum
-model, whose ~50 W/m² range here dwarfs the IHZ case and matches the Yang et al.
-(2016) model-spread finding.  Note the three *band/k* models (ExoRT n68, Clima
-2013-era, Clima Wolf2016) agree to within 6 W/m² and all have opaque windows
-(~8–9 W/m²) — they share the HITRAN-lineage CO2 k-distribution; the from-scratch
-PH89 LBL is the outlier (more transparent window) because RADIS truncates lines at
-the χ-cut without CLIMA's empirical window/dimer continuum.  The 2013↔Wolf2016
-shift is only ~3 W/m² here (CO2 k-coeffs), vs ~16 W/m² in the H2O-dominated IHZ.
+**ExoRT n68 sits inside the wing-treatment envelope, 3.0 W/m² (3.9 %) below the
+PH89 LBL and clustered with Clima.**
+
+> **Weak-line pruning fix (2026-08-21).**  The PH89 LBL previously read
+> **91.7** W/m² (window 17.6), and the apparent ~16 W/m² window disagreement with
+> every band/k model was an artefact of `co2_line_tau`'s own line-selection
+> cutoff, not physics.  It pruned lines weaker than `1e-6 × S.max()`; on this
+> column (N_col ≈ 1.3e26 molec/cm²) a line *at* that threshold still had a peak
+> optical depth of ~215, and in the 8–12 µm window — which has no strong band to
+> carry the opacity — **17 540 of 17 610 lines were being discarded**.  The cutoff
+> is now on peak *column optical depth* (`tau_min = 1e-3`, converged: the total
+> moves 0.017 W/m² between `tau_min` 1e-2 and 1e-5), which is also immune to the
+> old criterion's silent dependence on the requested spectral range.  Effect is
+> 96 % confined to the window: total 91.7 → 78.5, window 28.2 → 15.6, while
+> 10–400 cm⁻¹ is unchanged to 0.01 W/m² and the pure-Lorentz bound barely moves
+> (44.3 → 44.1 — with unclipped Lorentz wings the strong lines already saturate
+> the window, so the weak lines add nothing there).  `tools/check_co2_lbl.py`
+> check 4 now tests pruning convergence *in the window*; the pre-existing checks
+> ran only at 580–720 cm⁻¹, inside the 15 µm band, where any sane cutoff is
+> harmless — which is why this went unnoticed.
+
+After the fix the band/k models and the LBL agree to |Δ| ≤ 0.25 W/m² per n68 band
+across 720–1108 cm⁻¹, and **essentially the whole remaining residual is one band,
+1108–1200 cm⁻¹ (LBL 5.34 vs ExoRT 2.14 W/m²)**.  That band straddles the edge of
+the HITRAN-2024 CO2–CO2 CIA tabulation, which covers 1–750 and 1150–1850 cm⁻¹ with
+**nothing in between** (directly verified; ExoRT's own GB/Baranov-derived CIA is
+likewise ~0 across 875–1150).  So the residual is plausibly missing continuum/CIA
+opacity on our side of the 1150 cm⁻¹ edge rather than a k-distribution error — but
+that is a hypothesis, not a demonstration.  The three band/k models (ExoRT n68,
+Clima 2013-era, Clima Wolf2016) still agree to within 6 W/m² overall and have
+comparably opaque windows (8–9 W/m²), sharing the HITRAN-lineage CO2
+k-distribution.  The 2013↔Wolf2016 shift is only ~3 W/m² here (CO2 k-coeffs), vs
+~16 W/m² in the H2O-dominated IHZ.
 
 The figure (`lbl_olr_benchmark_2panel.{png,pdf}`, `tools/plot_lbl_olr_2panel.py`)
 puts the OHZ panel (right) in the same style as the inner-HZ Ts = 300 K benchmark
@@ -163,10 +192,9 @@ the ExoRT–Clima gap is a k-coefficient-generation effect and not a model
 difference: on the IHZ column Clima moves 251.8 → 267.5 W/m² against ExoRT's
 269.9 and the LBL's 272.6, and on the OHZ column 69.4 → 72.3 against ExoRT's 75.5.  The reference LBL on the
 right is the **PH89-χ** case (the sub-Lorentzian convention Kopparapu/CLIMA use);
-the pure-Lorentz bound is the table's opaque end, not drawn.  Both ExoRT and Clima
-sit ~16–22 W/m² below the PH89 LBL in the 8–12 µm window (more opaque there) —
-i.e. the from-scratch PH89 LBL is more transparent in the window than either
-band/k model, the wing/window-continuum signature discussed above.
+the pure-Lorentz bound is the table's opaque end, not drawn.  After the
+weak-line pruning fix the models track the LBL closely across the window; the
+visible exception is the 1108–1200 cm⁻¹ band discussed above.
 `lbl_olr_co2_maxgh.npz` caches both LBL wing bounds,
 `clima_band_olr_maxgh.txt` the two Clima generations (regenerated by
 running `/models/atmos` Clima inverse at TG0=273/PGO=9.87/fCO2≈0.9 through the

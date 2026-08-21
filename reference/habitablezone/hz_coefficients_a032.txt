@@ -9,6 +9,6 @@
 # form as Kopparapu et al. (2013,2014) Table 3, for direct substitution.
 #
 # boundary                 S_eff_sun              a              b              c              d        rms
-  Runaway greenhouse        1.068407   9.154422e-05   1.630882e-08   1.796227e-12   1.249651e-16   1.10e-03
-  Moist greenhouse          1.063626   8.762784e-05   5.705554e-09  -3.235539e-12  -5.319339e-16   7.51e-04
-  Maximum greenhouse        0.385133   7.190609e-05   3.272289e-09  -3.253026e-12  -5.481057e-16   6.26e-04
+  Runaway greenhouse        1.101534   9.414425e-05   7.365202e-09  -2.577216e-12  -4.603675e-16   1.16e-03
+  Moist greenhouse          1.087977   9.562399e-05   5.450699e-09  -3.703225e-12  -5.935071e-16   7.95e-04
+  Maximum greenhouse        0.394700   7.523164e-05   3.431762e-09  -3.352086e-12  -5.684352e-16   7.49e-04
