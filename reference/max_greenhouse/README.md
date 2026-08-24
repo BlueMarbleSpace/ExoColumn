@@ -117,7 +117,7 @@ conservative relative to their 1.70 AU.
 > **OLR = 82.3 W/m²**, versus 94.5 W/m² for the identical column at Earth gravity
 > (which is what produced the 97.4 quoted below).  At Mars gravity ExoRT sits
 > **between** Clima and SMART, not above both: Clima 2013-era k = 77.0,
-> Clima Wolf-2016 k = 81.0, ExoRT n68 = 82.3, SMART = 88.5 W/m².  The
+> Clima Wolf-2016 k = 80.9, ExoRT n68 = 82.3, SMART = 88.5 W/m².  The
 > "+11 W/m² dense-CO2 LW leak" inferred from the numbers below is therefore
 > **not supported**; see "Kopparapu Figure-1 benchmark" below for the corrected
 > case, which is now a manuscript figure panel.  The independent LBL benchmark
@@ -240,9 +240,9 @@ CO2-condensation kink near 1 bar).
 |---|---|
 | LBL pure-Lorentz wings (opaque bound) | 46.3 W/m² |
 | Clima 2013-era k (this reproduction) | 77.0 W/m² |
-| Clima Wolf-HITRAN2016 k | 81.0 W/m² |
+| Clima Wolf-HITRAN2016 k | 80.9 W/m² |
 | **ExoRT n68 (this work)** | **82.3 W/m²** |
-| LBL PH89 χ sub-Lorentzian (reference) | 82.8 W/m² |
+| LBL PH89 χ sub-Lorentzian (reference) | 82.9 W/m² |
 | **SMART** (Kopparapu, updated CIA) | **88.5 W/m²** |
 | published in Kopparapu et al. (2013) Fig. 1 | 86 (Clima), 88.4 (SMART) |
 

@@ -52,10 +52,10 @@ profile. The figure has four panels (Kopparapu Fig 3):
 
 | model | Ts = 300 K | Ts = 400 K (Kopparapu Fig. 2) |
 |---|---|---|
-| LBL (this work, MT_CKD) | 272.6 | 306.1 |
-| **ExoRT n68 (this work)** | **269.9** (−1.0 %) | **302.8** (−1.1 %) |
-| Clima, Wolf HITRAN-2016 k | 267.5 | 296.5 |
-| Clima, 2013-era k | 251.8 | 275.9 |
+| LBL (this work, MT_CKD) | 272.7 | 306.5 |
+| **ExoRT n68 (this work)** | **269.9** (−1.0 %) | **303.1** (−1.1 %) |
+| Clima, Wolf HITRAN-2016 k | 267.4 | 296.5 |
+| Clima, 2013-era k | 251.7 | 275.8 |
 | published by Kopparapu et al. (2013) | 250.2 (tabulated FTIR) | 285 (Clima), 297 (SMART) |
 
 The Ts = 400 K case is Kopparapu's own Clima-vs-SMART validation column, so it

@@ -62,6 +62,18 @@ def band_integrate(wn, oc, edges):
     return out
 
 
+def band_total(edges, vals, lo, hi):
+    """Sum a banded quantity over [lo, hi], pro-rating bands that straddle an
+    end of the range.  Used for the ExoRT n68 and Clima totals so that every
+    model in a panel is integrated over the same interval -- the range the LBL
+    reference itself covers."""
+    e = np.asarray(edges, float)
+    v = np.where(np.isfinite(vals), np.asarray(vals, float), 0.0)
+    w = np.diff(e)
+    frac = np.clip(np.minimum(e[1:], hi) - np.maximum(e[:-1], lo), 0.0, None)
+    return float(np.sum(v * np.where(w > 0, frac / w, 0.0)))
+
+
 def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
           rlim=None, smooth_cm=6.0, legend_loc='upper right',
           rlegend_loc='lower right'):
@@ -82,6 +94,13 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
     oc = (d['olr_nu_full'] if 'olr_nu_full' in d.files else d['olr_nu_cont']).astype(float)
     lbl_b = band_integrate(wn, oc, edges)
 
+    # Broadband totals quoted in the legend, all over the LBL's own range so
+    # that they are directly comparable.  The two line-by-line spectra are
+    # integrated on their native grids; the banded models are pro-rated.
+    lo, hi = float(wn[0]), float(wn[-1])
+    tot_lbl = float(np.trapezoid(oc, wn))
+    tot_exo = band_total(edges, exo, lo, hi)
+
     # surface-T blackbody envelope, then grey LBL, black LBL n68-band avg, red ExoRT
     wnbb = np.linspace(max(xlim[0], 1.0), xlim[1], 600)
     a.plot(wnbb, planck_nu(wnbb, ts), color='0.8', lw=1.0, zorder=1,
@@ -90,17 +109,20 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
     a.plot(wn[::5], np.convolve(oc, np.ones(k) / k, 'same')[::5], color='0.55',
            lw=0.6, zorder=2, label='LBL (line-by-line)')
     a.stairs(lbl_b / w_b, edges, color='k', lw=1.4, zorder=4,
-             label='LBL, n68-band averages')
+             label=f'LBL, n68-band averages  [{tot_lbl:.1f}]')
     a.stairs(exo / w_b, edges, color='C3', lw=1.2, zorder=3,
-             label='ExoRT n68 (this work)')
+             label=f'ExoRT n68 (this work)  [{tot_exo:.1f}]')
 
     smart_b = None
+    tot_smart = float('nan')
     if smart_txt and os.path.isfile(smart_txt):
         sm = np.loadtxt(smart_txt)
         s_wn, s_f = sm[:, 0], sm[:, 1]
         ks = max(1, int(round(smooth_cm / np.median(np.diff(s_wn)))) | 1)
+        ms = (s_wn >= lo) & (s_wn <= hi)
+        tot_smart = float(np.trapezoid(s_f[ms], s_wn[ms]))
         a.plot(s_wn, np.convolve(s_f, np.ones(ks) / ks, 'same'), color='C4',
-               lw=0.7, zorder=2, label='SMART LBL')
+               lw=0.7, zorder=2, label=f'SMART LBL  [{tot_smart:.1f}]')
         smart_b = band_integrate(s_wn, s_f, edges)
 
     clima_b = clima_b16 = clima_e = None
@@ -110,15 +132,20 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
         cw = np.diff(clima_e)
         # col 2 = 2013-era k (Kopparapu 2013 default);
         # col 3 = Wolf HITRAN-2016 k, adopted by the atmos repo in 2021.
-        a.stairs(clima[:, 2] / cw, clima_e, color='C2', lw=1.0,
-                 zorder=3, label='Clima (Kopparapu et al. 2013 $k$)')
-        a.stairs(clima[:, 3] / cw, clima_e, color='C0', lw=1.0,
-                 zorder=3, label='Clima (HITRAN-2016 $k$)')
+        t13 = band_total(clima_e, clima[:, 2], lo, hi)
+        t16 = band_total(clima_e, clima[:, 3], lo, hi)
+        a.stairs(clima[:, 2] / cw, clima_e, color='C2', lw=1.0, zorder=3,
+                 label=f'Clima (Kopparapu et al. 2013 $k$)  [{t13:.1f}]')
+        a.stairs(clima[:, 3] / cw, clima_e, color='C0', lw=1.0, zorder=3,
+                 label=f'Clima (HITRAN-2016 $k$)  [{t16:.1f}]')
         clima_b, clima_b16 = clima[:, 2], clima[:, 3]
 
     a.set_xlim(*xlim); a.set_ylim(*ylim)
     a.set_ylabel('F$_{IR}$ spectral density (W m$^{-2}$ / cm$^{-1}$)')
-    a.legend(loc=legend_loc, fontsize=7.5, frameon=False)
+    a.legend(loc=legend_loc, fontsize=7.5, frameon=False,
+             title=f'[ ] = total F$_{{IR}}$ over {lo:.0f}–{hi:.0f} cm$^{{-1}}$ '
+                   f'(W m$^{{-2}}$)',
+             title_fontsize=7.5, alignment='left')
     a.set_title(title, fontsize=9.5)
     a.set_facecolor('white')
 
@@ -146,11 +173,11 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
     if rlim:
         b.set_ylim(*rlim)
 
-    inr = np.isfinite(lbl_b)
-    ctot = (float(np.nansum(clima_b)), float(np.nansum(clima_b16))) \
+    ctot = (band_total(clima_e, clima_b, lo, hi),
+            band_total(clima_e, clima_b16, lo, hi)) \
         if clima_b is not None else (float('nan'), float('nan'))
-    stot = float(np.nansum(smart_b)) if smart_b is not None else float('nan')
-    return float(np.nansum(lbl_b[inr])), float(np.nansum(exo[inr])), ctot, stot
+    stot = tot_smart if smart_b is not None else float('nan')
+    return tot_lbl, tot_exo, ctot, stot
 
 
 def report(tag, r):
