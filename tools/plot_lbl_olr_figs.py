@@ -100,7 +100,7 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
         s_wn, s_f = sm[:, 0], sm[:, 1]
         ks = max(1, int(round(smooth_cm / np.median(np.diff(s_wn)))) | 1)
         a.plot(s_wn, np.convolve(s_f, np.ones(ks) / ks, 'same'), color='C4',
-               lw=0.7, zorder=2, label='SMART LBL (Kopparapu et al. 2013)')
+               lw=0.7, zorder=2, label='SMART LBL')
         smart_b = band_integrate(s_wn, s_f, edges)
 
     clima_b = clima_b16 = clima_e = None
