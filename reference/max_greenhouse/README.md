@@ -112,17 +112,28 @@ conservative relative to their 1.70 AU.
 > **Mars-mass** planet (their `input_clima.dat` uses `G = 373` cm/s²; a
 > hydrostatic fit to the P–T–z profile they handed to SMART independently gives
 > g₀ = 3.70 m/s² for a 95 % CO2 / 5 % N2 column), so the correct column mass is
-> 2.6× larger than was used.  Redone properly — Mars gravity, and Kopparapu's own
-> SMART profile rather than an ExoColumn cold start — ExoRT n68 gives
-> **OLR = 82.3 W/m²**, versus 94.5 W/m² for the identical column at Earth gravity
-> (which is what produced the 97.4 quoted below).  At Mars gravity ExoRT sits
-> **between** Clima and SMART, not above both: Clima 2013-era k = 77.0,
-> Clima Wolf-2016 k = 80.9, ExoRT n68 = 82.3, SMART = 88.5 W/m².  The
-> "+11 W/m² dense-CO2 LW leak" inferred from the numbers below is therefore
-> **not supported**; see "Kopparapu Figure-1 benchmark" below for the corrected
-> case, which is now a manuscript figure panel.  The independent LBL benchmark
-> on our *own* max-greenhouse column (next section) is unaffected — it was always
-> run at Earth gravity, which is correct for that Earth-mass case.
+> 2.6× larger than was used.  Redone properly — Mars gravity, Kopparapu's own
+> profile, and **dry** (see the next section for why) — ExoRT n68 gives
+> **OLR = 93.7 W/m²**, not the 97.4 quoted below.
+>
+> The *conclusion* of the paragraph below survives the correction, at a somewhat
+> smaller magnitude: on the correct column ExoRT is **+9.1 W/m² above Kopparapu's
+> own Clima run (84.6 W/m²)** and **+5.3 above SMART (88.5 W/m²)**.  What has
+> changed is the attribution.  Our own line-by-line code, run on that same dry
+> column, gives **93.7 W/m² — matching ExoRT n68 to 0.02 W/m²** — so the offset is
+> *not* an ExoRT k-distribution error: it lives in the underlying CO2 far-wing /
+> continuum ingredients and is shared by ExoRT and our LBL alike.  The band split
+> against SMART is −2.0 W/m² at 10–500 cm⁻¹ and −2.8 W/m² across the
+> 800–1200 cm⁻¹ window, with 1200–2000 cm⁻¹ agreeing to 0.00 W/m².
+>
+> (An intermediate version of this note, written before Kopparapu supplied his
+> actual Figure-1 Clima spectrum, reported 82.3 W/m² and claimed the offset was
+> "not supported".  That was based on a *saturated* reproduction of the deck —
+> the wrong configuration; see the next section.)
+>
+> The independent LBL benchmark on our *own* max-greenhouse column (next section)
+> is unaffected — it was always run at Earth gravity, which is correct for that
+> Earth-mass case.
 
 *(superseded, retained for the record)* reproduced Kopparapu's Figure 1 benchmark (early
 Mars: 2 bar, 95% CO2/5% N2, Ts = 250 K, 167 K isothermal stratosphere):
@@ -225,42 +236,85 @@ k-coeff generation), `exocol_maxgh_8.87bar.nc` the benchmarked column.
 ### Kopparapu Figure-1 benchmark (early Mars) — the second OHZ panel
 
 The right-hand panel of `lbl_olr_benchmark_ohz` is the **Kopparapu et al. (2013)
-Figure-1 configuration** run through the same four radiation models: a Mars-mass
-planet (**g = 3.73 m/s²** = their `G = 373` cm/s²), **2 bar of 95 % CO2 / 5 % N2**,
-Ts = 250 K, 167 K isothermal stratosphere, saturated H2O.  Unlike the
-max-greenhouse column on the left — which is ExoColumn's own — every model here
-integrates **Kopparapu's own atmosphere**: the P–T profile is taken verbatim from
-the file they handed to SMART (`smart_earlymars_thermal_newcia.hrt`, surface
-2.001 bar / 250 K, top 5.65e-5 bar / 167 K), the H2O profile from the matched
-Clima run, and Clima's own inverse solution on this deck reproduces that P–T to
-< 0.25 K through the stratosphere and upper troposphere (5.4 K max, at the
-CO2-condensation kink near 1 bar).
+Figure-1 configuration**: a Mars-mass planet (**g = 3.73 m/s²** = their
+`G = 373` cm/s²), **2 bar of 95 % CO2 / 5 % N2**, Ts = 250 K, 167 K isothermal
+stratosphere, and **dry** (no H2O).  Unlike the max-greenhouse column on the
+left — which is ExoColumn's own — every model here integrates **Kopparapu's own
+atmosphere**: the P–T profile is taken verbatim from the file they handed to
+SMART (`smart_earlymars_thermal_newcia.hrt`, surface 2.001 bar / 250 K, top
+5.65e-5 bar / 167 K).  Both of their own products for this column are overlaid:
+the SMART line-by-line spectrum and the Clima run used in the published figure.
 
 | model (10–2000 cm⁻¹) | OLR |
 |---|---|
-| LBL pure-Lorentz wings (opaque bound) | 46.3 W/m² |
-| Clima 2013-era k (this reproduction) | 77.0 W/m² |
-| Clima Wolf-HITRAN2016 k | 80.9 W/m² |
-| **ExoRT n68 (this work)** | **82.3 W/m²** |
-| LBL PH89 χ sub-Lorentzian (reference) | 82.9 W/m² |
+| LBL pure-Lorentz wings (opaque bound) | 47.8 W/m² |
+| **Clima** (Kopparapu's published Fig.-1 run) | **84.6 W/m²** |
 | **SMART** (Kopparapu, updated CIA) | **88.5 W/m²** |
-| published in Kopparapu et al. (2013) Fig. 1 | 86 (Clima), 88.4 (SMART) |
+| Wordsworth et al. (2010), same case | 88.2 W/m² |
+| **ExoRT n68 (this work)** | **93.7 W/m²** |
+| LBL PH89 χ sub-Lorentzian (this work) | 93.7 W/m² |
 
-**ExoRT n68 reproduces the line-by-line reference to 0.6 % on this column** —
-the closest agreement of any panel in either benchmark figure — and the
-band-resolved residuals are ≤ 0.62 W/m² everywhere.  SMART is 5.6 W/m² above our
-LBL, and essentially all of that sits in the 220–500 cm⁻¹ CO2 far wings, the same
-region Kopparapu identified as the source of their Clima–SMART difference.  Our
-reproduction of their 2013-era Clima lands 9 W/m² below their published 86; the
-identical ~9 W/m² shortfall appears in the dense-H2O Figure-2 reproduction
-(`reference/moist_runaway`), so it is a property of the current public `atmos`
-Clima relative to the 2013 version rather than of this column.
+**ExoRT n68 and our own line-by-line code agree to 0.02 W/m² (0.02 %) on this
+column** — by far the tightest agreement in either benchmark figure, and a
+direct demonstration that the n68 k-distribution is not the source of the
+dense-CO2 spread.  Both sit 5.3 W/m² above SMART and 9.1 above Kopparapu's
+Clima.  Band by band against SMART: −2.0 W/m² at 10–500 cm⁻¹ (CO2 far-IR wings
+and CIA), −0.5 at 500–800 (the saturated 15 µm core), −2.8 across the
+800–1200 cm⁻¹ window (the far-wing χ region), and **0.00 at 1200–2000**.  Both
+differences are in the CO2 far-wing / continuum treatment — the same family as
+the max-greenhouse panel's residual, not a band-model artefact.
 
-Files: `lbl_olr_co2_earlymars.npz` (LBL, both wing bounds; regenerate with
-`tools/lbl_co2_benchmark.py --g 3.73`), `clima_band_olr_earlymars.txt` (both
-Clima generations), `smart_earlymars_olr.txt` (Kopparapu's SMART spectrum,
-converted to W/m²/cm⁻¹), `exocol_earlymars_2bar.nc` (the benchmarked column;
-requires a `make PVER=200 EXO_G=3.73` binary — gravity is compile-time).
+#### Why the column is dry (and how that was established)
+
+The first version of this panel used Clima's standard saturated-troposphere
+inverse mode (`IMW=0`, `RSURF=1`), which puts **1.37 mm of precipitable water**
+into the column, 90 % of it in the bottom 0.1 bar.  That gave OLR = 82.3 (ExoRT)
+and 82.9 (our LBL) — visibly below the canonical 88–93 W/m² quoted for 2-bar
+early Mars, which is what prompted the check.  Holding T(p) fixed and varying
+only the water:
+
+| water content | ExoRT n68 | Clima 2013-era k | Clima Wolf-2016 k |
+|---|---|---|---|
+| saturated (1.37 mm PWV) | 82.3 | 77.0 | 81.0 |
+| Clima's f_H2O floor (0.11 mm) | 88.8 | 82.6 | 86.7 |
+| dry (0 mm), 95:5 CO2:N2 | **93.7** | — | — |
+| dry, pure CO2 | 92.8 | — | — |
+
+Water is worth **−11.3 W/m²** in ExoRT, essentially all of it in two intervals:
+−9.1 W/m² in the 10–500 cm⁻¹ H2O pure-rotation band and −2.2 W/m² in the
+1200–2000 cm⁻¹ ν2 band, with the 15 µm core and the CO2 window changing by
+0.01 W/m².  The T(p) profile is bit-identical across all of these (H2O is
+radiatively active here but dynamically irrelevant in a CO2-dominated column),
+so this is a pure absorber effect.
+
+R. Kopparapu then supplied the band-resolved Clima spectrum from the actual
+published Figure-1 run (`clima_2bar.dat`, 55-interval grid, W/m²/cm⁻¹; total
+84.6 W/m², quoted as 86 in the paper).  It settles the question:
+
+- The **1200–2000 cm⁻¹** interval, whose only absorber in this column is the
+  H2O ν2 band, reads **3.27 W/m²** in his run — against 1.07 for the saturated
+  reproduction and 1.84 for the driest the public Clima will produce.  Our dry
+  LBL and SMART both give 3.46 there, agreeing to 0.00 W/m².  His run carried
+  essentially no water.
+- Everything insensitive to water matches the reproduction closely: the four
+  CO2-CIA-dominated intervals below 220 cm⁻¹ agree to **0.006 W/m²**, and the
+  617–720 cm⁻¹ 15 µm core to 0.000.  That independently confirms the
+  2 bar / 95:5 / Mars-gravity / T(p) setup of the column.
+
+The panel's Clima curve is therefore **Kopparapu's own published run**, not a
+reproduction.  The public `atmos` Clima cannot reproduce it: its water floor
+(`f_H2O` ≈ 3e-5 at the surface) survives `RSURF=0` under both `IMW=1` and
+`IMW=3`, so a genuinely dry deck is not reachable from the namelist, and the
+two-k-generation comparison drawn on the other three panels is not drawn here.
+
+Files: `lbl_olr_co2_earlymars.npz` (dry LBL, both wing bounds; regenerate with
+`tools/lbl_co2_benchmark.py --g 3.73`), `clima_band_olr_earlymars.txt`
+(Kopparapu's published Clima run, converted from `clima_2bar.dat`),
+`clima_2bar.dat` (as received), `smart_earlymars_olr.txt` (Kopparapu's SMART
+spectrum, converted to W/m²/cm⁻¹), `exocol_earlymars_2bar.nc` (the benchmarked
+dry column; requires a `make PVER=200 EXO_G=3.73` binary — gravity is
+compile-time), and `lbl_olr_co2_earlymars_saturated.npz` (the superseded
+saturated-column LBL, kept as the evidence behind the water table above).
 
 ## Layers deeper than 10 bar: clamped pressure broadening
 

@@ -24,7 +24,9 @@ OUTER HZ  -> reference/max_greenhouse/lbl_olr_benchmark_ohz.{pdf,png}
 
 Both Kopparapu-configuration columns are integrated by every model from the
 SAME atmosphere: Clima's own profile for the dense-H2O case, and the profile
-Kopparapu handed to SMART for early Mars.  Dense-CO2 columns use CO2 lines +
+Kopparapu handed to SMART for early Mars.  On the early-Mars panel the Clima
+curve is Kopparapu's own published Figure-1 run rather than a reproduction, so
+only one Clima generation is drawn there.  Dense-CO2 columns use CO2 lines +
 the Perrin & Hartmann (1989) sub-Lorentzian chi-factor + HITRAN-2024 CO2-CO2
 CIA + trace H2O; moist columns use H2O + CO2 lines + the MT_CKD continuum.
 
@@ -74,9 +76,18 @@ def band_total(edges, vals, lo, hi):
     return float(np.sum(v * np.where(w > 0, frac / w, 0.0)))
 
 
+# Which columns of a clima_band_olr_*.txt file to draw, as
+# (column index, colour, legend label).  Most files carry the same deck through
+# two k-coefficient generations; the early-Mars file instead carries a single
+# curve -- Kopparapu's own published Figure-1 run.
+CLIMA_TWO_GEN = ((2, 'C2', 'Clima (Kopparapu et al. 2013 $k$)'),
+                 (3, 'C0', 'Clima (HITRAN-2016 $k$)'))
+CLIMA_KOPP = ((2, 'C2', 'Clima (Kopparapu et al. 2013)'),)
+
+
 def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
-          rlim=None, smooth_cm=6.0, legend_loc='upper right',
-          rlegend_loc='lower right'):
+          clima_cols=CLIMA_TWO_GEN, rlim=None, smooth_cm=6.0,
+          legend_loc='upper right', rlegend_loc='lower right'):
     """One column: grey fine LBL + black LBL n68-band averages + red ExoRT n68
     + green/blue Clima (2013-era and Wolf-2016 k); residual = model - LBL
     beneath.  The dense-CO2 npz files carry both wing bounds (olr_nu_full =
@@ -125,20 +136,17 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
                lw=0.7, zorder=2, label=f'SMART LBL  [{tot_smart:.1f}]')
         smart_b = band_integrate(s_wn, s_f, edges)
 
-    clima_b = clima_b16 = clima_e = None
+    clima_e, clima_curves = None, []
     if clima_txt and os.path.isfile(clima_txt):
         clima = np.loadtxt(clima_txt)
         clima_e = np.append(clima[:, 0], clima[-1, 1])
         cw = np.diff(clima_e)
-        # col 2 = 2013-era k (Kopparapu 2013 default);
-        # col 3 = Wolf HITRAN-2016 k, adopted by the atmos repo in 2021.
-        t13 = band_total(clima_e, clima[:, 2], lo, hi)
-        t16 = band_total(clima_e, clima[:, 3], lo, hi)
-        a.stairs(clima[:, 2] / cw, clima_e, color='C2', lw=1.0, zorder=3,
-                 label=f'Clima (Kopparapu et al. 2013 $k$)  [{t13:.1f}]')
-        a.stairs(clima[:, 3] / cw, clima_e, color='C0', lw=1.0, zorder=3,
-                 label=f'Clima (HITRAN-2016 $k$)  [{t16:.1f}]')
-        clima_b, clima_b16 = clima[:, 2], clima[:, 3]
+        for col, colour, lab in clima_cols:
+            v = clima[:, col]
+            a.stairs(v / cw, clima_e, color=colour, lw=1.0, zorder=3,
+                     label=f'{lab}  [{band_total(clima_e, v, lo, hi):.1f}]')
+            clima_curves.append((v, colour, f'{lab.split(" (")[0]} '
+                                 f'{lab.split("(")[-1].rstrip(")")} − LBL'))
 
     a.set_xlim(*xlim); a.set_ylim(*ylim)
     a.set_ylabel('F$_{IR}$ spectral density (W m$^{-2}$ / cm$^{-1}$)')
@@ -157,14 +165,13 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
         b.step(np.append(edges[0], edges[1:]),
                np.append((smart_b - lbl_b) / w_b, np.nan),
                where='post', color='C4', lw=1.0, label='SMART − LBL')
-    if clima_b is not None:
+    if clima_curves:
         lbl_c = band_integrate(wn, oc, clima_e)
         cw = np.diff(clima_e)
-        for cb, col, lab in ((clima_b, 'C2', 'Clima 2013 $k$ − LBL'),
-                             (clima_b16, 'C0', 'Clima 2016 $k$ − LBL')):
+        for cb, colour, lab in clima_curves:
             b.step(np.append(clima_e[0], clima_e[1:]),
                    np.append((cb - lbl_c) / cw, np.nan),
-                   where='post', color=col, lw=1.0, label=lab)
+                   where='post', color=colour, lw=1.0, label=lab)
     b.axhline(0, color='k', lw=0.6)
     b.set_ylabel('model − LBL\n(W m$^{-2}$ / cm$^{-1}$)')
     b.legend(fontsize=7, frameon=False, loc=rlegend_loc, ncol=2)
@@ -173,9 +180,7 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
     if rlim:
         b.set_ylim(*rlim)
 
-    ctot = (band_total(clima_e, clima_b, lo, hi),
-            band_total(clima_e, clima_b16, lo, hi)) \
-        if clima_b is not None else (float('nan'), float('nan'))
+    ctot = tuple(band_total(clima_e, cb, lo, hi) for cb, _, _ in clima_curves)
     stot = tot_smart if smart_b is not None else float('nan')
     return tot_lbl, tot_exo, ctot, stot
 
@@ -183,7 +188,7 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
 def report(tag, r):
     lbl, exo, cl, smart = r
     line = (f"{tag}: LBL={lbl:.1f}  ExoRT n68={exo:.1f}  diff={exo-lbl:+.1f}"
-            f"  |  Clima 2013 k={cl[0]:.1f}  Clima HITRAN-2016 k={cl[1]:.1f}")
+            f"  |  Clima " + ", ".join(f"{c:.1f}" for c in cl))
     if np.isfinite(smart):
         line += f"  |  SMART={smart:.1f}"
     print(line)
@@ -236,10 +241,11 @@ def main():
              npz=os.path.join(mg, 'lbl_olr_co2_earlymars.npz'),
              clima_txt=os.path.join(mg, 'clima_band_olr_earlymars.txt'),
              smart_txt=os.path.join(mg, 'smart_earlymars_olr.txt'),
+             clima_cols=CLIMA_KOPP,
              title='Outer HZ: early Mars $T_s$ = 250 K '
-                   '(2 bar 95% CO$_2$ / 5% N$_2$, Mars gravity)',
+                   '(dry, 2 bar 95% CO$_2$ / 5% N$_2$, Mars gravity)',
              xlim=(10, 1600), ylim=(0, 0.32),
-             rlim=(-0.025, 0.075), rlegend_loc='upper right'),
+             rlim=(-0.030, 0.042), rlegend_loc='upper right'),
     ], 'max_greenhouse', 'lbl_olr_benchmark_ohz')
 
 
