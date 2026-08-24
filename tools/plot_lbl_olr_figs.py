@@ -245,7 +245,7 @@ def main():
              title='Outer HZ: early Mars $T_s$ = 250 K '
                    '(dry, 2 bar 95% CO$_2$ / 5% N$_2$, Mars gravity)',
              xlim=(10, 1600), ylim=(0, 0.32),
-             rlim=(-0.030, 0.042), rlegend_loc='upper right'),
+             rlim=(-0.046, 0.042), rlegend_loc='upper right'),
     ], 'max_greenhouse', 'lbl_olr_benchmark_ohz')
 
 
