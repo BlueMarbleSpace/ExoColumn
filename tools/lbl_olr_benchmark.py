@@ -112,10 +112,15 @@ class MTCKD:
 # ----------------------------------------------------------------------------
 # Column handling
 # ----------------------------------------------------------------------------
-def load_column(path, nlay):
+def load_column(path, nlay, g=G):
     """Read an ExoColumn output and coarsen to ~nlay layers (TOA->surface).
     Returns dict with per-layer T, p_mb, x_h2o, x_co2, N_h2o, N_co2 [molec/cm2]
-    plus ts, and the n68 band data if present."""
+    plus ts, and the n68 band data if present.
+
+    g is the surface gravity [m/s2] used to turn pressure thickness into column
+    mass.  It defaults to ExoRT's Earth value; pass the planet's own g for a
+    column computed at a different gravity (e.g. the Mars-mass early-Mars
+    benchmark), otherwise every column amount is wrong by g_earth/g."""
     with nc.Dataset(path) as ds:
         tmid = np.array(ds['tmid'][:]); pint = np.array(ds['pint'][:])
         q = np.array(ds['h2ommr'][:]); qco2 = np.array(ds['co2mmr'][:])
@@ -126,7 +131,7 @@ def load_column(path, nlay):
             band['olr'] = np.array(ds['band_lwup_toa'][:])
             band['edges'] = np.array(ds['wavenum_edge'][:])
     pdel = np.diff(pint)                              # [Pa], TOA->sfc
-    Mtot = pdel / G                                   # kg/m2
+    Mtot = pdel / g                                   # kg/m2
     m_h2o = q * Mtot; M_dry = (1.0 - q) * Mtot
     m_co2 = qco2 * M_dry                              # qco2 is a DRY mmr
     N_h2o = m_h2o / MW_H2O * NA * 1e-4                # molec/cm2
@@ -215,13 +220,15 @@ def main():
     ap.add_argument('--wmin', type=float, default=10.0)
     ap.add_argument('--wmax', type=float, default=3000.0)
     ap.add_argument('--wstep', type=float, default=0.01)
+    ap.add_argument('--g', type=float, default=G,
+                    help='surface gravity [m/s2] (default: ExoRT Earth value)')
     ap.add_argument('--out', default=os.path.join(
         os.path.dirname(HERE), 'reference', 'moist_runaway',
         'lbl_olr_benchmark_ts300'))
     args = ap.parse_args()
 
-    lay = load_column(args.ncfile, args.nlay)
-    print(f"column: Ts={lay['ts']:.1f} K, {len(lay['T'])} layers, "
+    lay = load_column(args.ncfile, args.nlay, g=args.g)
+    print(f"column: Ts={lay['ts']:.1f} K, {len(lay['T'])} layers, g={args.g} m/s2, "
           f"x_h2o sfc={lay['x_h2o'][-1]:.4f}, x_co2 sfc={lay['x_co2'][-1]:.3e}")
 
     wn, tau_h2o, tau_co2, tau_cont = layer_tau(lay, args.wmin, args.wmax, args.wstep)

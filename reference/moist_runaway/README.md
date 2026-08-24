@@ -43,6 +43,28 @@ profile. The figure has four panels (Kopparapu Fig 3):
 | `lbl_olr_benchmark_ts300.npz` | LBL spectrum cache (compressed float32) + the ExoRT band OLR for the same column. Regenerate with `tools/lbl_olr_benchmark.py` (~25 min, RADIS/HITRAN). |
 | `clima_band_olr_ts300.txt` | CLIMA 55-interval TOA OLR on the same column, both k-coefficient generations (2013-era + Wolf HITRAN2016), from the patched public CLIMA at `/models/atmos`. Provenance in the file header. |
 | `plot_lbl_olr.py` | Renders `lbl_olr_benchmark_ts300.png` from the two data files above (instant). |
+| `lbl_olr_benchmark_ts400.npz` | Same, for the **Kopparapu et al. (2013) Figure-2 configuration**: dense H₂O, Ts = 400 K, 200 K isothermal stratosphere, 4 bar N₂ background (ps = 6.46 bar), Earth gravity. Regenerate with `tools/lbl_olr_benchmark.py --wmax 3000`. |
+| `clima_band_olr_ts400.txt` | CLIMA 55-interval TOA OLR on that column, both k generations. Provenance in the file header. |
+| `exocol_ts400_6.46bar.nc` | The benchmarked Ts = 400 K column itself (ExoColumn output, PVER = 200), built from CLIMA's own T(p) and f_H₂O(p) so ExoRT, the LBL and CLIMA all integrate the same atmosphere. |
+| `lbl_olr_benchmark_ihz.pdf` / `.png` | The **inner-edge** two-case benchmark figure (Ts = 300 K | Kopparapu Fig-2 Ts = 400 K), rendered by `tools/plot_lbl_olr_figs.py`. Manuscript figure. |
+
+### Inner-edge benchmark totals (10–3000 cm⁻¹)
+
+| model | Ts = 300 K | Ts = 400 K (Kopparapu Fig. 2) |
+|---|---|---|
+| LBL (this work, MT_CKD) | 272.6 | 306.1 |
+| **ExoRT n68 (this work)** | **269.9** (−1.0 %) | **302.8** (−1.1 %) |
+| Clima, Wolf HITRAN-2016 k | 267.5 | 296.5 |
+| Clima, 2013-era k | 251.8 | 275.9 |
+| published by Kopparapu et al. (2013) | 250.2 (tabulated FTIR) | 285 (Clima), 297 (SMART) |
+
+The Ts = 400 K case is Kopparapu's own Clima-vs-SMART validation column, so it
+carries their two published numbers directly. Our reproduction of their Clima
+run with the 2013-era k lands 9 W/m² below their published 285; the same ~9 W/m²
+shortfall appears in the early-Mars reproduction (`reference/max_greenhouse`),
+i.e. it is a property of the current public `atmos` Clima relative to the 2013
+version, not of this column. ExoRT tracks the line-by-line reference to ~1 % in
+both columns.
 
 The Kopparapu reference data are drawn as thin **dashed** curves, **colour-matched** to the
 corresponding ExoColumn quantity (solid = ExoColumn, dashed = Kopparapu) — in panel (d)
@@ -131,6 +153,10 @@ Re-plot (instant, from the committed data):
 ```bash
 python reference/moist_runaway/plot_lbl_olr.py
 ```
+
+The two-case manuscript figure (`lbl_olr_benchmark_ihz.pdf`) is rendered by
+`python tools/plot_lbl_olr_figs.py`, which also renders the outer-edge twin in
+`reference/max_greenhouse/`.
 
 Full regeneration of the underlying data:
 1. **Column:** run `run/exocol.exe` with the `hz_inner.py` namelist at

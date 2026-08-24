@@ -283,12 +283,14 @@ def main():
     ap.add_argument('--wmin', type=float, default=10.0)
     ap.add_argument('--wmax', type=float, default=2000.0)
     ap.add_argument('--wstep', type=float, default=0.02)
+    ap.add_argument('--g', type=float, default=G,
+                    help='surface gravity [m/s2] (default: ExoRT Earth value)')
     ap.add_argument('--out', default=os.path.join(
         os.path.dirname(HERE), 'reference', 'max_greenhouse', 'lbl_olr_co2_maxgh'))
     args = ap.parse_args()
 
-    lay = load_column(args.ncfile, args.nlay)
-    print(f"column: Ts={lay['ts']:.1f} K, {len(lay['T'])} layers, "
+    lay = load_column(args.ncfile, args.nlay, g=args.g)
+    print(f"column: Ts={lay['ts']:.1f} K, {len(lay['T'])} layers, g={args.g} m/s2, "
           f"x_co2 sfc={lay['x_co2'][-1]:.4f}, x_h2o sfc={lay['x_h2o'][-1]:.3e}")
 
     wn = np.arange(args.wmin, args.wmax + args.wstep, args.wstep)
