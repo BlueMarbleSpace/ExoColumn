@@ -85,8 +85,18 @@ CLIMA_TWO_GEN = ((2, 'C2', 'Clima (Kopparapu et al. 2013 $k$)'),
 CLIMA_KOPP = ((2, 'C2', 'Clima (Kopparapu et al. 2013)'),)
 
 
+def load_socrates(path):
+    """SOCRATES band dump -> (edges, spectral density, per-band flux).
+    Columns are: bin index, lower bound [cm-1], upper bound [cm-1], spectral
+    flux density [W/m2/cm-1]; the bins are contiguous, so the edges are the
+    lower bounds plus the final upper bound."""
+    a = np.loadtxt(path, skiprows=8)
+    lo, hi, dens = a[:, 1], a[:, 2], a[:, 3]
+    return np.append(lo, hi[-1]), dens, dens * (hi - lo)
+
+
 def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
-          clima_cols=CLIMA_TWO_GEN, rlim=None, smooth_cm=6.0,
+          socrates_txt=None, clima_cols=CLIMA_TWO_GEN, rlim=None, smooth_cm=6.0,
           legend_loc='upper right', rlegend_loc='lower right'):
     """One column: grey fine LBL + black LBL n68-band averages + red ExoRT n68
     + green/blue Clima (2013-era and Wolf-2016 k); residual = model - LBL
@@ -136,6 +146,12 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
                lw=0.7, zorder=2, label=f'SMART LBL  [{tot_smart:.1f}]')
         smart_b = band_integrate(s_wn, s_f, edges)
 
+    soc_e = soc_b = None
+    if socrates_txt and os.path.isfile(socrates_txt):
+        soc_e, soc_dens, soc_b = load_socrates(socrates_txt)
+        a.stairs(soc_dens, soc_e, color='C1', lw=0.9, zorder=3,
+                 label=f'SOCRATES  [{band_total(soc_e, soc_b, lo, hi):.1f}]')
+
     clima_e, clima_curves = None, []
     if clima_txt and os.path.isfile(clima_txt):
         clima = np.loadtxt(clima_txt)
@@ -165,6 +181,12 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
         b.step(np.append(edges[0], edges[1:]),
                np.append((smart_b - lbl_b) / w_b, np.nan),
                where='post', color='C4', lw=1.0, label='SMART − LBL')
+    if soc_e is not None:
+        lbl_s = band_integrate(wn, oc, soc_e)
+        sw = np.diff(soc_e)
+        b.step(np.append(soc_e[0], soc_e[1:]),
+               np.append((soc_b - lbl_s) / sw, np.nan),
+               where='post', color='C1', lw=0.9, label='SOCRATES − LBL')
     if clima_curves:
         lbl_c = band_integrate(wn, oc, clima_e)
         cw = np.diff(clima_e)
@@ -182,15 +204,18 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
 
     ctot = tuple(band_total(clima_e, cb, lo, hi) for cb, _, _ in clima_curves)
     stot = tot_smart if smart_b is not None else float('nan')
-    return tot_lbl, tot_exo, ctot, stot
+    soctot = band_total(soc_e, soc_b, lo, hi) if soc_e is not None else float('nan')
+    return tot_lbl, tot_exo, ctot, stot, soctot
 
 
 def report(tag, r):
-    lbl, exo, cl, smart = r
+    lbl, exo, cl, smart, soc = r
     line = (f"{tag}: LBL={lbl:.1f}  ExoRT n68={exo:.1f}  diff={exo-lbl:+.1f}"
             f"  |  Clima " + ", ".join(f"{c:.1f}" for c in cl))
     if np.isfinite(smart):
         line += f"  |  SMART={smart:.1f}"
+    if np.isfinite(soc):
+        line += f"  |  SOCRATES={soc:.1f}"
     print(line)
 
 
@@ -241,11 +266,13 @@ def main():
              npz=os.path.join(mg, 'lbl_olr_co2_earlymars.npz'),
              clima_txt=os.path.join(mg, 'clima_band_olr_earlymars.txt'),
              smart_txt=os.path.join(mg, 'smart_earlymars_olr.txt'),
+             socrates_txt=os.path.join(
+                 mg, 'socrates_PaleoMars_t250dry_pm_hit16.txt'),
              clima_cols=CLIMA_KOPP,
              title='Outer HZ: early Mars $T_s$ = 250 K '
                    '(dry, 2 bar 95% CO$_2$ / 5% N$_2$, Mars gravity)',
              xlim=(10, 1600), ylim=(0, 0.32),
-             rlim=(-0.046, 0.042), rlegend_loc='upper right'),
+             rlim=(-0.046, 0.078), rlegend_loc='upper right'),
     ], 'max_greenhouse', 'lbl_olr_benchmark_ohz')
 
 
