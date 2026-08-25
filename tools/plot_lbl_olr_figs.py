@@ -89,8 +89,18 @@ def load_socrates(path):
     """SOCRATES band dump -> (edges, spectral density, per-band flux).
     Columns are: bin index, lower bound [cm-1], upper bound [cm-1], spectral
     flux density [W/m2/cm-1]; the bins are contiguous, so the edges are the
-    lower bounds plus the final upper bound."""
-    a = np.loadtxt(path, skiprows=8)
+    lower bounds plus the final upper bound.  The free-text header varies in
+    length between deliveries, so data rows are picked out by shape rather than
+    by a fixed skiprows."""
+    rows = []
+    for line in open(path):
+        f = line.split()
+        if len(f) == 4:
+            try:
+                rows.append([float(x) for x in f])
+            except ValueError:
+                pass
+    a = np.array(rows)
     lo, hi, dens = a[:, 1], a[:, 2], a[:, 3]
     return np.append(lo, hi[-1]), dens, dens * (hi - lo)
 
@@ -272,7 +282,7 @@ def main():
              title='Outer HZ: early Mars $T_s$ = 250 K '
                    '(dry, 2 bar 95% CO$_2$ / 5% N$_2$, Mars gravity)',
              xlim=(10, 1600), ylim=(0, 0.32),
-             rlim=(-0.046, 0.078), rlegend_loc='upper right'),
+             rlim=(-0.046, 0.042), rlegend_loc='upper right'),
     ], 'max_greenhouse', 'lbl_olr_benchmark_ohz')
 
 

@@ -312,38 +312,49 @@ two-k-generation comparison drawn on the other three panels is not drawn here.
 E. Wolf supplied a **SOCRATES** calculation for the same column
 (`socrates_PaleoMars_t250dry_pm_hit16.txt`; SOCRATES = Edwards & Slingo 1996,
 run with the `pm_hit16` spectral configuration developed for the early-Mars
-simulations of Guzewich et al. 2021, JGR Planets 126, e2021JE006825, and adopted
-in Wolf et al. 2022).  The file header states **Total OLR = 93.5272 W/m²**,
-which would sit within 0.2 W/m² of both ExoRT n68 (93.65) and our LBL (93.73) —
-three independent codes on the same dry column.
+simulations of Guzewich et al. 2021, JGR Planets 126, e2021JE006825, and shown
+as Figure 2 of Wolf et al. 2022).  **Total OLR = 93.527 W/m²**, so on this
+column three independent codes agree to within 0.23 W/m²:
 
-> **⚠ The tabulated spectrum and the header total disagree, by 2.55 W/m².**
-> The 350 contiguous 10 cm⁻¹ bins in the file integrate to **96.077 W/m²**, not
-> the 93.527 quoted in its header.  The file is otherwise clean (bins contiguous
-> 1–3500 cm⁻¹, no gaps or overlaps), so this is not a parsing artefact.
->
-> The excess is **sharply localised**: differencing against our LBL bin by bin
-> gives +1.92 W/m² over 200–300 cm⁻¹ and +0.93 over 300–400, with +0.005 below
-> 200 and +0.03 above 400.  It switches on abruptly at 250 cm⁻¹ and decays
-> smoothly to ~400 — the signature of a missing band edge, not a broad
-> calibration offset — and the integrated excess (2.51 over 10–2000 cm⁻¹)
-> matches the header discrepancy (2.5496) to 0.04 W/m².
->
-> That is exactly the defect Wolf describes for the older `pm` spectral file:
-> a missing sliver of CO2–CO2 CIA that left it at **96 W/m²**, revised to
-> **~93 W/m²** in `pm_hit16`.  The most likely reading is that the file pairs a
-> **`pm` spectrum with a `pm_hit16` total**.  Until that is confirmed, the panel
-> plots the spectrum as supplied and labels it with what that spectrum actually
-> integrates to (96.1 over 10–2000 cm⁻¹), so the drawn curve and its quoted
-> number agree.  Swapping in a corrected `pm_hit16` spectrum is a one-file
-> change — no re-run of anything else is needed.
+| | OLR (10–2000 cm⁻¹) |
+|---|---|
+| SOCRATES `pm_hit16` (Wolf) | 93.50 |
+| ExoRT n68 (this work) | 93.65 |
+| LBL PH89 χ (this work) | 93.73 |
+
+The agreement is not just in the total.  Over **10–750 cm⁻¹**, where the
+CO2–CO2 CIA tabulation is complete, SOCRATES gives 72.42 against our LBL's
+72.45 — **0.03 W/m²**.
+
+That makes SMART (88.45) and Kopparapu's Clima (84.57) the low outliers on this
+column rather than ExoRT.  The residual against SMART is concentrated in two
+places: −2.4 W/m² over 10–750 cm⁻¹ and −3.2 W/m² across **750–1120 cm⁻¹**, which
+is exactly the interval where the HITRAN-2024 CO2–CO2 CIA tabulation has a hard
+gap (it covers 1–750 and 1120–1850 and nothing in between; verified directly).
+All three modern codes sit above SMART there — SOCRATES 13.62, our LBL 14.40,
+ExoRT 13.19, against SMART's 11.17 — so the window difference is shared, not an
+ExoRT artefact.
+
+> **Note on the first delivery (superseded).**  The initial version of this file
+> paired a `pm_hit16` header total (93.5272) with a spectrum that integrated to
+> **96.077 W/m²**.  The 2.55 W/m² excess was sharply localised — +1.92 W/m² over
+> 200–300 cm⁻¹ and +0.93 over 300–400, switching on abruptly at 250 cm⁻¹, with
+> +0.005 below 200 and +0.03 above 400 — and matched the header discrepancy
+> (2.5496) to 0.04 W/m².  That is the missing sliver of CO2–CO2 CIA Wolf
+> describes for the older `pm` spectral file, which left it at 96 W/m² before
+> the `pm_hit16` revision brought it to ~93.  The replacement file resolves it:
+> its bins now integrate to 93.5271 against a header of 93.5272, and the
+> 200–300 cm⁻¹ excess against our LBL falls from +1.92 to −0.03 W/m².
+> `tools/plot_lbl_olr_figs.py::load_socrates` picks data rows out by shape
+> rather than by a fixed `skiprows`, since the free-text header length varies
+> between deliveries.
 
 Files: `lbl_olr_co2_earlymars.npz` (dry LBL, both wing bounds; regenerate with
 `tools/lbl_co2_benchmark.py --g 3.73`), `clima_band_olr_earlymars.txt`
 (Kopparapu's published Clima run, converted from `clima_2bar.dat`),
 `clima_2bar.dat` (as received), `smart_earlymars_olr.txt` (Kopparapu's SMART
 spectrum, converted to W/m²/cm⁻¹), `socrates_PaleoMars_t250dry_pm_hit16.txt`
-(Wolf's SOCRATES run, as received — see the caveat above),
+(Wolf's SOCRATES run, as received),
 `exocol_earlymars_2bar.nc` (the benchmarked
 dry column; requires a `make PVER=200 EXO_G=3.73` binary — gravity is
 compile-time), and `lbl_olr_co2_earlymars_saturated.npz` (the superseded
