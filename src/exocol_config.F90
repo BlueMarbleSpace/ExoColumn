@@ -177,6 +177,37 @@ module exocol_config
   logical,           public, save :: sw_zenith_quad   = .false.
   integer,           public, save :: sw_nquad         = 4
 
+  ! ---- Flux sweep (&exocol_sweep) --------------------------------------------
+  ! When sweep_mode = .true. the driver builds the column exactly as for
+  ! flux_only, then loops the radiation call over every combination of the
+  ! listed solar zenith cosines and (grey) surface albedos, writing one flux
+  ! record per combination to sweep_outfile.  Neither coszrs nor the surface
+  ! albedo enters the cold-start profile construction, so the profile is built
+  ! once and only the radiation is repeated — the marginal cost of a sweep
+  ! point is one aerad_driver call (~0.05 s) against ~1.6 s of fixed ExoRT
+  ! initialisation.  Intended for building EBM-style radiation lookup tables.
+  ! sweep_mode implies flux_only (the RCE loop is skipped).
+  !
+  ! Unset list entries carry the sentinel -1 and are ignored, so a sweep is
+  ! specified simply by listing the values wanted:
+  !   sweep_coszrs = 1.0, 0.75, 0.5, 0.25, 0.05
+  !   sweep_albedo = 0.0, 0.1, 0.3, 0.7
+  ! sweep_ts optionally adds an outer loop over surface temperature.  The
+  ! column IS rebuilt for each entry (cold_start_init), but the ExoRT
+  ! initialisation — which dominates both the runtime and the ~240 MB working
+  ! set of a single-point run — is paid once for the whole list.  Each entry
+  ! may carry its own stratospheric cap in sweep_t_strato (an entry < 0 falls
+  ! back to &exocol_init::t_strato), which matters at the cold end where a
+  ! fixed 200 K cap would sit above the surface temperature.  Leave sweep_ts
+  ! unset to sweep only the zenith x albedo block at &exocol_init::ts.
+  integer,           public, parameter :: MAX_SWEEP     = 64
+  logical,           public, save :: sweep_mode         = .false.
+  real(r8),          public, save :: sweep_coszrs(MAX_SWEEP)   = -1.0_r8
+  real(r8),          public, save :: sweep_albedo(MAX_SWEEP)   = -1.0_r8
+  real(r8),          public, save :: sweep_ts(MAX_SWEEP)       = -1.0_r8
+  real(r8),          public, save :: sweep_t_strato(MAX_SWEEP) = -1.0_r8
+  character(len=256),public, save :: sweep_outfile      = 'iofiles/exocol_sweep.txt'
+
   ! When .true.: skip the RCE loop entirely.  The driver builds the column via
   ! cold start (or file), calls radiation once, writes output, and exits.
   ! Intended for Kopparapu-style OLR(Ts) sweeps where a prescribed moist-adiabat
@@ -409,6 +440,8 @@ contains
                                   coszrs, cpdry, asdir, asdif, aldir, aldif
     namelist /exocol_composition/ ps, co2_vmr, ch4_vmr, c2h6_vmr, &
                                   h2_vmr, n2_vmr, o3_vmr, o2_vmr, ar_vmr
+    namelist /exocol_sweep/       sweep_mode, sweep_coszrs, sweep_albedo, &
+                                  sweep_ts, sweep_t_strato, sweep_outfile
 
     integer :: unit, ios
     logical :: exists
@@ -435,7 +468,12 @@ contains
     rewind(unit); read(unit, nml=exocol_nml,         iostat=ios)
     rewind(unit); read(unit, nml=exocol_init,        iostat=ios)
     rewind(unit); read(unit, nml=exocol_composition, iostat=ios)
+    rewind(unit); read(unit, nml=exocol_sweep,       iostat=ios)
     close(unit)
+
+    ! sweep_mode implies flux_only: the sweep replaces the single radiation
+    ! call, and a time-marched column would make the sweep meaningless.
+    if (sweep_mode) flux_only = .true.
 
     ! Validate conv_scheme
     select case (trim(adjustl(conv_scheme)))
@@ -595,8 +633,15 @@ contains
       write(*,'(a)') '  Latent heat       : phase-aware (L_v / L_sub below 273.16 K)'
     end if
     write(*,'(a)') '  Vertical grid     : log-spaced'
-    if (flux_only) &
+    if (flux_only .and. .not. sweep_mode) &
       write(*,'(a)') '  *** flux_only = .true. — RCE loop skipped; single radiation call ***'
+    if (sweep_mode) then
+      write(*,'(a,i0,a,i0,a,i0,a)') '  *** sweep_mode = .true. — RCE loop skipped; ', &
+        max(count(sweep_ts >= 0.0_r8), 1), ' Ts x ', &
+        count(sweep_coszrs >= 0.0_r8), ' zenith x ', count(sweep_albedo >= 0.0_r8), &
+        ' albedo radiation calls ***'
+      write(*,'(3a)') '      sweep output  : ', trim(sweep_outfile)
+    end if
     if (variable_ps) &
       write(*,'(a)') '  *** variable_ps = .true. — ps = p_dry + esat(Ts) (Kopparapu style) ***'
     if (ihz_profile) &

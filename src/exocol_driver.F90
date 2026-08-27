@@ -36,12 +36,14 @@ PROGRAM exocol_driver
   use exocol_config,         only: read_config, apply_composition_overrides, &
                                    cfg_input_file => input_file, &
                                    latent_heat_mode, flux_only, &
+                                   sweep_mode, sweep_outfile, &
                                    esat_formula, h2o_eos, h2o_continuum, &
                                    cold_trap_phase, &
                                    cfg_solar_file => solar_file
   use exocol_io,             only: read_initial_conditions, write_output
   use exocol_coldstart,      only: cold_start_init
   use exocol_rce_loop,       only: run_rce_loop
+  use exocol_sweep,          only: run_flux_sweep
   use exocol_radiation,      only: exocol_rad_tend   ! final flux retrieval
   use exocol_convadj,        only: set_latent_heat_mode, set_esat_mode, &
                                    set_cold_trap_phase
@@ -112,6 +114,12 @@ PROGRAM exocol_driver
 
   ! ---- 5. Run RCE loop (skipped when flux_only = .true.) ----
   if (.not. flux_only) call run_rce_loop()
+
+  ! ---- 5b. Flux sweep over zenith angle x surface albedo (lookup tables) ----
+  !     sweep_mode forces flux_only, so the column is the prescribed cold-start
+  !     profile.  The sweep leaves coszrs and the albedos at their last swept
+  !     values; the NetCDF written below is therefore that last combination.
+  if (sweep_mode) call run_flux_sweep(trim(sweep_outfile))
 
   ! ---- 6. Retrieve final fluxes for output ----
   call exocol_rad_tend(LWHR, SWHR, LWUP, LWDN, SWUP, SWDN)

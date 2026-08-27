@@ -94,6 +94,25 @@ NetCDF profile is read. Calibrated example configurations are in `presets/`.
 Output is written to `iofiles/exocol_out.nc` in ExoRT's `RTprofile_out.nc`
 format.
 
+### Flux tables
+
+Setting `&exocol_sweep::sweep_mode` replaces the RCE loop with a sweep over
+surface temperature x solar zenith angle x surface albedo on prescribed
+profiles, writing one flux record per combination:
+
+```
+&exocol_sweep
+  sweep_mode   = .true.
+  sweep_ts     = 200.0, 250.0, 300.0
+  sweep_coszrs = 1.0, 0.6, 0.3, 0.1
+  sweep_albedo = 0.0, 0.2, 0.5, 0.8
+/
+```
+
+The ExoRT initialisation is paid once for the whole sweep rather than once per
+point, which is what makes it practical to tabulate radiative transfer for an
+energy-balance model.
+
 ## Plot
 
 ```bash
