@@ -148,7 +148,6 @@ ExoRT at commit `4ba8e44`.
 | `presets/` | Calibrated example namelists |
 | `reference/` | Self-contained validation/HZ cases with data and figures |
 | `data/exort_extra/` | Stellar spectra needed by the figures but not yet in ExoRT |
-| `ms/` | Manuscript source (default branch only; not in the release archive) |
 | `CLAUDE.md` | Detailed architecture and developer notes |
 
 ## Citation
@@ -172,4 +171,3 @@ supplies the radiative transfer: Wolf, E. T., et al. (2022), PSJ, 3, 7.
 MIT License © 2026 Blue Marble Space. See `LICENSE`.
 
 ExoRT is distributed separately under its own license and is not included here.
-The AASTeX class files under `ms/` are third-party and carry their own terms.

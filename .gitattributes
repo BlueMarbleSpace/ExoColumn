@@ -2,9 +2,6 @@
 # ------------------------
 # `export-ignore` paths are omitted from `git archive` output, which is what
 # GitHub serves as the release source tarball and what Zenodo mints a DOI for.
-# The manuscript source is kept on the default branch (it is synced with
-# Overleaf) but excluded from the archived release, which is a code release.
-ms/               export-ignore
 .gitattributes    export-ignore
 
 # Binary assets — do not attempt line-ending conversion or textual diffs.
