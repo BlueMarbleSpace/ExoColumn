@@ -260,7 +260,12 @@ def main():
              clima_txt=os.path.join(mr, 'clima_band_olr_ts400.txt'),
              title='Inner HZ: dense H$_2$O $T_s$ = 400 K '
                    '(4 bar N$_2$ + H$_2$O, $p_s$ = 6.46 bar)',
-             xlim=(10, 2000), ylim=(0, 1.25)),
+             # The model curves peak near 0.33, so scaling this panel to the
+             # 400 K blackbody (peak ~1.15) compressed them into the bottom
+             # quarter and buried the Clima HITRAN-2016 curve under the LBL
+             # reference.  Scale to the curves instead and let the blackbody
+             # envelope run off the top; it is context, not a compared model.
+             xlim=(10, 2000), ylim=(0, 0.40)),
     ], 'moist_runaway', 'lbl_olr_benchmark_ihz')
 
     # ------------------------------------------------------------ outer edge
