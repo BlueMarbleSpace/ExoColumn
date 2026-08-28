@@ -1,8 +1,6 @@
 # ExoColumn
 
-<!-- After the first Zenodo deposit, replace XXXXXXX below with the *concept*
-     DOI (the one that always resolves to the latest version). -->
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22151365.svg)](https://doi.org/10.5281/zenodo.22151365)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A one-dimensional radiative–convective equilibrium (RCE) model for planetary
@@ -154,10 +152,14 @@ ExoRT at commit `4ba8e44`.
 
 If you use ExoColumn, please cite both the software and the paper.
 
-**Software** — cite the archived release. The concept DOI above always resolves
-to the latest version; use a version-specific DOI to record exactly what you
-ran. Machine-readable metadata is in `CITATION.cff`, which GitHub renders as
-"Cite this repository".
+**Software** — Haqq-Misra, J. (2026), *ExoColumn: a one-dimensional
+radiative-convective equilibrium model for planetary atmospheres*, Zenodo,
+[10.5281/zenodo.22151365](https://doi.org/10.5281/zenodo.22151365).
+
+That is the concept DOI, which always resolves to the latest release. To record
+exactly which version you ran, cite the version DOI instead — v1.0.0 is
+[10.5281/zenodo.22151366](https://doi.org/10.5281/zenodo.22151366). Machine-readable metadata is in
+`CITATION.cff`, which GitHub renders as "Cite this repository".
 
 **Paper** — Haqq-Misra, J., Wolf, E. T., & Kopparapu, R. K. (2026), *Validation
 of Habitable Zone Limits with a New Radiative-Convective Equilibrium Climate
