@@ -405,17 +405,17 @@ def plot():
         # Kopparapu+2014 runaway (Table 1): dashed, same colour.
         ax.plot(kopp2014_seff(tk, KOPP2014['runaway'][m]), tk, '--',
                 color=col, lw=1.2, zorder=4)
+        # ExoColumn maximum greenhouse (outer edge): same mass colour.  The
+        # three curves are within the line width of each other for solar-type
+        # hosts and fan out only toward the M dwarfs, which is the point of
+        # drawing all three rather than one representative curve.
+        ax.plot(z['seff_maxgh'][order], te, '-', color=col, lw=2.0, zorder=5)
 
-    # Outer edge (maximum greenhouse): nearly mass-independent.  Plot the
-    # ExoColumn 1 M_E outer edge as the representative curve + Kopparapu dashed.
-    m_ref = 1.0 if 1.0 in data else sorted(data)[0]
-    zr = data[m_ref]
-    order = np.argsort(zr['teff'])
-    MAXGH_C = '#6a3d9a'    # purple, distinct from the 0.1 M_E inner-edge blue
-    ax.plot(zr['seff_maxgh'][order], zr['teff'][order], '-',
-            color=MAXGH_C, lw=2.0, zorder=5, label='Maximum greenhouse')
+    # Kopparapu+2014 maximum greenhouse: they give ONE coefficient set for the
+    # outer edge (no mass dependence in their Eq. 4 / Table 1), so it is drawn
+    # once, in neutral grey rather than a mass colour.
     ax.plot(kopp2014_seff(tk, KOPP2014['maxgh']), tk, '--',
-            color=MAXGH_C, lw=1.2, zorder=4)
+            color='0.35', lw=1.2, zorder=4)
 
     # Solar-system reference points at the Sun's Teff (Seff = S/S0 = 1/a^2).
     # Labels sit to the side of each marker (in the open direction) so they do
@@ -428,6 +428,14 @@ def plot():
         ax.annotate(nm, xy=(s, 5780), xytext=(dx, 0), textcoords='offset points',
                     ha=hal, va='center', fontsize=11, color='0.25', zorder=8)
 
+    # Both curve families are now mass-coloured, so name them directly on the
+    # plot (the colour legend carries the mass identity) rather than relying on
+    # the reader to infer which bundle is which edge.
+    ax.text(0.80, 3400, 'Inner edge\n(runaway greenhouse)', ha='left',
+            va='center', fontsize=9, color='0.25', zorder=8)
+    ax.text(0.52, 5200, 'Outer edge\n(maximum greenhouse)', ha='right',
+            va='center', fontsize=9, color='0.25', zorder=8)
+
     ax.set_xlim(1.40, 0.15)          # reversed; matches Fig. 7 top-panel S/S0 range
     ax.set_ylim(2000, 7200)          # extended to the 2000 K BT-Settl floor
     # NB: the dashed Kopparapu+2014 overlay (tk above) stays capped at 2600 K,
@@ -437,7 +445,7 @@ def plot():
     add_spectral_axis(ax, SPT_TEFF_BOUNDS, SPT_TEFF_CENTERS, SPT_LABELS)
 
     # Legends: mass identity (colours) + source key (solid/dashed).
-    leg1 = ax.legend(loc='lower left', fontsize=8.5, title='Inner edge (runaway)',
+    leg1 = ax.legend(loc='lower left', fontsize=8.5, title='Planet mass',
                      framealpha=0.92)
     leg1.get_title().set_fontsize(8.5)
     ax.add_artist(leg1)
@@ -453,15 +461,34 @@ def plot():
     print(f"\nWrote: {FIG_PNG}\n       {FIG_PDF}")
 
     # Console summary at the Sun (the canonical Kopparapu+2014 numbers).
-    print("\n  Inner edge (runaway greenhouse) Seff at the Sun (Teff=5780 K):")
-    print("    M [M_E]   ExoColumn   Kopparapu+2014")
+    print("\n  Seff at the Sun (Teff=5780 K):")
+    print("    M [M_E]   inner (ExoColumn / Kopparapu+2014)   outer (ExoColumn)")
     for m in MASSES:
         if m not in data:
             continue
         z = data[m]
         k = int(np.argmin(np.abs(z['teff'] - 5780)))
         kp = KOPP2014['runaway'][m][0]
-        print(f"      {m:4g}      {z['seff_runaway'][k]:.3f}        {kp:.3f}")
+        print(f"      {m:4g}          {z['seff_runaway'][k]:.3f} / {kp:.3f}"
+              f"                {z['seff_maxgh'][k]:.3f}")
+    # Spread across masses at each host, to back the "nearly mass-independent"
+    # statement about the outer edge in the manuscript.
+    if len(data) == len(MASSES):
+        te_ref = data[MASSES[0]]['teff']
+        o = np.argsort(te_ref)
+        outer = np.vstack([data[m]['seff_maxgh'][np.argsort(data[m]['teff'])]
+                           for m in MASSES])
+        inner = np.vstack([data[m]['seff_runaway'][np.argsort(data[m]['teff'])]
+                           for m in MASSES])
+        spread_o = outer.max(axis=0) - outer.min(axis=0)
+        spread_i = inner.max(axis=0) - inner.min(axis=0)
+        j = int(np.argmax(spread_o))
+        ksun = int(np.argmin(np.abs(te_ref[o] - 5780.0)))
+        print(f"\n  Mass spread in Seff (max - min over the three masses):")
+        print(f"    outer edge: {spread_o[j]:.3f} at Teff={te_ref[o][j]:.0f} K "
+              f"(worst case), {spread_o[ksun]:.3f} at the Sun")
+        print(f"    inner edge: {spread_i[j]:.3f} at Teff={te_ref[o][j]:.0f} K, "
+              f"{spread_i[ksun]:.3f} at the Sun")
 
 
 # --------------------------------------------------------------------------
