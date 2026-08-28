@@ -32,9 +32,11 @@ else
 endif
 
 # --- Compiler -----------------------------------------------------------------
-# Default: Intel ifx at its well-known OneAPI path.
-# Override via USER_FC in config.mk or on the command line.
-IFX := /opt/intel/oneapi/compiler/2025.3/bin/ifx
+# Default: Intel `ifx` as found on PATH (OneAPI's setvars.sh puts it there).
+# Override via USER_FC in config.mk or on the command line, e.g.
+#   USER_FC = gfortran
+#   USER_FC = /opt/intel/oneapi/compiler/2025.3/bin/ifx
+IFX ?= ifx
 
 ifeq ($(USER_FC),)
   FC := $(IFX)
@@ -45,10 +47,12 @@ endif
 # Compiler flags + the .mod output-directory flag (vendor-specific: Intel uses
 # `-module <dir>`, gfortran uses `-J<dir>`; both also add <dir> to the module
 # search path).  BUILD_DIR is expanded lazily, so its later definition is fine.
-ifeq ($(FC),$(IFX))
-  FFLAGS  = -O2 -traceback -fpe0
-  MODFLAG = -module $(BUILD_DIR)
-else ifeq ($(FC),gfortran)
+# Vendor is detected from the compiler's basename, so an absolute path
+# (USER_FC = /opt/.../ifx, or /usr/bin/gfortran-14) is classified correctly
+# instead of falling through to the default branch.
+FC_NAME := $(notdir $(FC))
+
+ifneq ($(findstring gfortran,$(FC_NAME)),)
   # -fallow-argument-mismatch / -fallow-invalid-boz: tolerate the legacy
   # CESM-lineage interface looseness in the ExoRT source (scalar/array netcdf
   # wrappers, BOZ bit patterns in infnan.F90) that modern gfortran rejects but
@@ -57,7 +61,7 @@ else ifeq ($(FC),gfortran)
             -fallow-argument-mismatch -fallow-invalid-boz -fno-range-check
   MODFLAG = -J$(BUILD_DIR)
 else
-  # Fallback: assume ifort-compatible flags
+  # ifx / ifort (and anything else ifort-compatible).
   FFLAGS  = -O2 -traceback -fpe0
   MODFLAG = -module $(BUILD_DIR)
 endif

@@ -35,7 +35,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-EXORT = '/models/ExoRT'
+# ExoRT tree.  Override with the EXORT_ROOT environment variable (the same
+# name the build uses in config.mk) if ExoRT lives elsewhere.
+EXORT = os.environ.get('EXORT_ROOT', '/models/ExoRT')
 KFILE = os.path.join(EXORT, 'data/kdist/n68h2o/hitran2016/'
                      'n68_8gpt_h2o_hitran16_Nnu1e4_c25_voigt_noplinth_q0_grrtm.nc')
 CFILE = os.path.join(EXORT, 'data/continuum/KH2O_MTCKD3.3_SELF.FRGN_n68_ngauss.nc')

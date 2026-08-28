@@ -9,11 +9,16 @@
 #   cd build && make
 
 # --- Fortran compiler ---------------------------------------------------------
-# Default (no entry here): Intel ifx at the hard-coded path in the Makefile.
-# Set USER_FC to override, e.g.:
+# Default (no entry here): `ifx` as found on PATH.  For an Intel OneAPI build,
+# `source /opt/intel/oneapi/setvars.sh` first so that ifx is on PATH.
+# Set USER_FC to name a different compiler or an explicit path, e.g.:
 #
-# USER_FC = /opt/intel/oneapi/compiler/2025.3/bin/ifx
 # USER_FC = gfortran
+# USER_FC = /opt/intel/oneapi/compiler/2025.3/bin/ifx
+#
+# The build selects compiler flags from USER_FC's basename, so any name
+# containing "gfortran" gets the gfortran flags and everything else is treated
+# as ifort-compatible.
 
 # --- NetCDF-Fortran -----------------------------------------------------------
 # Required when the system nf-config points to a NetCDF built with a different

@@ -25,7 +25,9 @@ import sys
 import numpy as np
 import netCDF4 as nc
 
-EXORT = '/models/ExoRT'
+# ExoRT tree.  Override with the EXORT_ROOT environment variable (the same
+# name the build uses in config.mk) if ExoRT lives elsewhere.
+EXORT = os.environ.get('EXORT_ROOT', '/models/ExoRT')
 CFILE = os.path.join(EXORT, 'data/continuum/KH2O_MTCKD3.3_SELF.FRGN_n68_ngauss.nc')
 OUT   = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'h2o_radis_bands.npz')
 

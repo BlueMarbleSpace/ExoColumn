@@ -48,12 +48,17 @@ PROGRAM exocol_driver
 
   implicit none
 
+  ! Release version, echoed in the startup banner so it appears in run logs.
+  ! Keep in sync with CITATION.cff / .zenodo.json / CHANGELOG.md on release.
+  character(len=*), parameter :: exocol_version = '1.0.0'
+
   character(len=256) :: output_file = 'iofiles/exocol_out.nc'
 
   real(r8), dimension(pver)  :: LWHR, SWHR
   real(r8), dimension(pverp) :: LWUP, LWDN, SWUP, SWDN
 
-  write(*,'(/,a)') '=== ExoColumn: Radiative-Convective Equilibrium Model ==='
+  write(*,'(/,3a)') '=== ExoColumn v', exocol_version, &
+                    ': Radiative-Convective Equilibrium Model ==='
   write(*,'(a,i0,a)') '  pver = ', pver, ' layers (from exoplanet_mod::exo_pver)'
 
   ! ---- 0. Read runtime configuration (scheme selection, etc.) ----

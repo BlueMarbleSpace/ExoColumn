@@ -40,3 +40,9 @@ tools/*.png
 tools/*.pdf
 tools/*.npz
 tools/*.nc
+
+# Raw upstream data archives and outbound handoff tarballs kept locally for
+# provenance.  The extracted/derived files that the figures actually use are
+# tracked; these bulk archives are not.
+reference/max_greenhouse/*.zip
+reference/max_greenhouse/*.tar.gz

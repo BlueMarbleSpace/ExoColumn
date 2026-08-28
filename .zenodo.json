@@ -1,0 +1,37 @@
+{
+  "title": "ExoColumn: a one-dimensional radiative-convective equilibrium model for planetary atmospheres",
+  "description": "<p><strong>ExoColumn</strong> is a one-dimensional radiative&ndash;convective equilibrium (RCE) model for planetary atmospheres, built directly on the <a href=\"https://github.com/storyofthewolf/ExoRT\">ExoRT</a> correlated-<em>k</em> radiative transfer code that also serves as the radiation core of the ExoCAM three-dimensional model. ExoColumn time-marches a single atmospheric column to radiative&ndash;convective equilibrium by calling ExoRT's <code>aerad_driver</code> each step, with a prognostic surface slab, surface turbulent fluxes, moist convection, condensation, and a stratospheric cold-trap closure.</p><p>ExoColumn couples an independently developed atmospheric column physics package to ExoRT without modifying it, so that spectroscopic updates propagate from ExoRT to ExoColumn automatically. The model reproduces present-day Earth to within a few kelvin of independent RCE codes, and reproduces the inner-edge (moist- and runaway-greenhouse) and outer-edge (maximum-greenhouse) habitable-zone limits of the Clima model lineage, extended to twelve host stars spanning 2000&ndash;7200 K and to planetary masses of 0.1, 1, and 5 Earth masses.</p><p>This release accompanies the paper <em>&ldquo;Validation of Habitable Zone Limits with a New Radiative-Convective Equilibrium Climate Model&rdquo;</em> (Haqq-Misra, Wolf &amp; Kopparapu). The <code>reference/</code> directory contains self-contained validation and habitable-zone cases, each with the data and plotting script that regenerate the corresponding published figure.</p>",
+  "upload_type": "software",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Haqq-Misra, Jacob",
+      "affiliation": "Blue Marble Space, Seattle, WA, USA",
+      "orcid": "0000-0003-4346-2611"
+    }
+  ],
+  "keywords": [
+    "habitable zone",
+    "exoplanet atmospheres",
+    "planetary climate",
+    "radiative transfer",
+    "radiative-convective equilibrium",
+    "one-dimensional climate model",
+    "astronomy software"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/storyofthewolf/ExoRT",
+      "relation": "requires",
+      "resource_type": "software",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://github.com/BlueMarbleSpace/ExoColumn",
+      "relation": "isSupplementTo",
+      "resource_type": "software",
+      "scheme": "url"
+    }
+  ]
+}

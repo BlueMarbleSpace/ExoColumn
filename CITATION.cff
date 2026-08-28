@@ -1,0 +1,56 @@
+cff-version: 1.2.0
+message: "If you use ExoColumn in your research, please cite both the software (this record) and the paper listed under preferred-citation."
+title: "ExoColumn: a one-dimensional radiative-convective equilibrium model for planetary atmospheres"
+abstract: >-
+  ExoColumn is a one-dimensional radiative-convective equilibrium (RCE) model
+  for planetary atmospheres, built directly on the ExoRT correlated-k radiative
+  transfer code that also serves as the radiation core of the ExoCAM
+  three-dimensional model. It time-marches a single atmospheric column to
+  radiative-convective equilibrium with a prognostic surface slab, surface
+  turbulent fluxes, moist convection, condensation, and a stratospheric
+  cold-trap closure. ExoColumn is used to compute habitable-zone boundaries for
+  a range of host stars and planetary masses, and to validate the habitable-zone
+  limits of the Clima model lineage.
+type: software
+authors:
+  - given-names: Jacob
+    family-names: Haqq-Misra
+    email: jacob@bmsis.org
+    affiliation: "Blue Marble Space, Seattle, WA, USA"
+    orcid: "https://orcid.org/0000-0003-4346-2611"
+version: 1.0.0
+date-released: "2026-08-28"
+license: MIT
+repository-code: "https://github.com/BlueMarbleSpace/ExoColumn"
+keywords:
+  - habitable zone
+  - exoplanet atmospheres
+  - planetary climate
+  - radiative transfer
+  - radiative-convective equilibrium
+  - one-dimensional climate model
+references:
+  - type: software
+    title: "ExoRT: a radiative transfer code for exoplanet atmospheres"
+    authors:
+      - given-names: Eric T.
+        family-names: Wolf
+        orcid: "https://orcid.org/0000-0002-7188-1648"
+    repository-code: "https://github.com/storyofthewolf/ExoRT"
+    notes: "Required dependency; supplies the correlated-k radiative transfer core."
+preferred-citation:
+  type: article
+  title: "Validation of Habitable Zone Limits with a New Radiative-Convective Equilibrium Climate Model"
+  authors:
+    - given-names: Jacob
+      family-names: Haqq-Misra
+      orcid: "https://orcid.org/0000-0003-4346-2611"
+    - given-names: Eric T.
+      family-names: Wolf
+      orcid: "https://orcid.org/0000-0002-7188-1648"
+    - given-names: Ravi K.
+      family-names: Kopparapu
+      orcid: "https://orcid.org/0000-0002-5893-2471"
+  journal: "The Astrophysical Journal"
+  year: 2026
+  status: submitted

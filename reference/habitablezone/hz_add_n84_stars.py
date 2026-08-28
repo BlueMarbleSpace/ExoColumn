@@ -11,7 +11,7 @@ tools/compare_7200_n68_n84.py: n68 underestimates albedo/Seff by ~2%).  So we
 replace the n68 F-star with the n84 F-star and append A0V + B2V.
 
 Run with the n84 core built and the Intel runtime on PATH:
-    cd build && make clean && make SPEC_DIR=/models/ExoRT/source/src.n84equiv PVER=200
+    cd build && make clean && make SPEC_DIR="$EXORT_ROOT/source/src.n84equiv" PVER=200
     cd .. && source /opt/intel/oneapi/setvars.sh && \
       python3 reference/habitablezone/hz_add_n84_stars.py
 then restore the default n68 core: cd build && make clean && make PVER=200.

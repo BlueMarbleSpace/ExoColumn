@@ -145,7 +145,10 @@ STARS = [
 # into the per-mass cache (so each curve = n68 M->G points + the n84 F point).
 # A/B hotter stars give unphysical albedo>1 and are excluded.
 F_STAR = ('F 7200 K', 'bt-settl_7200_logg4.5_FeH0_n84.nc', 7200)
-N84_SPEC_DIR = '/models/ExoRT/source/src.n84equiv'
+# Override the ExoRT location with the EXORT_ROOT environment variable (the
+# same name the build uses in config.mk).
+N84_SPEC_DIR = os.path.join(os.environ.get('EXORT_ROOT', '/models/ExoRT'),
+                            'source', 'src.n84equiv')
 
 # Ultra-cool BT-Settl stars (n68 core/SED) extending the ladder below 2600 K.
 # These are the leading entries of STARS; the `addcool` driver mode runs ONLY

@@ -13,7 +13,7 @@ swap — it needs the matching ExoColumn build:
 
 Build the n84 core (ExoColumn src is band-count-agnostic; just point at the tree):
     cd build && make clean && \
-      make SPEC_DIR=/models/ExoRT/source/src.n84equiv PVER=200
+      make SPEC_DIR="$EXORT_ROOT/source/src.n84equiv" PVER=200
 and rebuild the default n68 core afterwards with `make clean && make PVER=200`.
 
 Planetary albedo and S_eff are band-integrated scalars, so they are directly

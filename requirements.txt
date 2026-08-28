@@ -1,0 +1,29 @@
+# Python environment for the ExoColumn analysis and plotting tools.
+#
+#   python3 -m pip install -r requirements.txt
+#
+# The Fortran model itself has no Python dependency; these packages are only
+# needed to run the scripts in tools/ and reference/.
+
+# --- Core: needed by every plotting and sweep script -------------------------
+numpy
+matplotlib
+netCDF4
+
+# --- Optional: needed only by specific scripts -------------------------------
+# Line-by-line benchmarks (tools/lbl_olr_benchmark.py, tools/lbl_co2_benchmark.py,
+# tools/lbl_sw_benchmark.py) — numba JIT-compiles the Voigt/Lorentz line sums.
+# numba
+
+# Independent IAPWS-95 cross-check for test/test_iapws95.F90
+# (tools/check_iapws95.py).
+# iapws
+
+# HITEMP/HITRAN cross-section retrieval (tools/fetch_hitemp_h2o.py).  Requires
+# HITRAN.org credentials cached in ~/radis.json.
+# radis
+
+# Independent RCE reference profiles (reference/earth/).  konrad pins older
+# numpy/scipy — install it in a separate environment:
+#   numpy==1.26.4  scipy==1.13.1  konrad==1.0.2
+# konrad
