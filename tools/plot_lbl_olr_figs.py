@@ -80,8 +80,8 @@ def band_total(edges, vals, lo, hi):
 # (column index, colour, legend label).  Most files carry the same deck through
 # two k-coefficient generations; the early-Mars file instead carries a single
 # curve -- Kopparapu's own published Figure-1 run.
-CLIMA_TWO_GEN = ((2, 'C2', 'Clima (Kopparapu et al. 2013 $k$)'),
-                 (3, 'C0', 'Clima (HITRAN-2016 $k$)'))
+CLIMA_TWO_GEN = ((2, 'C2', 'Clima (Kopparapu et al. 2013)'),
+                 (3, 'C0', 'Clima (HITRAN-2016)'))
 CLIMA_KOPP = ((2, 'C2', 'Clima (Kopparapu et al. 2013)'),)
 
 
@@ -171,8 +171,7 @@ def panel(axes, npz, title, xlim, ylim, clima_txt=None, smart_txt=None,
             v = clima[:, col]
             a.stairs(v / cw, clima_e, color=colour, lw=1.0, zorder=3,
                      label=f'{lab}  [{band_total(clima_e, v, lo, hi):.1f}]')
-            clima_curves.append((v, colour, f'{lab.split(" (")[0]} '
-                                 f'{lab.split("(")[-1].rstrip(")")} − LBL'))
+            clima_curves.append((v, colour, f'{lab} − LBL'))
 
     a.set_xlim(*xlim); a.set_ylim(*ylim)
     a.set_ylabel('F$_{IR}$ spectral density (W m$^{-2}$ / cm$^{-1}$)')
